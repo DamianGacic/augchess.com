@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AugChess</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="logo">
+        <span class="logo-icon">♟</span>
+        <span class="logo-text">augchess</span>
+      </div>
+    </header>
+
+    <main>
+      <div class="game-layout">
+
+        <!-- Black player info -->
+        <div class="player-bar" id="player-black">
+          <div class="player-info">
+            <div class="player-avatar">♟</div>
+            <div class="player-details">
+              <span class="player-name">Black</span>
+              <span class="player-rating">?</span>
+            </div>
+          </div>
+          <div class="captured-pieces" id="captured-by-white"></div>
+          <div class="clock" id="clock-black">—</div>
+        </div>
+
+        <!-- Chess Board -->
+        <div class="board-wrapper">
+          <div id="board"></div>
+        </div>
+
+        <!-- White player info -->
+        <div class="player-bar" id="player-white">
+          <div class="player-info">
+            <div class="player-avatar">♙</div>
+            <div class="player-details">
+              <span class="player-name">White</span>
+              <span class="player-rating">?</span>
+            </div>
+          </div>
+          <div class="captured-pieces" id="captured-by-black"></div>
+          <div class="clock" id="clock-white">—</div>
+        </div>
+
+        <!-- Side panel -->
+        <div class="side-panel">
+          <div class="status-box" id="status-box">
+            <span id="status-text">White to move</span>
+          </div>
+
+          <div class="time-control">
+            <div class="time-control-label">Time Control</div>
+            <div class="time-control-options">
+              <button class="tc-btn selected" data-minutes="3">3 min</button>
+              <button class="tc-btn" data-minutes="5">5 min</button>
+              <button class="tc-btn" data-minutes="15">15 min</button>
+            </div>
+          </div>
+
+          <div class="active-augments" id="active-augments">
+            <div class="aa-header">Augments</div>
+          </div>
+
+          <div class="move-list-container">
+            <div class="move-list-header">Moves</div>
+            <div id="move-list" class="move-list"></div>
+          </div>
+
+
+          <div class="controls">
+            <button class="btn btn-primary" id="btn-new-game">New Game</button>
+            <button class="btn btn-secondary" id="btn-flip">Flip Board</button>
+            <button class="btn btn-secondary" id="btn-undo">Undo</button>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Promotion modal -->
+  <div id="promotion-modal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Promote Pawn</h3>
+      <div class="promotion-pieces" id="promotion-pieces"></div>
+    </div>
+  </div>
+
+  <!-- Augment selection modal -->
+  <div id="augment-modal" class="modal hidden">
+    <div class="modal-content augment-content">
+      <h3>Augment Draft</h3>
+      <p class="augment-subtitle" id="augment-turn-text">White, choose an augment</p>
+      <div class="augment-points-row">
+        <div class="augment-points" id="augment-points-white">
+          <span class="ap-label">White</span>
+          <span class="ap-value" id="ap-white">2</span>
+        </div>
+        <div class="augment-points" id="augment-points-black">
+          <span class="ap-label">Black</span>
+          <span class="ap-value" id="ap-black">2</span>
+        </div>
+      </div>
+      <div class="augment-list" id="augment-list"></div>
+      <div class="augment-actions">
+        <button class="btn btn-secondary" id="btn-augment-pass">Pass / Done</button>
+        <button class="btn btn-primary hidden" id="btn-augment-start">Start Game</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="chess.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

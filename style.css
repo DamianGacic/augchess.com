@@ -1,0 +1,820 @@
+/* ===== Reset & Base ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg-primary: #e8e8e8;
+  --bg-secondary: #f5f5f5;
+  --bg-panel: #ffffff;
+  --bg-panel-alt: #f0f0f0;
+  --border: #d0d0d0;
+  --text-primary: #333333;
+  --text-secondary: #888888;
+  --text-bright: #111111;
+  --accent: #759900;
+  --accent-hover: #8aaf00;
+  --accent-danger: #c62828;
+  --square-light: #f0d9b5;
+  --square-dark: #b58863;
+  --square-last-move-light: #cdd16f;
+  --square-last-move-dark: #aaa23a;
+  --board-size: min(560px, 90vw, 80vh);
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+/* ===== Header ===== */
+header {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-icon {
+  font-size: 28px;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.logo-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-bright);
+  letter-spacing: -0.5px;
+}
+
+/* ===== Main Layout ===== */
+main {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px 16px;
+  min-height: calc(100vh - 50px);
+}
+
+.game-layout {
+  display: grid;
+  grid-template-columns: var(--board-size) 280px;
+  grid-template-rows: auto var(--board-size) auto;
+  grid-template-areas:
+    "player-black side"
+    "board        side"
+    "player-white side";
+  gap: 8px 16px;
+  align-items: start;
+}
+
+/* ===== Player Bars ===== */
+.player-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  height: 52px;
+}
+
+#player-black { grid-area: player-black; }
+#player-white { grid-area: player-white; }
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.player-avatar {
+  width: 32px;
+  height: 32px;
+  background: var(--bg-panel-alt);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border: 1px solid var(--border);
+}
+
+.player-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.player-name {
+  font-weight: 600;
+  color: var(--text-bright);
+  font-size: 14px;
+}
+
+.player-rating {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.captured-pieces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  flex: 1;
+  font-size: 15px;
+  line-height: 1;
+  min-height: 20px;
+  color: var(--text-secondary);
+}
+
+/* ===== Clock ===== */
+.clock {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-bright);
+  background: var(--bg-panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  min-width: 72px;
+  text-align: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.clock.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.clock.low-time {
+  background: #e53935;
+  color: #fff;
+  border-color: #e53935;
+}
+
+/* ===== Board ===== */
+.board-wrapper {
+  grid-area: board;
+  position: relative;
+  width: var(--board-size);
+  height: var(--board-size);
+}
+
+#board {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  border: 2px solid #999;
+  border-radius: 2px;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ===== Squares ===== */
+.square {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  transition: background-color 0.1s;
+}
+
+.square.light { background-color: var(--square-light); }
+.square.dark  { background-color: var(--square-dark); }
+
+.square.last-move.light { background-color: var(--square-last-move-light); }
+.square.last-move.dark  { background-color: var(--square-last-move-dark); }
+
+.square.selected.light { background-color: #7fc97f; }
+.square.selected.dark  { background-color: #5fa85f; }
+
+.square.in-check.light { background-color: #ff6b6b; }
+.square.in-check.dark  { background-color: #cc3333; }
+
+/* Coordinate labels */
+.square .rank-label {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.square .file-label {
+  position: absolute;
+  bottom: 2px;
+  right: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.square.light .rank-label,
+.square.light .file-label { color: var(--square-dark); }
+.square.dark  .rank-label,
+.square.dark  .file-label  { color: var(--square-light); }
+
+/* Legal move dots */
+.square.legal-move::after {
+  content: '';
+  position: absolute;
+  width: 30%;
+  height: 30%;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.square.legal-capture::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 4px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.square.can-move { cursor: pointer; }
+
+/* ===== Pieces ===== */
+.piece {
+  width: 85%;
+  height: 85%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--board-size) / 8 * 0.78);
+  line-height: 1;
+  cursor: grab;
+  position: relative;
+  z-index: 1;
+  transition: transform 0.05s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.piece.white { color: #d0d0d0; }
+.piece.black { color: #2e2e2e; }
+
+.piece:active {
+  cursor: grabbing;
+  transform: scale(1.15);
+  z-index: 10;
+}
+
+.piece.dragging { opacity: 0.4; }
+
+/* Host pieces that carry an occupant (rook garrisoning a pawn, knight carrying a
+   mounted king) shrink and shift up-left so BOTH pieces are clearly visible
+   sitting on the square together — instead of the occupant covering the host. */
+.piece.manned-tower,
+.piece.mounted {
+  font-size: calc(var(--board-size) / 8 * 0.62);
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding-top: 4%;
+  padding-left: 4%;
+}
+
+
+/* Drag ghost */
+#drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1000;
+  font-size: calc(var(--board-size) / 8 * 0.85);
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  display: none;
+}
+
+/* When the dragged piece carries an occupant (a tower carrying its pawn, or a
+   knight carrying the mounted king), the ghost shows BOTH — the host glyph plus
+   a smaller occupant glyph nestled in the lower-right, mirroring the board. */
+#drag-ghost.has-occupant {
+  position: fixed;
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  font-size: calc(var(--board-size) / 8 * 0.68);
+}
+#drag-ghost .ghost-badge {
+  position: absolute;
+  bottom: -8%;
+  right: -16%;
+  font-size: calc(var(--board-size) / 8 * 0.44);
+  line-height: 1;
+}
+#drag-ghost.white { color: #d0d0d0; }
+#drag-ghost.black { color: #2e2e2e; }
+#drag-ghost .ghost-badge.white {
+  color: #d0d0d0;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.85), 0 0 3px rgba(0, 0, 0, 0.85);
+}
+#drag-ghost .ghost-badge.black {
+  color: #2e2e2e;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.85), 0 0 3px rgba(255, 255, 255, 0.85);
+}
+
+
+/* ===== Side Panel ===== */
+.side-panel {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: calc(var(--board-size) + 120px);
+}
+
+/* Status box */
+.status-box {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-bright);
+  text-align: center;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-box.check     { border-color: #e53935; color: #c62828; }
+.status-box.checkmate { border-color: var(--accent); color: var(--accent); }
+.status-box.draw      { border-color: #999; color: #666; }
+
+/* Time control selector */
+.time-control {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.time-control-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+}
+
+.time-control-options {
+  display: flex;
+  gap: 6px;
+}
+
+.tc-btn {
+  flex: 1;
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.tc-btn:hover {
+  background: var(--border);
+}
+
+.tc-btn.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Move list */
+.move-list-container {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.move-list-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel-alt);
+}
+
+.move-list {
+  padding: 6px 4px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.move-list::-webkit-scrollbar { width: 4px; }
+.move-list::-webkit-scrollbar-track { background: transparent; }
+.move-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.move-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 1fr;
+  gap: 2px;
+  align-items: center;
+  border-radius: 3px;
+}
+
+.move-row:hover { background: var(--bg-panel-alt); }
+
+.move-num {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+  padding-right: 4px;
+}
+
+.move-san {
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.move-san:hover { background: var(--bg-panel-alt); color: var(--text-bright); }
+.move-san.current { background: var(--accent); color: #fff; }
+
+/* Controls */
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btn {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  width: 100%;
+}
+
+.btn:active { transform: scale(0.98); }
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+
+.btn-secondary {
+  background: var(--bg-panel-alt);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover {
+  background: var(--border);
+  color: var(--text-bright);
+}
+
+/* ===== Promotion Modal ===== */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+
+.modal.hidden { display: none; }
+
+.modal-content {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.modal-content h3 {
+  color: var(--text-bright);
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+
+.promotion-pieces {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.promotion-piece {
+  width: 70px;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  background: var(--bg-panel-alt);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.promotion-piece:hover {
+  border-color: var(--accent);
+  background: #f9f9f9;
+}
+
+/* ===== Augment Draft Modal ===== */
+.augment-content {
+  width: min(560px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.augment-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+
+.augment-points-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.augment-points {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.augment-points.active {
+  border-color: var(--accent);
+  background: #f3f7e6;
+}
+
+.ap-label {
+  font-weight: 700;
+  color: var(--text-bright);
+  font-size: 13px;
+}
+
+.ap-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.augment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.augment-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--bg-panel-alt);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.augment-card:hover {
+  border-color: var(--accent);
+  background: #f9f9f9;
+}
+
+.augment-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.augment-card.disabled:hover {
+  border-color: var(--border);
+  background: var(--bg-panel-alt);
+}
+
+.augment-card .ac-cost {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+  background: var(--accent);
+}
+
+.augment-card.cost-2 .ac-cost { background: #c87800; }
+
+.augment-card .ac-body { flex: 1; }
+
+.augment-card .ac-name {
+  font-weight: 700;
+  color: var(--text-bright);
+  font-size: 14px;
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.augment-card .ac-owner {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.augment-card .ac-owner.white { background: #e7e7e7; color: #555; border: 1px solid #ccc; }
+.augment-card .ac-owner.black { background: #2e2e2e; color: #eee; }
+
+.augment-card .ac-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.augment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.augment-actions .btn { width: auto; flex: 1; }
+
+/* Active augments side display */
+.active-augments {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.active-augments.has-items { display: flex; }
+
+.active-augments .aa-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+}
+
+.active-augments .aa-item {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+}
+
+.active-augments .aa-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.active-augments .aa-dot.white { background: #bbb; border: 1px solid #999; }
+.active-augments .aa-dot.black { background: #2e2e2e; }
+
+/* Board visual markers for augments — subtle corner accent on tower squares */
+.square.tower::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 0 2px rgba(80, 50, 20, 0.22);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Occupant badge (pawn-in-tower or king-on-knight) — its own click/grab target.
+   Both pieces share one square, so the occupant is rendered as a clear, second
+   glyph nestled in the lower-right corner rather than a tiny mark. The two
+   pieces should read as "sitting on the square together". */
+.tower-pawn-badge,
+.mount-king-badge {
+  position: absolute;
+  bottom: -2%;
+  right: -2%;
+  width: 56%;
+  height: 56%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--board-size) / 8 * 0.44);
+  line-height: 1;
+  color: #d0d0d0;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.85), 0 0 3px rgba(0, 0, 0, 0.85);
+  cursor: grab;
+  z-index: 6;
+  transition: transform 0.05s, opacity 0.05s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tower-pawn-badge.white,
+.mount-king-badge.white { color: #d0d0d0; }
+.tower-pawn-badge.black,
+.mount-king-badge.black {
+  color: #2e2e2e;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.85), 0 0 3px rgba(255, 255, 255, 0.85);
+}
+.tower-pawn-badge:hover,
+.mount-king-badge:hover { transform: scale(1.15); }
+.tower-pawn-badge:active,
+.mount-king-badge:active { cursor: grabbing; }
+/* The occupant being dragged out fades while the host piece stays visible. */
+.tower-pawn-badge.dragging,
+.mount-king-badge.dragging { opacity: 0.4; }
+
+
+
+
+/* ===== Responsive ===== */
+@media (max-width: 700px) {
+  :root { --board-size: 95vw; }
+
+  .game-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "player-black"
+      "board"
+      "player-white"
+      "side";
+  }
+
+  .board-wrapper { width: 100%; height: auto; aspect-ratio: 1; }
+  #board { width: 100%; height: 100%; }
+  .side-panel { height: auto; width: 100%; }
+  .move-list-container { max-height: 200px; }
+}

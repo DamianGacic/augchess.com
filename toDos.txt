@@ -1,0 +1,5 @@
+-properly display the piece(s) being moved in unmounting
+-horse dies upon unmounting
+-watchtowers can not be remounted after being entered/left once
+-checkmate needed when neither knight movement
+  nor unmounting could save the king
