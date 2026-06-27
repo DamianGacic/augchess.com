@@ -1,0 +1,1 @@
+Your king can mount an allied knight (move onto it) and then moves like a knight. It is still the king — capturing it ends the game. Double-click the mounted king, then step onto a free field to dismount.

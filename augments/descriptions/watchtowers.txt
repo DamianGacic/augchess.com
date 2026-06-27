@@ -1,0 +1,1 @@
+A pawn can enter an allied corner tower by moving onto it (1 step, any direction). Double-click a manned tower, then step onto a free field to leave.

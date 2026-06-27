@@ -12,32 +12,56 @@ const PIECES = {
 const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 
 // ─── Augment Definitions ──────────────────────────────────────────────────────
-const AUGMENTS = [
-  {
-    id: 'leaping',
-    name: 'Leaping Pawns',
-    cost: 1,
-    desc: 'Your pawns may take a double step straight forward at any time, even jumping over pieces. They cannot capture this way.',
-  },
-  {
-    id: 'watchtowers',
-    name: 'Watchtowers',
-    cost: 1,
-    desc: 'A pawn can enter an allied corner tower by moving onto it (1 step, any direction). Double-click a manned tower, then step onto a free field to leave.',
-  },
-  {
-    id: 'kingspawns',
-    name: "King's Pawns",
-    cost: 2,
-    desc: 'Your pawns may step one square in any direction, but they still capture only in their normal diagonal pattern.',
-  },
-  {
-    id: 'mounting',
-    name: 'Mounting',
-    cost: 2,
-    desc: 'Your king can mount an allied knight (move onto it) and then moves like a knight. It is still the king — capturing it ends the game. Double-click the mounted king, then step onto a free field to dismount.',
-  },
+const AUGMENT_DESCRIPTION_PATH = 'augments/descriptions';
+
+const AUGMENT_IMAGE_PATH = 'augments/images';
+
+// ─── Figure Definitions ───────────────────────────────────────────────────────
+const FIGURE_IMAGE_PATH = 'figures/images';
+
+// piece types in display order (pawns first, king last)
+const FIGURE_TYPE_ORDER = ['p', 'n', 'b', 'r', 'q', 'k'];
+const FIGURE_TYPE_NAMES = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King' };
+
+const FIGURES = [
+  // Pawns
+  { id: 'archer',      name: 'Archer',      replaces: 'p', image: null, desc: 'A nimble archer who can strike from a distance. Details coming soon.' },
+  // Knights
+  { id: 'cavalry',     name: 'Cavalry',     replaces: 'n', image: null, desc: 'A mounted warrior who charges across the field. Details coming soon.' },
+  // Bishops
+  { id: 'longbowman',  name: 'Longbowman',  replaces: 'b', image: null, desc: 'A skilled longbowman who commands the diagonals. Details coming soon.' },
+  // Rooks
+  { id: 'troll',       name: 'Troll',       replaces: 'r', image: null, desc: 'A hulking troll who dominates the ranks and files. Details coming soon.' },
+  // Queens
+  { id: 'sorceress',   name: 'Sorceress',   replaces: 'q', image: null, desc: 'A powerful sorceress who bends the rules of movement. Details coming soon.' },
+  // Kings
+  { id: 'warlord',     name: 'Warlord',     replaces: 'k', image: null, desc: 'A fearless warlord who leads from the front. Details coming soon.' },
 ];
+
+const AUGMENTS = [
+  { id: 'leaping',     name: 'Leaping Pawns', cost: 1, desc: 'Loading description...' },
+  { id: 'watchtowers', name: 'Watchtowers',  cost: 1, desc: 'Loading description...' },
+  { id: 'kingspawns',  name: "King's Pawns", cost: 2, desc: 'Loading description...' },
+  { id: 'mounting',    name: 'Mounting',     cost: 2, desc: 'Loading description...', image: 'mounting.jpg' },
+];
+
+function augmentDescriptionUrl(id) {
+  return `${AUGMENT_DESCRIPTION_PATH}/${id}.txt`;
+}
+
+async function loadAugmentDescriptions() {
+  await Promise.all(AUGMENTS.map(async aug => {
+    try {
+      const response = await fetch(augmentDescriptionUrl(aug.id));
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      aug.desc = (await response.text()).trim();
+    } catch (err) {
+      console.warn(`Could not load augment description for ${aug.id}:`, err);
+      aug.desc = aug.desc || 'Description unavailable.';
+    }
+  }));
+}
+
 
 const TOWER_SQUARES = { w: ['a1', 'h1'], b: ['a8', 'h8'] };
 const ALL_TOWERS = ['a1', 'h1', 'a8', 'h8'];
@@ -102,6 +126,24 @@ const apBoxBlack      = document.getElementById('augment-points-black');
 const btnAugmentPass  = document.getElementById('btn-augment-pass');
 const btnAugmentStart = document.getElementById('btn-augment-start');
 
+// View refs
+const homeView        = document.getElementById('home-view');
+const gameView        = document.getElementById('game-view');
+const augmentsView    = document.getElementById('augments-view');
+
+// Navigation refs
+const navHomeBtn      = document.getElementById('nav-home');
+const navGameBtn      = document.getElementById('nav-game');
+const navAugmentsBtn  = document.getElementById('nav-augments');
+const startGameBtn    = document.getElementById('start-game-btn');
+
+// Augment detail modal refs
+const augmentDetailModal = document.getElementById('augment-detail-modal');
+const detailTitle        = document.getElementById('detail-title');
+const detailCost         = document.getElementById('detail-cost');
+const detailDescription  = document.getElementById('detail-description');
+const closeDetailBtn     = document.getElementById('close-detail-btn');
+
 // Drag ghost
 const dragGhost = document.createElement('div');
 dragGhost.id = 'drag-ghost';
@@ -123,9 +165,6 @@ document.querySelectorAll('.tc-btn').forEach(btn => {
 
 btnAugmentPass.addEventListener('click', draftPass);
 btnAugmentStart.addEventListener('click', draftStart);
-
-// Boot up with the draft
-startAugmentDraft();
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  AUGMENT DRAFT
@@ -433,23 +472,20 @@ function generateKingsPawnMoves(sq, color) {
 }
 
 // ── Watchtowers: entry ───────────────────────────────────────────────────────────
-// A pawn enters an allied corner tower with a 1-step move from any direction.
-// The corner may be empty OR garrisoned by the player's own rook (the "tower").
+// A pawn boards an adjacent allied rook with a 1-step move from any direction.
+// The rook may be anywhere on the board (it is not restricted to its starting corner).
 function generateTowerEntryMoves(sq, color) {
   const { f, r } = sqToFR(sq);
   const res = [];
-  const allied = TOWER_SQUARES[color];
   for (let df = -1; df <= 1; df++) {
     for (let dr = -1; dr <= 1; dr++) {
       if (df === 0 && dr === 0) continue;
       const target = frToSq(f + df, r + dr);
-      if (!target || !allied.includes(target)) continue;
+      if (!target) continue;
       if (mannedTowers[target]) continue; // already manned
       const tp = pieceAt(target);
-      const enterable = !tp || (tp.color === color && tp.type === 'r');
-      if (enterable) {
-        res.push({ from: sq, to: target, special: 'towerEnter', hadRook: tp ? true : false });
-      }
+      if (!tp || tp.color !== color || tp.type !== 'r') continue;
+      res.push({ from: sq, to: target, special: 'towerEnter' });
     }
   }
   return res;
@@ -680,9 +716,7 @@ function applyMoveToState(m, color, testOnly) {
       break;
     }
     case 'towerEnter': {
-      game.remove(m.from);
-      // Ensure a real rook occupies the tower so it can be moved (carrying the pawn).
-      game.put({ type: 'r', color }, m.to);
+      game.remove(m.from);       // remove the pawn; the rook already occupies m.to
       mannedTowers[m.to] = color;
       break;
     }
@@ -836,6 +870,45 @@ function evaluateGameOver() {
     return;
   }
 
+  // Special case for mounted kings - check if the mounted king can escape check
+  if (mounted.w || mounted.b) {
+    const sideToMove = game.turn();
+    const kingSq = mounted[sideToMove];
+    
+    if (kingSq) {
+      // Check if king is in check
+      const inCheck = isKingAttacked(sideToMove);
+      
+      if (inCheck) {
+        // King is in check, check if it can escape
+        let canEscape = false;
+        
+        // Check knight moves
+        const knightMoves = generateMountedKingMoves(kingSq, sideToMove);
+        const safeKnightMoves = filterIntoCheck(knightMoves, sideToMove);
+        if (safeKnightMoves.length > 0) canEscape = true;
+        
+        // Check dismount moves if not already can escape
+        if (!canEscape) {
+          const dismountMoves = generateExitMoves(kingSq);
+          if (dismountMoves.length > 0) canEscape = true;
+        }
+        
+        // Check if any other pieces can block or capture the attacking piece
+        if (!canEscape) {
+          const otherPiecesCanMove = hasAnyLegalMove(sideToMove);
+          if (!otherPiecesCanMove) {
+            // No escape and no other pieces can help - checkmate
+            const winner = sideToMove === 'w' ? 'Black' : 'White';
+            gameOver = true; 
+            gameOverText = `♛ ${winner} wins by checkmate!`;
+            return;
+          }
+        }
+      }
+    }
+  }
+  
   // A king is mounted — chess.js's own checkmate/stalemate detection can't be
   // trusted (it doesn't know the king rides a knight and moves like one). We
   // evaluate it ourselves: the side to move is mated if its (mounted) king is
@@ -1488,3 +1561,243 @@ function undoMove() {
   updateCaptured();
   updateClockStyles();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NAVIGATION AND VIEWS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Show a specific view and update navigation
+function showView(viewName) {
+  homeView.classList.add('hidden');
+  gameView.classList.add('hidden');
+  augmentsView.classList.add('hidden');
+  document.getElementById('figures-view').classList.add('hidden');
+
+  if (viewName === 'home') {
+    homeView.classList.remove('hidden');
+  } else if (viewName === 'game') {
+    gameView.classList.remove('hidden');
+  } else if (viewName === 'augments') {
+    augmentsView.classList.remove('hidden');
+    renderAugmentsPage();
+  } else if (viewName === 'figures') {
+    document.getElementById('figures-view').classList.remove('hidden');
+    renderFiguresPage();
+  }
+
+  navHomeBtn.classList.toggle('active', viewName === 'home');
+  navGameBtn.classList.toggle('active', viewName === 'game');
+  navAugmentsBtn.classList.toggle('active', viewName === 'augments');
+  document.getElementById('nav-figures').classList.toggle('active', viewName === 'figures');
+}
+
+// Render the augments page with cards organized by cost
+function renderAugmentsPage() {
+  const container = document.getElementById('augments-container');
+  container.innerHTML = '';
+  
+  // Group augments by cost
+  const augmentsByCost = {};
+  AUGMENTS.forEach(aug => {
+    if (!augmentsByCost[aug.cost]) {
+      augmentsByCost[aug.cost] = [];
+    }
+    augmentsByCost[aug.cost].push(aug);
+  });
+  
+  // Create sections for each cost
+  [1, 2].forEach(cost => {
+    if (augmentsByCost[cost] && augmentsByCost[cost].length > 0) {
+      const section = document.createElement('div');
+      section.className = 'augments-by-cost';
+      
+      const title = document.createElement('h2');
+      title.textContent = `Cost ${cost} Augments`;
+      section.appendChild(title);
+      
+      const cardsContainer = document.createElement('div');
+      cardsContainer.className = 'augment-cards';
+      
+      augmentsByCost[cost].forEach(aug => {
+        const card = document.createElement('div');
+        card.className = `augment-card-upright cost-${aug.cost}`;
+        card.dataset.id = aug.id;
+        
+        const header = document.createElement('div');
+        header.className = 'ac-header';
+        
+        const costEl = document.createElement('div');
+        costEl.className = 'ac-cost';
+        costEl.textContent = aug.cost;
+        
+        const nameEl = document.createElement('div');
+        nameEl.className = 'ac-name';
+        nameEl.textContent = aug.name;
+        
+        header.appendChild(costEl);
+        header.appendChild(nameEl);
+        card.appendChild(header);
+
+        if (aug.image) {
+          const imgEl = document.createElement('img');
+          imgEl.className = 'ac-image';
+          imgEl.src = `${AUGMENT_IMAGE_PATH}/${aug.image}`;
+          imgEl.alt = aug.name;
+          card.appendChild(imgEl);
+        }
+
+        const descEl = document.createElement('div');
+        descEl.className = 'ac-desc';
+        descEl.textContent = aug.desc;
+        card.appendChild(descEl);
+        
+        card.addEventListener('click', () => {
+          showAugmentDetail(aug);
+        });
+        
+        cardsContainer.appendChild(card);
+      });
+      
+      section.appendChild(cardsContainer);
+      container.appendChild(section);
+    }
+  });
+}
+
+
+// Show augment detail modal
+function showAugmentDetail(augment) {
+  detailTitle.textContent = augment.name;
+  detailCost.textContent = `Cost: ${augment.cost}`;
+  detailDescription.textContent = augment.desc;
+  augmentDetailModal.classList.remove('hidden');
+}
+
+// Close augment detail modal
+function closeAugmentDetail() {
+  augmentDetailModal.classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FIGURES PAGE
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderFiguresPage() {
+  const container = document.getElementById('figures-container');
+  container.innerHTML = '';
+
+  FIGURE_TYPE_ORDER.forEach(type => {
+    const figures = FIGURES.filter(f => f.replaces === type);
+    if (figures.length === 0) return;
+
+    const section = document.createElement('div');
+    section.className = 'augments-by-cost';
+
+    const title = document.createElement('h2');
+    title.textContent = FIGURE_TYPE_NAMES[type] + ' Figures';
+    section.appendChild(title);
+
+    const cardsContainer = document.createElement('div');
+    cardsContainer.className = 'augment-cards';
+
+    figures.forEach(fig => {
+      const card = document.createElement('div');
+      card.className = 'augment-card-upright';
+      card.dataset.id = fig.id;
+
+      const header = document.createElement('div');
+      header.className = 'ac-header';
+
+      const typeEl = document.createElement('div');
+      typeEl.className = 'ac-cost';
+      typeEl.textContent = FIGURE_TYPE_NAMES[fig.replaces][0]; // first letter e.g. "P"
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'ac-name';
+      nameEl.textContent = fig.name;
+
+      header.appendChild(typeEl);
+      header.appendChild(nameEl);
+      card.appendChild(header);
+
+      if (fig.image) {
+        const imgEl = document.createElement('img');
+        imgEl.className = 'ac-image';
+        imgEl.src = `${FIGURE_IMAGE_PATH}/${fig.image}`;
+        imgEl.alt = fig.name;
+        card.appendChild(imgEl);
+      }
+
+      const descEl = document.createElement('div');
+      descEl.className = 'ac-desc';
+      descEl.textContent = fig.desc;
+      card.appendChild(descEl);
+
+      card.addEventListener('click', () => showFigureDetail(fig));
+      cardsContainer.appendChild(card);
+    });
+
+    section.appendChild(cardsContainer);
+    container.appendChild(section);
+  });
+}
+
+function showFigureDetail(fig) {
+  const modal = document.getElementById('figure-detail-modal');
+  document.getElementById('figure-detail-title').textContent = fig.name;
+  document.getElementById('figure-detail-type').textContent = `Replaces: ${FIGURE_TYPE_NAMES[fig.replaces]}`;
+  const imgEl = document.getElementById('figure-detail-img');
+  if (fig.image) {
+    imgEl.src = `${FIGURE_IMAGE_PATH}/${fig.image}`;
+    imgEl.alt = fig.name;
+    imgEl.style.display = 'block';
+  } else {
+    imgEl.style.display = 'none';
+  }
+  document.getElementById('figure-detail-description').textContent = fig.desc;
+  modal.classList.remove('hidden');
+}
+
+// Initialize navigation event listeners
+function initNavigation() {
+  // Navigation buttons
+  navHomeBtn.addEventListener('click', () => showView('home'));
+  navGameBtn.addEventListener('click', () => showView('game'));
+  navAugmentsBtn.addEventListener('click', () => showView('augments'));
+  document.getElementById('nav-figures').addEventListener('click', () => showView('figures'));
+  
+  // Start game button on homepage
+  startGameBtn.addEventListener('click', () => {
+    showView('game');
+    startAugmentDraft();
+  });
+  
+  // Close detail modal button
+  closeDetailBtn.addEventListener('click', closeAugmentDetail);
+  
+  // Close modal when clicking outside content
+  augmentDetailModal.addEventListener('click', (e) => {
+    if (e.target === augmentDetailModal) {
+      closeAugmentDetail();
+    }
+  });
+
+  // Figure detail modal
+  document.getElementById('close-figure-detail-btn').addEventListener('click', () => {
+    document.getElementById('figure-detail-modal').classList.add('hidden');
+  });
+  document.getElementById('figure-detail-modal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('figure-detail-modal')) {
+      document.getElementById('figure-detail-modal').classList.add('hidden');
+    }
+  });
+}
+
+// Initialize the app
+async function initApp() {
+  await loadAugmentDescriptions();
+  initNavigation();
+  showView('home'); // Start on homepage instead of game
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', initApp);

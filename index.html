@@ -13,109 +13,183 @@
         <span class="logo-icon">♟</span>
         <span class="logo-text">augchess</span>
       </div>
+      <nav class="main-nav">
+        <button class="nav-btn" id="nav-home">Home</button>
+        <button class="nav-btn" id="nav-game">Game</button>
+        <button class="nav-btn" id="nav-augments">Augments</button>
+        <button class="nav-btn" id="nav-figures">Figures</button>
+      </nav>
     </header>
 
-    <main>
-      <div class="game-layout">
+    <!-- Homepage View -->
+    <div id="home-view" class="view">
+      <main class="home-main">
+        <div class="hero">
+          <h1>AugChess</h1>
+          <p>Experience chess with powerful augments that change the game</p>
+          <button class="btn btn-primary" id="start-game-btn">Start New Game</button>
+        </div>
+        
+        <div class="features">
+          <div class="feature-card">
+            <h3>Classic Chess</h3>
+            <p>Play traditional chess with all the standard rules and pieces</p>
+          </div>
+          <div class="feature-card">
+            <h3>Powerful Augments</h3>
+            <p>Choose from unique augments that give your pieces special abilities</p>
+          </div>
+          <div class="feature-card">
+            <h3>Strategic Depth</h3>
+            <p>Combine chess strategy with augment selection for a fresh experience</p>
+          </div>
+        </div>
+      </main>
+    </div>
 
-        <!-- Black player info -->
-        <div class="player-bar" id="player-black">
-          <div class="player-info">
-            <div class="player-avatar">♟</div>
-            <div class="player-details">
-              <span class="player-name">Black</span>
-              <span class="player-rating">?</span>
+    <!-- Game View -->
+    <div id="game-view" class="view hidden">
+      <main>
+        <div class="game-layout">
+
+          <!-- Black player info -->
+          <div class="player-bar" id="player-black">
+            <div class="player-info">
+              <div class="player-avatar">♟</div>
+              <div class="player-details">
+                <span class="player-name">Black</span>
+                <span class="player-rating">?</span>
+              </div>
+            </div>
+            <div class="captured-pieces" id="captured-by-white"></div>
+            <div class="clock" id="clock-black">—</div>
+          </div>
+
+          <!-- Chess Board -->
+          <div class="board-wrapper">
+            <div id="board"></div>
+          </div>
+
+          <!-- White player info -->
+          <div class="player-bar" id="player-white">
+            <div class="player-info">
+              <div class="player-avatar">♙</div>
+              <div class="player-details">
+                <span class="player-name">White</span>
+                <span class="player-rating">?</span>
+              </div>
+            </div>
+            <div class="captured-pieces" id="captured-by-black"></div>
+            <div class="clock" id="clock-white">—</div>
+          </div>
+
+          <!-- Side panel -->
+          <div class="side-panel">
+            <div class="status-box" id="status-box">
+              <span id="status-text">White to move</span>
+            </div>
+
+            <div class="time-control">
+              <div class="time-control-label">Time Control</div>
+              <div class="time-control-options">
+                <button class="tc-btn selected" data-minutes="3">3 min</button>
+                <button class="tc-btn" data-minutes="5">5 min</button>
+                <button class="tc-btn" data-minutes="15">15 min</button>
+              </div>
+            </div>
+
+            <div class="active-augments" id="active-augments">
+              <div class="aa-header">Augments</div>
+            </div>
+
+            <div class="move-list-container">
+              <div class="move-list-header">Moves</div>
+              <div id="move-list" class="move-list"></div>
+            </div>
+
+
+            <div class="controls">
+              <button class="btn btn-primary" id="btn-new-game">New Game</button>
+              <button class="btn btn-secondary" id="btn-flip">Flip Board</button>
+              <button class="btn btn-secondary" id="btn-undo">Undo</button>
             </div>
           </div>
-          <div class="captured-pieces" id="captured-by-white"></div>
-          <div class="clock" id="clock-black">—</div>
+
         </div>
+      </main>
+    </div>
 
-        <!-- Chess Board -->
-        <div class="board-wrapper">
-          <div id="board"></div>
-        </div>
+    <!-- Augments View -->
+    <div id="augments-view" class="view hidden">
+      <main class="augments-main">
+        <h1>Augments</h1>
+        <p>Discover all available augments and their effects</p>
+        
+        <div id="augments-container"></div>
+      </main>
+    </div>
 
-        <!-- White player info -->
-        <div class="player-bar" id="player-white">
-          <div class="player-info">
-            <div class="player-avatar">♙</div>
-            <div class="player-details">
-              <span class="player-name">White</span>
-              <span class="player-rating">?</span>
-            </div>
-          </div>
-          <div class="captured-pieces" id="captured-by-black"></div>
-          <div class="clock" id="clock-white">—</div>
-        </div>
+    <!-- Figures View -->
+    <div id="figures-view" class="view hidden">
+      <main class="augments-main">
+        <h1>Figures</h1>
+        <p>Alternative figures that can replace standard pieces via exchange augments</p>
+        <div id="figures-container"></div>
+      </main>
+    </div>
 
-        <!-- Side panel -->
-        <div class="side-panel">
-          <div class="status-box" id="status-box">
-            <span id="status-text">White to move</span>
-          </div>
-
-          <div class="time-control">
-            <div class="time-control-label">Time Control</div>
-            <div class="time-control-options">
-              <button class="tc-btn selected" data-minutes="3">3 min</button>
-              <button class="tc-btn" data-minutes="5">5 min</button>
-              <button class="tc-btn" data-minutes="15">15 min</button>
-            </div>
-          </div>
-
-          <div class="active-augments" id="active-augments">
-            <div class="aa-header">Augments</div>
-          </div>
-
-          <div class="move-list-container">
-            <div class="move-list-header">Moves</div>
-            <div id="move-list" class="move-list"></div>
-          </div>
-
-
-          <div class="controls">
-            <button class="btn btn-primary" id="btn-new-game">New Game</button>
-            <button class="btn btn-secondary" id="btn-flip">Flip Board</button>
-            <button class="btn btn-secondary" id="btn-undo">Undo</button>
-          </div>
-        </div>
-
+    <!-- Figure Detail Modal -->
+    <div id="figure-detail-modal" class="modal hidden">
+      <div class="modal-content figure-detail-content">
+        <h3 id="figure-detail-title">Figure Name</h3>
+        <div class="figure-detail-type" id="figure-detail-type">Replaces: Pawn</div>
+        <img id="figure-detail-img" src="" alt="" class="figure-detail-img" />
+        <p id="figure-detail-description">Figure description</p>
+        <button class="btn btn-primary" id="close-figure-detail-btn">Close</button>
       </div>
-    </main>
-  </div>
+    </div>
 
-  <!-- Promotion modal -->
-  <div id="promotion-modal" class="modal hidden">
-    <div class="modal-content">
-      <h3>Promote Pawn</h3>
-      <div class="promotion-pieces" id="promotion-pieces"></div>
+    <!-- Promotion modal -->
+    <div id="promotion-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Promote Pawn</h3>
+        <div class="promotion-pieces" id="promotion-pieces"></div>
+      </div>
+    </div>
+
+    <!-- Augment selection modal -->
+    <div id="augment-modal" class="modal hidden">
+      <div class="modal-content augment-content">
+        <h3>Augment Draft</h3>
+        <p class="augment-subtitle" id="augment-turn-text">White, choose an augment</p>
+        <div class="augment-points-row">
+          <div class="augment-points" id="augment-points-white">
+            <span class="ap-label">White</span>
+            <span class="ap-value" id="ap-white">2</span>
+          </div>
+          <div class="augment-points" id="augment-points-black">
+            <span class="ap-label">Black</span>
+            <span class="ap-value" id="ap-black">2</span>
+          </div>
+        </div>
+        <div class="augment-list" id="augment-list"></div>
+        <div class="augment-actions">
+          <button class="btn btn-secondary" id="btn-augment-pass">Pass / Done</button>
+          <button class="btn btn-primary hidden" id="btn-augment-start">Start Game</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Augment Detail Modal -->
+    <div id="augment-detail-modal" class="modal hidden">
+      <div class="modal-content augment-detail-content">
+        <h3 id="detail-title">Augment Name</h3>
+        <div class="augment-detail-cost" id="detail-cost">Cost: 1</div>
+        <p id="detail-description">Augment description</p>
+        <button class="btn btn-primary" id="close-detail-btn">Close</button>
+      </div>
     </div>
   </div>
-
-  <!-- Augment selection modal -->
-  <div id="augment-modal" class="modal hidden">
-    <div class="modal-content augment-content">
-      <h3>Augment Draft</h3>
-      <p class="augment-subtitle" id="augment-turn-text">White, choose an augment</p>
-      <div class="augment-points-row">
-        <div class="augment-points" id="augment-points-white">
-          <span class="ap-label">White</span>
-          <span class="ap-value" id="ap-white">2</span>
-        </div>
-        <div class="augment-points" id="augment-points-black">
-          <span class="ap-label">Black</span>
-          <span class="ap-value" id="ap-black">2</span>
-        </div>
-      </div>
-      <div class="augment-list" id="augment-list"></div>
-      <div class="augment-actions">
-        <button class="btn btn-secondary" id="btn-augment-pass">Pass / Done</button>
-        <button class="btn btn-primary hidden" id="btn-augment-start">Start Game</button>
-      </div>
-    </div>
-  </div>
-
 
   <script src="chess.js"></script>
   <script src="app.js"></script>
