@@ -1,0 +1,1 @@
+After any of your bishops moves, you may cast Stunlock once per bishop per game. Stunlock freezes a 2×2 quadrant of squares: every unit inside — friend or foe — is unable to move for the next two turns. After moving your bishop, two buttons appear: cast the ability or simply end your turn.

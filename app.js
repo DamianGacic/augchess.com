@@ -43,6 +43,7 @@ const AUGMENTS = [
   { id: 'watchtowers', name: 'Watchtowers',  cost: 1, desc: 'Loading description...' },
   { id: 'kingspawns',  name: "King's Pawns", cost: 2, desc: 'Loading description...' },
   { id: 'mounting',    name: 'Mounting',     cost: 2, desc: 'Loading description...', image: 'mounting.jpg' },
+  { id: 'stunlock',    name: 'Stunlock',     cost: 2, desc: 'Loading description...' },
 ];
 
 function augmentDescriptionUrl(id) {
@@ -84,6 +85,13 @@ let moveLog = [];                        // array of SAN-like strings
 let snapshots = [];                      // undo stack
 let gameOver = false;
 let gameOverText = '';
+
+// Stunlock augment state
+let stunlockCharges = { w: {}, b: {} }; // { [sq]: true } — bishops that still have their charge
+let stunnedSquares = {};                 // { [sq]: turnsRemaining } — squares currently stunned
+let pendingStunlock = null;              // { color, bishopSq } — waiting for player to cast or skip
+let stunlockTargeting = false;           // true while player is picking the quadrant target
+let stunlockHoverQuad = null;            // { f, r } — quadrant currently previewed while hovering
 
 // Manual double-click tracking (native dblclick is unreliable because we
 // re-render the board between the two clicks, destroying the element).
@@ -319,6 +327,16 @@ function newGame() {
   gameOver = false;
   gameOverText = '';
 
+  // Stunlock reset
+  stunlockCharges = { w: {}, b: {} };
+  stunnedSquares = {};
+  pendingStunlock = null;
+  stunlockTargeting = false;
+  // Seed charges: each bishop starting square gets a charge if owner has stunlock
+  if (has('w', 'stunlock')) { stunlockCharges.w = { c1: true, f1: true }; }
+  if (has('b', 'stunlock')) { stunlockCharges.b = { c8: true, f8: true }; }
+  hideStunlockPanel();
+
   stopClock();
   clockStarted = false;
   timeWhite = selectedMinutes * 60;
@@ -386,6 +404,9 @@ function generateMoves(sq) {
 
   const piece = pieceAt(sq);
   if (!piece || piece.color !== turn) return [];
+
+  // Stunned pieces cannot move
+  if (stunnedSquares[sq] > 0) return [];
 
   let moves = [];
 
@@ -654,6 +675,10 @@ function captureState() {
     moveLogLen: moveLog.length,
     specialSelect: specialSelect ? { ...specialSelect } : null,
     gameOver, gameOverText,
+    stunlockCharges: { w: { ...stunlockCharges.w }, b: { ...stunlockCharges.b } },
+    stunnedSquares: { ...stunnedSquares },
+    pendingStunlock: pendingStunlock ? { ...pendingStunlock } : null,
+    stunlockTargeting,
   };
 }
 
@@ -666,6 +691,12 @@ function restoreState(snap) {
   specialSelect = snap.specialSelect ? { ...snap.specialSelect } : null;
   gameOver = snap.gameOver;
   gameOverText = snap.gameOverText;
+  if (snap.stunlockCharges) {
+    stunlockCharges = { w: { ...snap.stunlockCharges.w }, b: { ...snap.stunlockCharges.b } };
+  }
+  stunnedSquares = snap.stunnedSquares ? { ...snap.stunnedSquares } : {};
+  pendingStunlock = snap.pendingStunlock ? { ...snap.pendingStunlock } : null;
+  stunlockTargeting = snap.stunlockTargeting || false;
 }
 
 // Build a new FEN with modified board + flipped turn (for special moves).
@@ -822,6 +853,21 @@ function executeMove(move, promotionChoice) {
 
   applyMoveToState(m, color, false);
 
+  // Decrement stun counters (each individual move counts as one "turn")
+  tickStunCounters();
+
+  // Track bishop moves for stunlock charge transfer
+  let bishopStunlockPending = false;
+  if (fromPiece && fromPiece.type === 'b' && has(color, 'stunlock')) {
+    const hadCharge = stunlockCharges[color][m.from];
+    delete stunlockCharges[color][m.from];
+    if (hadCharge) {
+      stunlockCharges[color][m.to] = true;
+      pendingStunlock = { color, bishopSq: m.to };
+      bishopStunlockPending = true;
+    }
+  }
+
   // Record SAN-ish log entry
   moveLog.push({ san: describeMove(m, fromPiece, color), color });
 
@@ -833,6 +879,16 @@ function executeMove(move, promotionChoice) {
   // Clocks
   if (!clockStarted) { clockStarted = true; startClock(); }
   switchClock();
+
+  // If a stunlock decision is pending, pause turn and show panel
+  if (bishopStunlockPending) {
+    renderBoard();
+    renderMoveList();
+    updateStatus();
+    updateCaptured();
+    showStunlockPanel();
+    return;
+  }
 
   // Check game-over conditions (incl. mounted-king capture / checkmate)
   evaluateGameOver();
@@ -854,6 +910,170 @@ function describeMove(m, piece, color) {
   const p = piece && piece.type !== 'p' ? piece.type.toUpperCase() : '';
   const cap = m.captured ? 'x' : '';
   return p + cap + m.to;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  STUNLOCK AUGMENT LOGIC
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function tickStunCounters() {
+  for (const sq of Object.keys(stunnedSquares)) {
+    stunnedSquares[sq]--;
+    if (stunnedSquares[sq] <= 0) delete stunnedSquares[sq];
+  }
+}
+
+// Returns all valid quadrant top-left (f,r) pairs reachable from the bishop.
+// A quadrant covers [f..f+1] x [r..r+1]. It is valid if it overlaps the
+// bishop's 3x3 neighbourhood (adjacent to or including the bishop).
+function getStunlockQuadrants(bishopSq) {
+  const { f: bf, r: br } = sqToFR(bishopSq);
+  const results = [];
+  for (let f = Math.max(0, bf - 2); f <= Math.min(6, bf + 1); f++) {
+    for (let r = Math.max(0, br - 2); r <= Math.min(6, br + 1); r++) {
+      // Quadrant [f,f+1] x [r,r+1] overlaps bishop's [bf-1,bf+1] if ranges intersect
+      if (f + 1 >= bf - 1 && f <= bf + 1 && r + 1 >= br - 1 && r <= br + 1) {
+        results.push({ f, r });
+      }
+    }
+  }
+  return results;
+}
+
+// Returns the up-to-4 squares of quadrant with top-left (f,r).
+function quadrantSquares(f, r) {
+  return [frToSq(f,r), frToSq(f+1,r), frToSq(f,r+1), frToSq(f+1,r+1)].filter(Boolean);
+}
+
+// Apply the stunlock to the quadrant whose top-left is (f, r).
+function applyStunlockToQuadrant(f, r) {
+  const { color, bishopSq } = pendingStunlock;
+  delete stunlockCharges[color][bishopSq]; // consume the charge
+  quadrantSquares(f, r).forEach(sq => { stunnedSquares[sq] = 2; });
+  moveLog.push({ san: '⚡' + frToSq(f, r), color });
+  pendingStunlock = null;
+  stunlockTargeting = false;
+  hideStunlockPanel();
+  // Finish the turn
+  evaluateGameOver();
+  renderBoard();
+  renderMoveList();
+  updateStatus();
+  updateCaptured();
+  if (gameOver) stopClock();
+}
+
+// Show the panel with Cast/Skip buttons inside the side panel.
+function showStunlockPanel() {
+  let panel = document.getElementById('stunlock-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'stunlock-panel';
+    panel.className = 'stunlock-panel';
+    const moveListContainer = document.querySelector('.move-list-container');
+    moveListContainer.parentNode.insertBefore(panel, moveListContainer);
+  }
+  panel.innerHTML = `
+    <div class="stunlock-panel-title">⚡ Stunlock Ready</div>
+    <div class="stunlock-panel-hint" id="stunlock-hint">Your bishop can cast Stunlock.</div>
+    <div class="stunlock-panel-buttons">
+      <button class="btn btn-primary" id="btn-stunlock-cast">Cast Stunlock</button>
+      <button class="btn btn-secondary" id="btn-stunlock-skip">End Turn</button>
+    </div>`;
+  panel.classList.remove('hidden');
+  document.getElementById('btn-stunlock-cast').addEventListener('click', onStunlockCast);
+  document.getElementById('btn-stunlock-skip').addEventListener('click', onStunlockSkip);
+}
+
+function hideStunlockPanel() {
+  const panel = document.getElementById('stunlock-panel');
+  if (panel) panel.classList.add('hidden');
+  stunlockTargeting = false;
+  stunlockHoverQuad = null;
+  document.removeEventListener('mousemove', onStunlockMouseMove);
+  document.removeEventListener('touchmove', onStunlockTouchMove);
+}
+
+function onStunlockCast() {
+  if (!pendingStunlock) return;
+  stunlockTargeting = true;
+  stunlockHoverQuad = null;
+  const hint = document.getElementById('stunlock-hint');
+  if (hint) hint.textContent = 'Hover to preview a quadrant, then click to stun it.';
+  renderBoard(); // draw base targeting highlights
+  // Attach lightweight hover listeners so we can preview the quadrant under the cursor
+  document.addEventListener('mousemove', onStunlockMouseMove);
+  document.addEventListener('touchmove', onStunlockTouchMove, { passive: true });
+}
+
+// Given page-coordinate (x, y), compute the closest valid quadrant to the bishop
+// from the square that is under that point, then DOM-patch the preview classes.
+function onStunlockMouseMove(e) {
+  updateStunlockPreview(e.clientX, e.clientY);
+}
+function onStunlockTouchMove(e) {
+  if (e.touches.length) updateStunlockPreview(e.touches[0].clientX, e.touches[0].clientY);
+}
+
+function updateStunlockPreview(x, y) {
+  if (!stunlockTargeting || !pendingStunlock) return;
+
+  // Find which board square is under the cursor
+  const el = document.elementFromPoint(x, y);
+  const sqEl = el ? el.closest('.square') : null;
+  const hoveredSq = sqEl ? sqEl.dataset.square : null;
+
+  const validQuads = getStunlockQuadrants(pendingStunlock.bishopSq);
+  let best = null;
+
+  if (hoveredSq) {
+    // All valid quadrants that contain the hovered square
+    const matching = validQuads.filter(({ f, r }) => quadrantSquares(f, r).includes(hoveredSq));
+    if (matching.length > 0) {
+      const { f: bf, r: br } = sqToFR(pendingStunlock.bishopSq);
+      best = matching.reduce((a, b) => {
+        const da = Math.abs((a.f + 0.5) - bf) + Math.abs((a.r + 0.5) - br);
+        const db = Math.abs((b.f + 0.5) - bf) + Math.abs((b.r + 0.5) - br);
+        return da <= db ? a : b;
+      });
+    }
+  }
+
+  // If the hovered quad hasn't changed, nothing to do
+  const sameQuad = best && stunlockHoverQuad &&
+    best.f === stunlockHoverQuad.f && best.r === stunlockHoverQuad.r;
+  if (sameQuad) return;
+  if (!best && !stunlockHoverQuad) return;
+
+  // Patch DOM: remove old preview classes, add new ones
+  if (stunlockHoverQuad) {
+    quadrantSquares(stunlockHoverQuad.f, stunlockHoverQuad.r).forEach(sq => {
+      const el = boardEl.querySelector(`.square[data-square="${sq}"]`);
+      if (el) el.classList.remove('stunlock-preview');
+    });
+  }
+  stunlockHoverQuad = best;
+  if (stunlockHoverQuad) {
+    quadrantSquares(stunlockHoverQuad.f, stunlockHoverQuad.r).forEach(sq => {
+      const el = boardEl.querySelector(`.square[data-square="${sq}"]`);
+      if (el) el.classList.add('stunlock-preview');
+    });
+  }
+}
+
+function onStunlockSkip() {
+  if (!pendingStunlock) return;
+  // Do NOT consume the charge — the bishop still has it for future moves.
+  // Just clear the pending decision and finish the turn normally.
+  pendingStunlock = null;
+  stunlockTargeting = false;
+  hideStunlockPanel();
+  evaluateGameOver();
+  renderBoard();
+  renderMoveList();
+  updateStatus();
+  updateCaptured();
+  if (gameOver) stopClock();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -934,7 +1154,10 @@ function sideToMoveHasSafeMove(color) {
     for (let bf = 0; bf < 8; bf++) {
       const cell = board[br][bf];
       if (!cell || cell.color !== color) continue;
-      myPieces.push({ sq: frToSq(bf, 7 - br), type: cell.type, f: bf, r: 7 - br });
+      const sq = frToSq(bf, 7 - br);
+      // Stunned pieces have no moves
+      if (stunnedSquares[sq] > 0) continue;
+      myPieces.push({ sq, type: cell.type, f: bf, r: 7 - br });
     }
   }
   for (const p of myPieces) {
@@ -1193,6 +1416,25 @@ function renderBoard() {
         if (kingSquare === sq) sqEl.classList.add('in-check');
       }
 
+      // Stunlock: mark currently stunned squares
+      if (stunnedSquares[sq] > 0) {
+        sqEl.classList.add('stunned');
+      }
+
+      // Stunlock targeting mode: highlight selectable quadrant squares
+      if (stunlockTargeting && pendingStunlock) {
+        const validQuads = getStunlockQuadrants(pendingStunlock.bishopSq);
+        const isTargetable = validQuads.some(({ f: qf, r: qr }) =>
+          quadrantSquares(qf, qr).includes(sq)
+        );
+        if (isTargetable) sqEl.classList.add('stunlock-target');
+        // Restore preview highlight for the currently hovered quad after a re-render
+        if (stunlockHoverQuad && quadrantSquares(stunlockHoverQuad.f, stunlockHoverQuad.r).includes(sq)) {
+          sqEl.classList.add('stunlock-preview');
+        }
+        sqEl.classList.add('can-move');
+      }
+
       // Render piece (or manned tower marker)
       const piece = pieceAt(sq);
       if (mannedTowers[sq]) {
@@ -1324,6 +1566,31 @@ function onSquareClick(e) {
   const sq = e.currentTarget.dataset.square;
   const turn = game.turn();
 
+  // While a stunlock decision is pending and NOT targeting, block all board interaction
+  if (pendingStunlock && !stunlockTargeting) return;
+
+  // Stunlock targeting: confirm the currently-previewed quadrant on click
+  if (stunlockTargeting && pendingStunlock) {
+    // Prefer the quad already highlighted by the hover preview; fall back to
+    // computing the closest quad to the clicked square if hover is unavailable.
+    if (stunlockHoverQuad) {
+      applyStunlockToQuadrant(stunlockHoverQuad.f, stunlockHoverQuad.r);
+    } else {
+      const validQuads = getStunlockQuadrants(pendingStunlock.bishopSq);
+      const matching = validQuads.filter(({ f, r }) => quadrantSquares(f, r).includes(sq));
+      if (matching.length > 0) {
+        const { f: bf, r: br } = sqToFR(pendingStunlock.bishopSq);
+        const best = matching.reduce((a, b) => {
+          const da = Math.abs((a.f + 0.5) - bf) + Math.abs((a.r + 0.5) - br);
+          const db = Math.abs((b.f + 0.5) - bf) + Math.abs((b.r + 0.5) - br);
+          return da <= db ? a : b;
+        });
+        applyStunlockToQuadrant(best.f, best.r);
+      }
+    }
+    return;
+  }
+
   // If we have an armed special (tower-leave / dismount) and click a valid exit, do it.
   if (specialSelect && specialSelect.square === selectedSquare) {
     const move = legalMoves.find(m => m.to === sq);
@@ -1424,6 +1691,7 @@ function deselectSquare() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function onPieceMouseDown(e) {
   if (gameOver) return;
+  if (pendingStunlock) return; // block dragging while stunlock decision is pending
   const sq = e.currentTarget.dataset.square;
   const turn = game.turn();
   const piece = pieceAt(sq);
@@ -1438,6 +1706,7 @@ function onPieceMouseDown(e) {
 
 function onPieceTouchStart(e) {
   if (gameOver) return;
+  if (pendingStunlock) return; // block dragging while stunlock decision is pending
   const sq = e.currentTarget.dataset.square;
   const turn = game.turn();
   const piece = pieceAt(sq);
@@ -1686,7 +1955,10 @@ function undoMove() {
   selectedSquare = null;
   legalMoves = [];
   specialSelect = null;
-  // recompute lastMove from snapshot already stored
+  // Hide stunlock panel after undo (state restored from snapshot)
+  hideStunlockPanel();
+  // Sync panel visibility: if restored state has pendingStunlock, show it
+  if (pendingStunlock) showStunlockPanel();
   renderBoard();
   renderMoveList();
   updateStatus();

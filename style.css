@@ -1098,3 +1098,88 @@ main {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== Stunlock Augment ===== */
+
+/* Board: stunned square overlay (purple tint, chain icon) */
+.square.stunned::after {
+  content: '⛓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: calc(var(--board-size) / 8 * 0.38);
+  opacity: 0.72;
+  pointer-events: none;
+  z-index: 8;
+  line-height: 1;
+}
+.square.stunned.light { background-color: #d9b3e8; }
+.square.stunned.dark  { background-color: #a666c4; }
+
+/* When also selected */
+.square.stunned.selected.light { background-color: #c47cd6; }
+.square.stunned.selected.dark  { background-color: #8d44ab; }
+
+/* Board: stunlock targeting — selectable quadrant squares glow purple */
+.square.stunlock-target::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(138, 43, 226, 0.18);
+  pointer-events: none;
+  z-index: 2;
+}
+.square.stunlock-target.light { background-color: #e2c0f0; }
+.square.stunlock-target.dark  { background-color: #bb88d8; }
+
+/* Hovered quadrant preview — distinct bright highlight over the 2×2 cells */
+.square.stunlock-preview {
+  outline: 3px solid #8e24aa;
+  outline-offset: -3px;
+  z-index: 3;
+}
+.square.stunlock-preview.light { background-color: #d17fe8 !important; }
+.square.stunlock-preview.dark  { background-color: #ab47bc !important; }
+
+/* Stunlock side panel */
+.stunlock-panel {
+  background: linear-gradient(135deg, #f3e8fb 0%, #ede0f7 100%);
+  border: 1.5px solid #b56cd6;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 8px rgba(120, 40, 180, 0.10);
+}
+.stunlock-panel.hidden { display: none; }
+
+.stunlock-panel-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #7b1fa2;
+  margin-bottom: 5px;
+  letter-spacing: 0.2px;
+}
+
+.stunlock-panel-hint {
+  font-size: 12px;
+  color: #555;
+  margin-bottom: 10px;
+  line-height: 1.45;
+}
+
+.stunlock-panel-buttons {
+  display: flex;
+  gap: 8px;
+}
+.stunlock-panel-buttons .btn {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.stunlock-panel-buttons .btn-primary {
+  background: #8e24aa;
+}
+.stunlock-panel-buttons .btn-primary:hover {
+  background: #ab47bc;
+}
