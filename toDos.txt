@@ -1,5 +1,3 @@
--properly display the piece(s) being moved in unmounting
--horse dies upon unmounting
--watchtowers can not be remounted after being entered/left once
--[DONE] checkmate needed when neither knight movement
-  nor unmounting could save the king
+add trolls, longbowmen, ghouls, archers
+add more art
+add developer mode (beta feature access)
