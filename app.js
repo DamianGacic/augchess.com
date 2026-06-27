@@ -534,12 +534,18 @@ function generateMountedKingMoves(sq, color) {
 function generateExitMoves(sq) {
   const { f, r } = sqToFR(sq);
   const res = [];
+  // Determine the exit type. While a special exit is being armed by the player
+  // `specialSelect` tells us; otherwise (e.g. during game-over evaluation) infer
+  // it from the board state so we never dereference a null `specialSelect`.
+  const type = (specialSelect && specialSelect.square === sq)
+    ? specialSelect.type
+    : (mannedTowers[sq] ? 'tower' : 'mount');
   for (let df = -1; df <= 1; df++) {
     for (let dr = -1; dr <= 1; dr++) {
       if (df === 0 && dr === 0) continue;
       const target = frToSq(f + df, r + dr);
       if (target && isEmpty(target)) {
-        res.push({ from: sq, to: target, special: specialSelect.type === 'tower' ? 'towerLeave' : 'dismount' });
+        res.push({ from: sq, to: target, special: type === 'tower' ? 'towerLeave' : 'dismount' });
       }
     }
   }
@@ -551,8 +557,15 @@ function generateExitMoves(sq) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Apply a move to a cloned board state and test if own king is attacked.
 function filterIntoCheck(moves, color) {
+  // Normally chess.js has already filtered standard moves so they can't leave
+  // the king in check. But once ANY king is mounted, chess.js's check detection
+  // is unreliable — it doesn't know a mounted king moves/attacks like a knight,
+  // so it can both under-report check (enemy mounted king giving a knight-check)
+  // and mis-judge which moves are safe. In that case we must re-validate every
+  // move (standard included) with our own mounted-aware isKingAttacked.
+  const mountedInPlay = !!(mounted.w || mounted.b);
   return moves.filter(m => {
-    if (m.standard) return true; // chess.js already filtered these
+    if (m.standard && !mountedInPlay) return true; // chess.js already filtered these
     const snap = captureState();
     try {
       applyMoveToState(m, color, true);
@@ -870,53 +883,28 @@ function evaluateGameOver() {
     return;
   }
 
-  // Special case for mounted kings - check if the mounted king can escape check
-  if (mounted.w || mounted.b) {
-    const sideToMove = game.turn();
-    const kingSq = mounted[sideToMove];
-    
-    if (kingSq) {
-      // Check if king is in check
-      const inCheck = isKingAttacked(sideToMove);
-      
-      if (inCheck) {
-        // King is in check, check if it can escape
-        let canEscape = false;
-        
-        // Check knight moves
-        const knightMoves = generateMountedKingMoves(kingSq, sideToMove);
-        const safeKnightMoves = filterIntoCheck(knightMoves, sideToMove);
-        if (safeKnightMoves.length > 0) canEscape = true;
-        
-        // Check dismount moves if not already can escape
-        if (!canEscape) {
-          const dismountMoves = generateExitMoves(kingSq);
-          if (dismountMoves.length > 0) canEscape = true;
-        }
-        
-        // Check if any other pieces can block or capture the attacking piece
-        if (!canEscape) {
-          const otherPiecesCanMove = hasAnyLegalMove(sideToMove);
-          if (!otherPiecesCanMove) {
-            // No escape and no other pieces can help - checkmate
-            const winner = sideToMove === 'w' ? 'Black' : 'White';
-            gameOver = true; 
-            gameOverText = `♛ ${winner} wins by checkmate!`;
-            return;
-          }
-        }
-      }
-    }
-  }
-  
   // A king is mounted — chess.js's own checkmate/stalemate detection can't be
-  // trusted (it doesn't know the king rides a knight and moves like one). We
-  // evaluate it ourselves: the side to move is mated if its (mounted) king is
-  // attacked and it has NO legal move that escapes; stalemated if not attacked
-  // but it has no legal move at all.
-  const sideToMove = game.turn();
-  const inCheck = isKingAttacked(sideToMove);
-  const canMove = hasAnyLegalMove(sideToMove);
+  // trusted (it doesn't know a king rides a knight and moves/attacks like one,
+  // and it is blind to manned-tower / augment threats). We therefore evaluate
+  // this position with a FULLY SELF-CONTAINED, exception-proof brute-force
+  // search (sideToMoveHasSafeMove) that never relies on chess.js move legality.
+  // It covers all three escape avenues at once:
+  //   1. King escapes onto a free field (knight ride, dismount, or king step).
+  //   2. The threat is captured by ANY allied piece (incl. the mounted king).
+  //   3. An allied piece interposes between the threat and the king.
+  // Mated if the king is attacked and NO such move exists; stalemated if it is
+  // not attacked but likewise has no move at all.
+  let sideToMove, inCheck, canMove;
+  try {
+    sideToMove = game.turn();
+    inCheck = isKingAttacked(sideToMove);
+    canMove = sideToMoveHasSafeMove(sideToMove);
+  } catch (err) {
+    // Absolute fail-safe: a bug in evaluation must never freeze the board.
+    console.error('evaluateGameOver (mounted) failed:', err);
+    gameOver = false; gameOverText = '';
+    return;
+  }
   if (!canMove) {
     if (inCheck) {
       const winner = sideToMove === 'w' ? 'Black' : 'White';
@@ -930,28 +918,172 @@ function evaluateGameOver() {
   gameOverText = '';
 }
 
-// Does `color` (which must be the side to move) have at least one legal move?
-// Considers all of its pieces — standard moves, augment moves, and the mounted
-// king's knight-pattern moves — and relies on the existing check-filtering so
-// only moves that leave the king safe are counted.
-function hasAnyLegalMove(color) {
-  // generateMoves bails out when gameOver is set; temporarily clear it so we
-  // can probe the position cleanly during evaluation.
-  const wasGameOver = gameOver;
-  gameOver = false;
+// ─────────────────────────────────────────────────────────────────────────────
+//  FULLY SELF-CONTAINED MATE/STALEMATE SEARCH (mounted-aware, fool-proof)
+// ─────────────────────────────────────────────────────────────────────────────
+// Returns true if `color` (the side to move) has AT LEAST ONE move that leaves
+// its own king not under attack. Candidate moves are generated geometrically
+// (never trusting chess.js), each is simulated on the real board, king safety is
+// tested with our mounted-aware isKingAttacked, then the position is fully
+// restored. Every candidate is wrapped so a single bad simulation can never
+// throw out of here and freeze the game.
+function sideToMoveHasSafeMove(color) {
+  const board = game.board();
+  const myPieces = [];
+  for (let br = 0; br < 8; br++) {
+    for (let bf = 0; bf < 8; bf++) {
+      const cell = board[br][bf];
+      if (!cell || cell.color !== color) continue;
+      myPieces.push({ sq: frToSq(bf, 7 - br), type: cell.type, f: bf, r: 7 - br });
+    }
+  }
+  for (const p of myPieces) {
+    for (const c of pseudoMovesFor(color, p)) {
+      if (trySafeMove(color, p.sq, c)) return true;
+    }
+  }
+  return false;
+}
+
+// Geometric pseudo-move generation for one piece (self-check NOT filtered here —
+// trySafeMove does that). `p` = { sq, type, f, r } with r=0 == rank1.
+function pseudoMovesFor(color, p) {
+  const moves = [];
+  const { f, r, type, sq } = p;
+  const onBoard = (tf, tr) => tf >= 0 && tf <= 7 && tr >= 0 && tr <= 7;
+  const occ = (tf, tr) => !!pieceAt(frToSq(tf, tr)); // a tower rook counts as a piece
+  const occByEnemy = (tf, tr) => { const t = pieceAt(frToSq(tf, tr)); return t && t.color !== color; };
+  const promoRank = color === 'w' ? 7 : 0;
+
+  // Mounted king: moves like a knight (rides, may capture) or dismounts.
+  if (type === 'k' && mounted[color] === sq) {
+    const KN = [[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]];
+    for (const [df, dr] of KN) {
+      const tf = f + df, tr = r + dr;
+      if (onBoard(tf, tr) && (!occ(tf, tr) || occByEnemy(tf, tr))) moves.push({ to: frToSq(tf, tr), kind: 'ride' });
+    }
+    for (let df = -1; df <= 1; df++) for (let dr = -1; dr <= 1; dr++) {
+      if (!df && !dr) continue;
+      const tf = f + df, tr = r + dr;
+      if (onBoard(tf, tr) && !occ(tf, tr)) moves.push({ to: frToSq(tf, tr), kind: 'dismount' });
+    }
+    return moves;
+  }
+
+  switch (type) {
+    case 'p': {
+      const dir = color === 'w' ? 1 : -1;
+      const startRank = color === 'w' ? 1 : 6;
+      if (onBoard(f, r + dir) && !occ(f, r + dir)) {
+        pushPawn(moves, f, r + dir, promoRank);
+        if (r === startRank && !occ(f, r + 2 * dir)) moves.push({ to: frToSq(f, r + 2 * dir), kind: 'plain' });
+      }
+      for (const df of [-1, 1]) {
+        const tf = f + df, tr = r + dir;
+        if (onBoard(tf, tr) && occByEnemy(tf, tr)) pushPawn(moves, tf, tr, promoRank);
+      }
+      if (has(color, 'leaping') && onBoard(f, r + 2 * dir) && !occ(f, r + 2 * dir)) pushPawn(moves, f, r + 2 * dir, promoRank);
+      if (has(color, 'kingspawns')) {
+        for (let df = -1; df <= 1; df++) for (let dr = -1; dr <= 1; dr++) {
+          if (!df && !dr) continue;
+          const tf = f + df, tr = r + dr;
+          if (onBoard(tf, tr) && !occ(tf, tr)) pushPawn(moves, tf, tr, promoRank);
+        }
+      }
+      break;
+    }
+    case 'n': {
+      const KN = [[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]];
+      for (const [df, dr] of KN) {
+        const tf = f + df, tr = r + dr;
+        if (onBoard(tf, tr) && (!occ(tf, tr) || occByEnemy(tf, tr))) moves.push({ to: frToSq(tf, tr), kind: 'plain' });
+      }
+      break;
+    }
+    case 'b': case 'r': case 'q': {
+      const dirs = [];
+      if (type === 'b' || type === 'q') dirs.push([1,1],[1,-1],[-1,1],[-1,-1]);
+      if (type === 'r' || type === 'q') dirs.push([1,0],[-1,0],[0,1],[0,-1]);
+      for (const [df, dr] of dirs) {
+        let tf = f + df, tr = r + dr;
+        while (onBoard(tf, tr)) {
+          if (!occ(tf, tr)) moves.push({ to: frToSq(tf, tr), kind: 'plain' });
+          else { if (occByEnemy(tf, tr)) moves.push({ to: frToSq(tf, tr), kind: 'plain' }); break; }
+          tf += df; tr += dr;
+        }
+      }
+      break;
+    }
+    case 'k': { // un-mounted king
+      for (let df = -1; df <= 1; df++) for (let dr = -1; dr <= 1; dr++) {
+        if (!df && !dr) continue;
+        const tf = f + df, tr = r + dr;
+        if (onBoard(tf, tr) && (!occ(tf, tr) || occByEnemy(tf, tr))) moves.push({ to: frToSq(tf, tr), kind: 'plain' });
+      }
+      if (has(color, 'mounting')) {
+        for (let df = -1; df <= 1; df++) for (let dr = -1; dr <= 1; dr++) {
+          if (!df && !dr) continue;
+          const tf = f + df, tr = r + dr;
+          if (!onBoard(tf, tr)) continue;
+          const t = pieceAt(frToSq(tf, tr));
+          if (t && t.color === color && t.type === 'n') moves.push({ to: frToSq(tf, tr), kind: 'mount' });
+        }
+      }
+      break;
+    }
+  }
+  return moves;
+}
+
+function pushPawn(moves, tf, tr, promoRank) {
+  if (tr === promoRank) moves.push({ to: frToSq(tf, tr), kind: 'plain', promotion: 'q' });
+  else moves.push({ to: frToSq(tf, tr), kind: 'plain' });
+}
+
+// Simulate one candidate with raw board edits, test if `color`'s king is then
+// safe, and ALWAYS restore the position. Wrapped so it can never throw outward.
+function trySafeMove(color, from, candidate) {
+  const snap = captureState();
   try {
-    const board = game.board();
-    for (let r = 0; r < 8; r++) {
-      for (let f = 0; f < 8; f++) {
-        const cell = board[r][f];
-        if (!cell || cell.color !== color) continue;
-        const sq = 'abcdefgh'[f] + (8 - r);
-        if (generateMoves(sq).length > 0) return true;
+    const to = candidate.to;
+    if (mannedTowers[to]) delete mannedTowers[to]; // capturing a tower kills its pawn
+    switch (candidate.kind) {
+      case 'ride': {
+        if (pieceAt(to)) game.remove(to);
+        game.remove(from);
+        game.put({ type: 'k', color }, to);
+        mounted[color] = to;
+        break;
+      }
+      case 'dismount': {
+        game.remove(from);
+        game.put({ type: 'n', color }, from);
+        game.put({ type: 'k', color }, to);
+        mounted[color] = null;
+        break;
+      }
+      case 'mount': {
+        game.remove(from);
+        game.remove(to);
+        game.put({ type: 'k', color }, to);
+        mounted[color] = to;
+        break;
+      }
+      default: {
+        if (pieceAt(to)) game.remove(to);
+        const moving = pieceAt(from);
+        const placeType = candidate.promotion ? candidate.promotion : (moving ? moving.type : 'p');
+        game.remove(from);
+        game.put({ type: placeType, color }, to);
+        if (mannedTowers[from]) { const c = mannedTowers[from]; delete mannedTowers[from]; mannedTowers[to] = c; }
+        break;
       }
     }
-    return false;
+    return !isKingAttacked(color);
+  } catch (err) {
+    return false; // a broken simulation never counts as a legal escape
   } finally {
-    gameOver = wasGameOver;
+    restoreState(snap);
   }
 }
 
