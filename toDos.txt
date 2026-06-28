@@ -1,4 +1,3 @@
 add trolls, longbowmen, ghouls, archers
 add more art
 add developer mode (beta feature access)
-add stunlock checkmate
