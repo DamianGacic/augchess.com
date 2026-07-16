@@ -178,6 +178,10 @@ function initNavigation() {
     startAugmentDraft();
   });
 
+  document.getElementById('create-game-link-btn').addEventListener('click', () => {
+    createGameLink();
+  });
+
   closeDetailBtn.addEventListener('click', closeAugmentDetail);
   augmentDetailModal.addEventListener('click', (e) => {
     if (e.target === augmentDetailModal) closeAugmentDetail();

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AugChess</title>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -27,7 +28,10 @@
         <div class="hero">
           <h1>AugChess</h1>
           <p>Experience chess with powerful augments that change the game</p>
-          <button class="btn btn-primary" id="start-game-btn">Start New Game</button>
+          <div class="hero-buttons">
+            <button class="btn btn-primary" id="start-game-btn">Start New Game</button>
+            <button class="btn btn-multiplayer" id="create-game-link-btn">🔗 Create Game Link</button>
+          </div>
         </div>
         
         <div class="features">
@@ -191,6 +195,7 @@
     </div>
   </div>
 
+  <script src="multiplayer.js"></script>
   <script src="chess.js"></script>
   <script src="data.js"></script>
   <script src="stunlock.js"></script>

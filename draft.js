@@ -80,15 +80,24 @@ function draftPick(augId) {
   if (ds.owned[ds.current].includes(augId)) return;
   if (ds.points[ds.current] < aug.cost) return;
 
+  // In multiplayer, only the player whose color matches the current draft turn may pick
+  if (mpActive() && ds.current !== mpMyColor) return;
+
   ds.points[ds.current] -= aug.cost;
   ds.owned[ds.current].push(augId);
   ds.passed[ds.current] = false;
 
+  mpBroadcastDraftPick(augId, ds.current);
   advanceDraft();
 }
 
 function draftPass() {
   const ds = draftState;
+
+  // In multiplayer, only the player whose color matches the current draft turn may pass
+  if (mpActive() && ds.current !== mpMyColor) return;
+
+  mpBroadcastDraftPass(ds.current);
   ds.passed[ds.current] = true;
   advanceDraft();
 }
@@ -108,30 +117,28 @@ function advanceDraft() {
 }
 
 function finishDraft() {
-  btnAugmentPass.classList.add('hidden');
-  btnAugmentStart.classList.remove('hidden');
-  augmentTurnText.textContent = 'Draft complete! Ready to play.';
-  augmentListEl.innerHTML = '';
-  ['w', 'b'].forEach(c => {
-    draftState.owned[c].forEach(id => {
-      const aug = AUGMENTS.find(a => a.id === id);
-      const card = document.createElement('div');
-      card.className = 'augment-card cost-' + aug.cost;
-      card.innerHTML = `
-        <div class="ac-cost">${aug.cost}</div>
-        <div class="ac-body">
-          <div class="ac-name">${aug.name} <span class="ac-owner ${c === 'w' ? 'white' : 'black'}">${c === 'w' ? 'W' : 'B'}</span></div>
-          <div class="ac-desc">${aug.desc}</div>
-        </div>`;
-      augmentListEl.appendChild(card);
-    });
-  });
-  if (draftState.owned.w.length === 0 && draftState.owned.b.length === 0) {
-    augmentTurnText.textContent = 'No augments selected. Standard chess!';
+  // Auto-start the game without requiring a button click.
+  // In multiplayer: only the host broadcasts the start; the guest waits for the
+  // 'draftStart' message so we don't get a double-start race.
+  if (mpActive() && mpRole === 'guest') {
+    // Guest: just wait — the host will broadcast draftStart and we'll mirror it.
+    // Show a brief "waiting" message in case the host hasn't finished yet.
+    btnAugmentPass.classList.add('hidden');
+    btnAugmentStart.classList.add('hidden');
+    augmentTurnText.textContent = 'Draft complete! Starting game…';
+    augmentListEl.innerHTML = '';
+    return;
   }
+  // Host or local game: start immediately (host also broadcasts to guest).
+  draftStart(false);
 }
 
-function draftStart() {
+// Called by the "Start Game" button (local player) or by multiplayer.js (remote mirror).
+// `fromRemote` prevents re-broadcasting back to the peer.
+function draftStart(fromRemote) {
+  if (!fromRemote) {
+    mpBroadcastDraftStart();
+  }
   augments = { w: [...draftState.owned.w], b: [...draftState.owned.b] };
   augmentModal.classList.add('hidden');
   newGame();

@@ -49,7 +49,10 @@ const dragGhost = document.createElement('div');
 dragGhost.id = 'drag-ghost';
 document.body.appendChild(dragGhost);
 
-document.getElementById('btn-new-game').addEventListener('click', () => startAugmentDraft());
+document.getElementById('btn-new-game').addEventListener('click', () => {
+  if (mpActive()) mpBroadcastNewGame();
+  startAugmentDraft();
+});
 document.getElementById('btn-flip').addEventListener('click', () => { flipped = !flipped; renderBoard(); });
 document.getElementById('btn-undo').addEventListener('click', undoMove);
 
@@ -588,6 +591,12 @@ function executeMove(move, promotionChoice) {
   // Push undo snapshot BEFORE applying
   snapshots.push(captureState());
 
+  // Broadcast to peer BEFORE applying (so peer gets the original move object)
+  // Only broadcast if this move originates from the local player (not a received remote move)
+  if (mpActive() && game.turn() === mpMyColor) {
+    mpBroadcastMove(move, promotionChoice);
+  }
+
   const color = game.turn();
   const fromPiece = pieceAt(move.from);
 
@@ -629,8 +638,13 @@ function executeMove(move, promotionChoice) {
   legalMoves = [];
   specialSelect = null;
 
-  // Clocks
-  if (!clockStarted) { clockStarted = true; startClock(); }
+  // Clocks: only start after both players have made their first move
+  // (moveLog has the current move already pushed, so length >= 2 means
+  //  White and Black have each moved at least once).
+  if (!clockStarted && moveLog.length >= 2) {
+    clockStarted = true;
+    startClock();
+  }
   switchClock();
 
   // If a stunlock decision is pending, pause turn and show panel
@@ -666,6 +680,11 @@ function describeMove(m, piece, color) {
 }
 
 function renderBoard() {
+  // Sync the flipped class on the game layout so player bars (and clocks) swap
+  // to match the board orientation — opponent always at top, you always at bottom.
+  const gameLayout = document.querySelector('.game-layout');
+  if (gameLayout) gameLayout.classList.toggle('flipped', flipped);
+
   boardEl.innerHTML = '';
   const files = ['a','b','c','d','e','f','g','h'];
   const ranks = ['8','7','6','5','4','3','2','1'];
@@ -863,6 +882,7 @@ function onPieceDblClick(e) {
 function onSquareClick(e) {
   if (gameOver) return;
   if (dragState) return;
+  if (!mpIsMyTurn()) return;
 
   const sq = e.currentTarget.dataset.square;
   const turn = game.turn();
@@ -993,6 +1013,7 @@ function deselectSquare() {
 function onPieceMouseDown(e) {
   if (gameOver) return;
   if (pendingStunlock) return; // block dragging while stunlock decision is pending
+  if (!mpIsMyTurn()) return;
   const sq = e.currentTarget.dataset.square;
   const turn = game.turn();
   const piece = pieceAt(sq);
@@ -1008,6 +1029,7 @@ function onPieceMouseDown(e) {
 function onPieceTouchStart(e) {
   if (gameOver) return;
   if (pendingStunlock) return; // block dragging while stunlock decision is pending
+  if (!mpIsMyTurn()) return;
   const sq = e.currentTarget.dataset.square;
   const turn = game.turn();
   const piece = pieceAt(sq);
