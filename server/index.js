@@ -34,7 +34,12 @@ function serveStatic(req, res) {
   if (!full.startsWith(ROOT)) { res.writeHead(403); res.end('Forbidden'); return; }
   fs.readFile(full, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(full)] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[path.extname(full)] || 'application/octet-stream',
+      // Short window: cuts repeat-load bandwidth (the free tier's real limit)
+      // without holding stale assets long after a deploy during active dev.
+      'Cache-Control': 'public, max-age=300',
+    });
     res.end(data);
   });
 }
