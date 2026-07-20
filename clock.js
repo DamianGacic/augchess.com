@@ -1,11 +1,14 @@
 /**
- * clock.js — Chess clock state and all timer functions.
- * Depends on: DOM refs (clockWhiteEl, clockBlackEl, statusText, statusBox),
- *             game state (game, gameOver, gameOverText) defined in app.js.
+ * clock.js — Client-local chess clock. Purely cosmetic: each browser ticks
+ * its own display down independently between server state updates, the same
+ * way the plan's server-side clock enforcement was scoped out of this pass
+ * (see the plan's "Explicitly deferred" section) — a flag-fall shown here is
+ * a local-only guess, not authoritative, until the server tracks time itself.
+ * Depends on: `state` (app.js), DOM refs (clockWhiteEl, clockBlackEl,
+ * statusText, statusBox — app.js).
  */
 
 // ─── Clock State ──────────────────────────────────────────────────────────────
-let selectedMinutes = 3;
 let timeWhite = 0;
 let timeBlack = 0;
 let clockInterval = null;
@@ -23,10 +26,20 @@ function renderClocks() {
   clockBlackEl.textContent = formatTime(timeBlack);
 }
 
+function resetClockForNewGame() {
+  stopClock();
+  clockStarted = false;
+  timeWhite = state.settings.minutes * 60;
+  timeBlack = state.settings.minutes * 60;
+  renderClocks();
+  clockWhiteEl.classList.remove('active', 'low-time');
+  clockBlackEl.classList.remove('active', 'low-time');
+}
+
 function startClock() {
   stopClock();
   clockInterval = setInterval(() => {
-    const turn = game.turn();
+    const turn = state.game.turn();
     if (turn === 'w') timeWhite = Math.max(0, timeWhite - 1);
     else timeBlack = Math.max(0, timeBlack - 1);
 
@@ -36,9 +49,10 @@ function startClock() {
     if (timeWhite === 0 || timeBlack === 0) {
       stopClock();
       const winner = timeWhite === 0 ? 'Black' : 'White';
-      gameOver = true;
-      gameOverText = `⏱ ${winner} wins on time!`;
-      statusText.textContent = gameOverText;
+      // Local-only flag-fall guess (see file header) — not written to `state`,
+      // since only the server (networked) / engine.applyAction (hotseat) may
+      // ever mutate real game state.
+      statusText.textContent = `⏱ ${winner} wins on time!`;
       statusBox.className = 'status-box checkmate';
     }
   }, 1000);
@@ -51,10 +65,11 @@ function stopClock() {
 function switchClock() { updateClockStyles(); }
 
 function updateClockStyles() {
-  const turn = game.turn();
+  if (!state.game) return;
+  const turn = state.game.turn();
   const LOW_TIME = 30;
-  clockWhiteEl.classList.toggle('active', turn === 'w' && clockStarted && !gameOver);
-  clockBlackEl.classList.toggle('active', turn === 'b' && clockStarted && !gameOver);
+  clockWhiteEl.classList.toggle('active', turn === 'w' && clockStarted && !state.gameOver);
+  clockBlackEl.classList.toggle('active', turn === 'b' && clockStarted && !state.gameOver);
   clockWhiteEl.classList.toggle('low-time', timeWhite <= LOW_TIME && timeWhite > 0);
   clockBlackEl.classList.toggle('low-time', timeBlack <= LOW_TIME && timeBlack > 0);
 }

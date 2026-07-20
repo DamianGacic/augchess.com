@@ -1,0 +1,1 @@
+Exchanges both your bishops for Longbowmen. A Longbowman steps to any free adjacent square but never captures by moving there. Instead it can strike any unit exactly two squares away in a straight or diagonal line — rank, file, or diagonal — instantly killing it without the Longbowman leaving its square.

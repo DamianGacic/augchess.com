@@ -1,0 +1,1 @@
+Requires Ghoul Corps. Your Ghouls gain the same forward-diagonal options they already have straight ahead — they can step or double-step onto an empty diagonal square, capture a diagonal square directly ahead, and charge an enemy 2 squares along either forward diagonal, under the same blocking rules as their straight charge.

@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AugChess</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -56,6 +55,45 @@
       <main>
         <div class="game-layout">
 
+          <!-- Ability rail: sits in the board's row so it's level with the board
+               itself (not the shorter player bars). Black's cluster hugs the top
+               (next to Black's side), White's hugs the bottom (next to White's
+               side) — reversed via flex order when the board is flipped. Each
+               cluster is two single-file columns: A/S/D/F (global abilities,
+               reserved for future non-unit augments) on the left, Q/W/E/R (unit
+               abilities, tied to the piece that player currently has selected)
+               right next to the board. -->
+          <div class="ability-rail" id="ability-rail">
+            <div class="ability-cluster" id="ability-panel-black">
+              <div class="ability-column" id="ability-col-b-global">
+                <div class="ability-slot empty" id="ability-slot-b-A" data-key="A"><span class="ability-key">A</span></div>
+                <div class="ability-slot empty" id="ability-slot-b-S" data-key="S"><span class="ability-key">S</span></div>
+                <div class="ability-slot empty" id="ability-slot-b-D" data-key="D"><span class="ability-key">D</span></div>
+                <div class="ability-slot empty" id="ability-slot-b-F" data-key="F"><span class="ability-key">F</span></div>
+              </div>
+              <div class="ability-column" id="ability-col-b-unit">
+                <div class="ability-slot empty" id="ability-slot-b-Q" data-key="Q"><span class="ability-key">Q</span></div>
+                <div class="ability-slot empty" id="ability-slot-b-W" data-key="W"><span class="ability-key">W</span></div>
+                <div class="ability-slot empty" id="ability-slot-b-E" data-key="E"><span class="ability-key">E</span></div>
+                <div class="ability-slot empty" id="ability-slot-b-R" data-key="R"><span class="ability-key">R</span></div>
+              </div>
+            </div>
+            <div class="ability-cluster" id="ability-panel-white">
+              <div class="ability-column" id="ability-col-w-global">
+                <div class="ability-slot empty" id="ability-slot-w-A" data-key="A"><span class="ability-key">A</span></div>
+                <div class="ability-slot empty" id="ability-slot-w-S" data-key="S"><span class="ability-key">S</span></div>
+                <div class="ability-slot empty" id="ability-slot-w-D" data-key="D"><span class="ability-key">D</span></div>
+                <div class="ability-slot empty" id="ability-slot-w-F" data-key="F"><span class="ability-key">F</span></div>
+              </div>
+              <div class="ability-column" id="ability-col-w-unit">
+                <div class="ability-slot empty" id="ability-slot-w-Q" data-key="Q"><span class="ability-key">Q</span></div>
+                <div class="ability-slot empty" id="ability-slot-w-W" data-key="W"><span class="ability-key">W</span></div>
+                <div class="ability-slot empty" id="ability-slot-w-E" data-key="E"><span class="ability-key">E</span></div>
+                <div class="ability-slot empty" id="ability-slot-w-R" data-key="R"><span class="ability-key">R</span></div>
+              </div>
+            </div>
+          </div>
+
           <!-- Black player info -->
           <div class="player-bar" id="player-black">
             <div class="player-info">
@@ -91,15 +129,6 @@
           <div class="side-panel">
             <div class="status-box" id="status-box">
               <span id="status-text">White to move</span>
-            </div>
-
-            <div class="time-control">
-              <div class="time-control-label">Time Control</div>
-              <div class="time-control-options">
-                <button class="tc-btn selected" data-minutes="3">3 min</button>
-                <button class="tc-btn" data-minutes="5">5 min</button>
-                <button class="tc-btn" data-minutes="15">15 min</button>
-              </div>
             </div>
 
             <div class="active-augments" id="active-augments">
@@ -161,6 +190,40 @@
       </div>
     </div>
 
+    <!-- Game Settings modal (shown before the augment draft) -->
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-content augment-content">
+        <h3>Game Settings</h3>
+        <p class="augment-subtitle">Agree on a time control and auction points, then start the draft. Either player can choose.</p>
+
+        <div class="settings-body">
+          <div class="time-control">
+            <div class="time-control-label">Time Control</div>
+            <div class="time-control-options" id="settings-tc-options">
+              <button class="tc-btn selected" data-minutes="3">3 min</button>
+              <button class="tc-btn" data-minutes="5">5 min</button>
+              <button class="tc-btn" data-minutes="15">15 min</button>
+              <button class="tc-btn" data-minutes="25">25 min</button>
+              <button class="tc-btn" data-minutes="45">45 min</button>
+            </div>
+          </div>
+
+          <div class="time-control">
+            <div class="time-control-label">Auction Points</div>
+            <div class="time-control-options" id="settings-points-options">
+              <button class="tc-btn selected" data-points="3">3 pts</button>
+              <button class="tc-btn" data-points="7">7 pts</button>
+              <button class="tc-btn" data-points="12">12 pts</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="augment-actions">
+          <button class="btn btn-primary" id="btn-settings-start">Start Draft</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Augment selection modal -->
     <div id="augment-modal" class="modal hidden">
       <div class="modal-content augment-content">
@@ -169,14 +232,24 @@
         <div class="augment-points-row">
           <div class="augment-points" id="augment-points-white">
             <span class="ap-label">White</span>
-            <span class="ap-value" id="ap-white">2</span>
+            <span class="ap-value" id="ap-white">3</span>
           </div>
           <div class="augment-points" id="augment-points-black">
             <span class="ap-label">Black</span>
-            <span class="ap-value" id="ap-black">2</span>
+            <span class="ap-value" id="ap-black">3</span>
           </div>
         </div>
-        <div class="augment-list" id="augment-list"></div>
+        <div class="augment-list" id="augment-list">
+          <div class="augment-col" id="augment-col-other">
+            <div class="augment-col-label">Movement</div>
+          </div>
+          <div class="augment-col" id="augment-col-exchange">
+            <div class="augment-col-label">Unit Exchange</div>
+          </div>
+          <div class="augment-col" id="augment-col-ability">
+            <div class="augment-col-label">Abilities</div>
+          </div>
+        </div>
         <div class="augment-actions">
           <button class="btn btn-secondary" id="btn-augment-pass">Pass / Done</button>
           <button class="btn btn-primary hidden" id="btn-augment-start">Start Game</button>
@@ -195,11 +268,21 @@
     </div>
   </div>
 
-  <script src="multiplayer.js"></script>
   <script src="chess.js"></script>
   <script src="data.js"></script>
+  <script src="engine/draft-engine.js"></script>
+  <script src="engine/chess-engine.js"></script>
+  <script src="engine/gameover-engine.js"></script>
+  <script src="engine/augments-engine.js"></script>
+  <script src="engine/index.js"></script>
+  <script src="netclient.js"></script>
   <script src="stunlock.js"></script>
-  <script src="gameOver.js"></script>
+  <script src="abilities.js"></script>
+  <script src="solarstrike.js"></script>
+  <script src="clubbing.js"></script>
+  <script src="silverbullet.js"></script>
+  <script src="unstablefireball.js"></script>
+  <script src="unstableteleport.js"></script>
   <script src="draft.js"></script>
   <script src="clock.js"></script>
   <script src="views.js"></script>

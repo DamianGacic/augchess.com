@@ -1,0 +1,1 @@
+Requires Guardsmen Corps. Your Guardsmen can now capture on any adjacent square, not just the forward diagonals — striking straight ahead, straight behind, to either side, or on any diagonal, just like a king. They still step onto empty squares in all directions, double-step from their starting square, and promote like a normal pawn.

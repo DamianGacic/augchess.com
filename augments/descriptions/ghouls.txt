@@ -1,0 +1,1 @@
+Exchanges all your pawns for Ghouls. A ghoul moves and captures straight ahead instead of diagonally — one square, or two squares if that far field holds an enemy, jumping over whatever is in between. It still double-steps from its starting square and promotes like a normal pawn.

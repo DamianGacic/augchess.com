@@ -1,0 +1,1 @@
+Exchanges all your pawns for Apprentices. An apprentice can never capture — it moves forward or diagonally onto empty squares only, can still double-step from its starting square, and promotes like a normal pawn.

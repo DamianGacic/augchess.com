@@ -1,99 +1,43 @@
 /**
- * stunlock.js — All state and logic for the Stunlock augment.
- * Depends on: game state and helpers defined in app.js.
+ * stunlock.js — Client-local quadrant-targeting UI for Stunlock. The actual
+ * cast (validation + applying the freeze) happens in engine/augments-engine.js,
+ * server-side for networked play or via dispatch() locally for hotseat — this
+ * file only lets the player preview/pick a quadrant, then dispatches the cast.
  */
 
-// ─── Stunlock State ───────────────────────────────────────────────────────────
-let stunlockCharges = { w: {}, b: {} }; // { [sq]: true } — bishops that still have their charge
-let stunnedSquares = {};                 // { [sq]: turnsRemaining } — squares currently stunned
-let pendingStunlock = null;              // { color, bishopSq } — waiting for player to cast or skip
-let stunlockTargeting = false;           // true while player is picking the quadrant target
-let stunlockHoverQuad = null;            // { f, r } — quadrant currently previewed while hovering
+// ─── Stunlock UI-only state (never touches the server) ────────────────────────
+let stunlockTargeting = false;   // true while player is picking the quadrant target
+let stunlockHoverQuad = null;    // { f, r } — quadrant currently previewed while hovering
 
-// ─── Stunlock Functions ───────────────────────────────────────────────────────
-
-function tickStunCounters() {
-  for (const sq of Object.keys(stunnedSquares)) {
-    stunnedSquares[sq]--;
-    if (stunnedSquares[sq] <= 0) delete stunnedSquares[sq];
+// Called by app.js's NetClient.onState/renderAll whenever a fresh state shows
+// a pending cast that this client isn't already targeting for (e.g. right
+// after our own armed bishop's move lands).
+function syncStunlockTargeting() {
+  if (state.pendingStunlock && state.pendingStunlock.color === currentActor() && !stunlockTargeting) {
+    beginStunlockTargeting();
+  } else if (!state.pendingStunlock && stunlockTargeting) {
+    stopStunlockTargeting();
   }
 }
 
-// Returns all valid quadrant top-left (f,r) pairs reachable from the bishop.
-function getStunlockQuadrants(bishopSq) {
-  const { f: bf, r: br } = sqToFR(bishopSq);
-  const results = [];
-  for (let f = Math.max(0, bf - 2); f <= Math.min(6, bf + 1); f++) {
-    for (let r = Math.max(0, br - 2); r <= Math.min(6, br + 1); r++) {
-      if (f + 1 >= bf - 1 && f <= bf + 1 && r + 1 >= br - 1 && r <= br + 1) {
-        results.push({ f, r });
-      }
-    }
-  }
-  return results;
+function beginStunlockTargeting() {
+  stunlockTargeting = true;
+  stunlockHoverQuad = null;
+  document.addEventListener('mousemove', onStunlockMouseMove);
+  document.addEventListener('touchmove', onStunlockTouchMove, { passive: false });
 }
 
-// Returns the up-to-4 squares of quadrant with top-left (f,r).
-function quadrantSquares(f, r) {
-  return [frToSq(f,r), frToSq(f+1,r), frToSq(f,r+1), frToSq(f+1,r+1)].filter(Boolean);
-}
-
-// Apply the stunlock to the quadrant whose top-left is (f, r).
-function applyStunlockToQuadrant(f, r) {
-  const { color, bishopSq } = pendingStunlock;
-  delete stunlockCharges[color][bishopSq];
-  quadrantSquares(f, r).forEach(sq => { stunnedSquares[sq] = 2; });
-  moveLog.push({ san: '⚡' + frToSq(f, r), color });
-  pendingStunlock = null;
-  stunlockTargeting = false;
-  hideStunlockPanel();
-  evaluateGameOver();
-  renderBoard();
-  renderMoveList();
-  updateStatus();
-  updateCaptured();
-  if (gameOver) stopClock();
-}
-
-function showStunlockPanel() {
-  let panel = document.getElementById('stunlock-panel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'stunlock-panel';
-    panel.className = 'stunlock-panel';
-    const moveListContainer = document.querySelector('.move-list-container');
-    moveListContainer.parentNode.insertBefore(panel, moveListContainer);
-  }
-  panel.innerHTML = `
-    <div class="stunlock-panel-title">⚡ Stunlock Ready</div>
-    <div class="stunlock-panel-hint" id="stunlock-hint">Your bishop can cast Stunlock.</div>
-    <div class="stunlock-panel-buttons">
-      <button class="btn btn-primary" id="btn-stunlock-cast">Cast Stunlock</button>
-      <button class="btn btn-secondary" id="btn-stunlock-skip">End Turn</button>
-    </div>`;
-  panel.classList.remove('hidden');
-  document.getElementById('btn-stunlock-cast').addEventListener('click', onStunlockCast);
-  document.getElementById('btn-stunlock-skip').addEventListener('click', onStunlockSkip);
-}
-
-function hideStunlockPanel() {
-  const panel = document.getElementById('stunlock-panel');
-  if (panel) panel.classList.add('hidden');
+function stopStunlockTargeting() {
   stunlockTargeting = false;
   stunlockHoverQuad = null;
   document.removeEventListener('mousemove', onStunlockMouseMove);
   document.removeEventListener('touchmove', onStunlockTouchMove);
 }
 
-function onStunlockCast() {
-  if (!pendingStunlock) return;
-  stunlockTargeting = true;
-  stunlockHoverQuad = null;
-  const hint = document.getElementById('stunlock-hint');
-  if (hint) hint.textContent = 'Hover to preview a quadrant, then click to stun it.';
-  renderBoard();
-  document.addEventListener('mousemove', onStunlockMouseMove);
-  document.addEventListener('touchmove', onStunlockTouchMove, { passive: false });
+// Apply the stunlock to the quadrant whose top-left is (f, r).
+function applyStunlockToQuadrant(f, r) {
+  stopStunlockTargeting();
+  dispatch({ type: 'castAbility', id: 'stunlock', center: frToSq(f, r) });
 }
 
 function onStunlockMouseMove(e) {
@@ -104,16 +48,16 @@ function onStunlockTouchMove(e) {
 }
 
 function updateStunlockPreview(x, y) {
-  if (!stunlockTargeting || !pendingStunlock) return;
+  if (!stunlockTargeting || !state.pendingStunlock) return;
   const el = document.elementFromPoint(x, y);
   const sqEl = el ? el.closest('.square') : null;
   const hoveredSq = sqEl ? sqEl.dataset.square : null;
-  const validQuads = getStunlockQuadrants(pendingStunlock.bishopSq);
+  const validQuads = getStunlockQuadrants(state.pendingStunlock.bishopSq);
   let best = null;
   if (hoveredSq) {
     const matching = validQuads.filter(({ f, r }) => quadrantSquares(f, r).includes(hoveredSq));
     if (matching.length > 0) {
-      const { f: bf, r: br } = sqToFR(pendingStunlock.bishopSq);
+      const { f: bf, r: br } = sqToFR(state.pendingStunlock.bishopSq);
       best = matching.reduce((a, b) => {
         const da = Math.abs((a.f + 0.5) - bf) + Math.abs((a.r + 0.5) - br);
         const db = Math.abs((b.f + 0.5) - bf) + Math.abs((b.r + 0.5) - br);
@@ -140,15 +84,10 @@ function updateStunlockPreview(x, y) {
   }
 }
 
+// Cancel an in-progress cast (Esc/Backspace) — the move that armed it already
+// happened server-side; canceling just leaves it un-cast (no quadrant chosen).
 function onStunlockSkip() {
-  if (!pendingStunlock) return;
-  pendingStunlock = null;
-  stunlockTargeting = false;
-  hideStunlockPanel();
-  evaluateGameOver();
-  renderBoard();
-  renderMoveList();
-  updateStatus();
-  updateCaptured();
-  if (gameOver) stopClock();
+  if (!state.pendingStunlock) return;
+  stopStunlockTargeting();
+  dispatch({ type: 'cancelAbility' });
 }

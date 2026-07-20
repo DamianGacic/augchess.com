@@ -1,0 +1,1 @@
+A global ability, usable once per game. Press its slot on your global ability row (A/S/D/F) to send every pawn-type unit you have one step forward at once, into whatever square is directly ahead of it. A pawn with no free square ahead simply stays put. Casting Advance uses up your turn — you do not also get to make a normal move.

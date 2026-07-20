@@ -19,7 +19,7 @@
   --accent-danger: #c62828;
   --square-light: #f0d9b5;
   --square-dark: #b58863;
-  --square-last-move-light: #cdd16f;
+  --square-last-move-light: #b3a83c;
   --square-last-move-dark: #aaa23a;
   --board-size: min(560px, 90vw, 80vh);
 }
@@ -72,14 +72,26 @@ main {
 
 .game-layout {
   display: grid;
-  grid-template-columns: var(--board-size) 280px;
+  grid-template-columns: 100px var(--board-size) 280px;
   grid-template-rows: auto var(--board-size) auto;
   grid-template-areas:
-    "player-black side"
-    "board        side"
-    "player-white side";
+    ".         player-black side"
+    "abilities board        side"
+    ".         player-white side";
   gap: 8px 16px;
   align-items: start;
+}
+
+/* The rail lives in the BOARD's row/height, not the shorter player-bar rows,
+   so it's naturally level with the board rather than centered a bit below its
+   top. Black's cluster hugs the top (next to Black's bar just above), White's
+   hugs the bottom (next to White's bar just below). */
+#ability-rail {
+  grid-area: abilities;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 /* ===== Player Bars ===== */
@@ -94,16 +106,98 @@ main {
   height: 52px;
 }
 
-#player-black { grid-area: player-black; }
-#player-white { grid-area: player-white; }
+#player-black { grid-area: player-black; align-self: center; }
+#player-white { grid-area: player-white; align-self: center; }
 
-/* When the board is flipped (guest/Black at bottom), swap the player bars */
+/* When the board is flipped (guest/Black at bottom), swap the player bars —
+   and reverse the rail so each cluster still sits next to its own bar. */
 .game-layout.flipped {
   grid-template-areas:
-    "player-white side"
-    "board        side"
-    "player-black side";
+    ".         player-white side"
+    "abilities board        side"
+    ".         player-black side";
 }
+
+.game-layout.flipped #ability-rail {
+  flex-direction: column-reverse;
+}
+
+/* ===== Ability Bar ===== */
+/* One cluster per player, each shown at all times so both sides can see their
+   abilities simultaneously. Within a cluster: global abilities (A/S/D/F,
+   reserved for future non-unit augments) as a single top-to-bottom column,
+   unit abilities (Q/W/E/R, tied to whichever piece that player currently has
+   selected) as a second top-to-bottom column right next to it, closer to the
+   board. */
+.ability-cluster {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.ability-column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ability-slot {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel-alt);
+  cursor: default;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.ability-slot.empty {
+  opacity: 0.4;
+}
+
+.ability-slot:not(.empty) {
+  cursor: pointer;
+}
+
+.ability-slot:not(.empty):hover {
+  border-color: var(--accent);
+}
+
+.ability-slot .ability-key {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.ability-slot .ability-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.ability-slot.armed {
+  border-color: #8e24aa;
+  background: #f3e8fb;
+  box-shadow: 0 0 0 2px rgba(142, 36, 170, 0.35);
+}
+
+.ability-slot.armed .ability-key { color: #8e24aa; }
+
+/* Passive abilities (e.g. Breaking Rank) just sit here once owned — always on,
+   never armed/clicked, so no pointer cursor and a steady (not pulsing) look. */
+.ability-slot.passive {
+  border-color: #b8860b;
+  background: #fff3d6;
+  cursor: default;
+}
+.ability-slot.passive:hover { border-color: #b8860b; }
+.ability-slot.passive .ability-key { color: #8a5a00; }
 
 .player-info {
   display: flex;
@@ -269,6 +363,66 @@ main {
   z-index: 2;
 }
 
+/* Archer shoot target — a ranged kill, not a walk-in capture, so it gets its
+   own mark (a small "x") instead of the move dot or capture ring. */
+.square.legal-shoot::after {
+  content: '×';
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40%;
+  height: 40%;
+  font-size: calc(var(--board-size) / 8 * 0.4);
+  line-height: 1;
+  font-weight: 800;
+  color: rgba(180, 40, 40, 0.75);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Archer shoot range preview — the same 2 squares up either flank plus dead
+   ahead, shown faintly even when empty/unshootable, once the archer is selected. */
+.square.shoot-range-preview::after {
+  content: '×';
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40%;
+  height: 40%;
+  font-size: calc(var(--board-size) / 8 * 0.4);
+  line-height: 1;
+  font-weight: 800;
+  color: rgba(120, 120, 120, 0.35);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Ghoul charge target — a 2-square lunge, distinct from a normal capture, so it
+   gets its own mark (a 3-line claw swipe) instead of the capture ring. Red when
+   an enemy is actually there and the charge is legal; grey preview otherwise. */
+.square.legal-claw::after,
+.square.claw-range-preview::after {
+  content: '';
+  position: absolute;
+  width: 42%;
+  height: 42%;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.square.legal-claw::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='%23b42828' stroke-opacity='0.75' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='4' y1='5' x2='11' y2='20'/%3E%3Cline x1='10' y1='3' x2='17' y2='20'/%3E%3Cline x1='16' y1='4' x2='22' y2='17'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.square.claw-range-preview::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='%23787878' stroke-opacity='0.45' stroke-width='3' stroke-linecap='round'%3E%3Cline x1='4' y1='5' x2='11' y2='20'/%3E%3Cline x1='10' y1='3' x2='17' y2='20'/%3E%3Cline x1='16' y1='4' x2='22' y2='17'/%3E%3C/g%3E%3C/svg%3E");
+}
+
 .square.can-move { cursor: pointer; }
 
 /* ===== Pieces ===== */
@@ -288,7 +442,9 @@ main {
   user-select: none;
 }
 
-.piece.white { color: #d0d0d0; }
+/* Thin dark edge so white pieces stay readable against light highlight colors
+   (last-move, selected, etc.), not just the plain light square color. */
+.piece.white { color: #d0d0d0; -webkit-text-stroke: 0.6px rgba(0, 0, 0, 0.4); }
 .piece.black { color: #2e2e2e; }
 
 .piece:active {
@@ -298,6 +454,30 @@ main {
 }
 
 .piece.dragging { opacity: 0.4; }
+
+/* Figure pieces (e.g. the Troll) that use a cut-out silhouette image instead of
+   the glyph font. There's one baked PNG per side rather than a single mask
+   tinted via currentColor: the white one has .piece.white's dark edge
+   (-webkit-text-stroke, above) baked into its pixels, since text-stroke only
+   works on font glyphs and does nothing for an image. Baking it in also
+   sidesteps -webkit-mask-image + filter:drop-shadow, which don't compose
+   reliably together across browsers. */
+.piece.figure-troll,
+#drag-ghost.figure-troll {
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.piece.white.figure-troll, #drag-ghost.white.figure-troll { background-image: url("troll1-white.png"); }
+.piece.black.figure-troll, #drag-ghost.black.figure-troll { background-image: url("troll1-black.png"); }
+
+/* #drag-ghost otherwise sizes itself from its text glyph's font-size — with no
+   glyph (the background image supplies the shape instead) it has no intrinsic
+   box, so it needs an explicit size to render into. */
+#drag-ghost.figure-troll {
+  width: calc(var(--board-size) / 8 * 0.85);
+  height: calc(var(--board-size) / 8 * 0.85);
+}
 
 /* Host pieces that carry an occupant (rook garrisoning a pawn, knight carrying a
    mounted king) shrink and shift up-left so BOTH pieces are clearly visible
@@ -582,9 +762,16 @@ main {
   background: #f9f9f9;
 }
 
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
 /* ===== Augment Draft Modal ===== */
 .augment-content {
-  width: min(560px, 94vw);
+  width: min(760px, 96vw);
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -631,24 +818,47 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+/* 3 columns: movement/misc augments (left), unit-exchange Corps (middle),
+   activatable abilities (right) — see draft.js augmentColumn(). */
 .augment-list {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.augment-col {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 16px;
+}
+
+.augment-col-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
 }
 
 .augment-card {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 10px 8px;
   background: var(--bg-panel-alt);
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   transition: border-color 0.15s, background 0.15s, transform 0.1s;
 }
 
@@ -669,30 +879,32 @@ main {
 
 .augment-card .ac-cost {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 14px;
   color: #fff;
   background: var(--accent);
 }
 
 .augment-card.cost-2 .ac-cost { background: #c87800; }
+.augment-card.cost-3 .ac-cost { background: #b83232; }
 
-.augment-card .ac-body { flex: 1; }
+.augment-card .ac-body { width: 100%; }
 
 .augment-card .ac-name {
   font-weight: 700;
   color: var(--text-bright);
-  font-size: 14px;
+  font-size: 12.5px;
   margin-bottom: 3px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .augment-card .ac-owner {
@@ -708,9 +920,13 @@ main {
 .augment-card .ac-owner.black { background: #2e2e2e; color: #eee; }
 
 .augment-card .ac-desc {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .augment-actions {
@@ -803,6 +1019,65 @@ main {
 /* The occupant being dragged out fades while the host piece stays visible. */
 .tower-pawn-badge.dragging,
 .mount-king-badge.dragging { opacity: 0.4; }
+
+/* Small badge marking a bishop that still has its Stunlock charge available —
+   purely informational (not a grab target, unlike the badges above). */
+.stunlock-charge-badge {
+  position: absolute;
+  top: -6%;
+  right: -6%;
+  width: 34%;
+  height: 34%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--board-size) / 8 * 0.3);
+  line-height: 1;
+  color: #8e24aa;
+  text-shadow: 0 0 2px rgba(255, 255, 255, 0.9), 0 0 2px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Small icon marking a pawn/bishop that's been exchanged for a ranged figure
+   (Spearman, Archer, Longbowman) — purely informational, drawn in the opposite
+   corner from the Stunlock/Teleport badges above so the two never collide. */
+.figure-badge {
+  position: absolute;
+  bottom: -6%;
+  left: -6%;
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  background-size: 62%;
+  background-repeat: no-repeat;
+  background-position: 52% 52%;
+  pointer-events: none;
+  z-index: 5;
+}
+.figure-badge-spear {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cline x1='4' y1='21' x2='16' y2='9' stroke='%238d6e42' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpolygon points='14,11 19,3 22,5 17,13' fill='%23b0b0b0' stroke='%23555555' stroke-width='0.5'/%3E%3C/svg%3E");
+}
+.figure-badge-bow {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 2 Q16 12 7 22' fill='none' stroke='%237a4a25' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='7' y1='2' x2='7' y2='22' stroke='%23999999' stroke-width='1'/%3E%3Cline x1='2' y1='12' x2='19' y2='12' stroke='%235a5a5a' stroke-width='1.8' stroke-linecap='round'/%3E%3Cpolygon points='19,12 14,9 14,15' fill='%235a5a5a'/%3E%3C/svg%3E");
+}
+
+/* Small dot marking an Apprentice that still has Unstable Teleport available —
+   purely informational, same corner as the Stunlock charge badge above. */
+.teleport-ready-badge {
+  position: absolute;
+  top: -4%;
+  right: -4%;
+  width: 20%;
+  height: 20%;
+  border-radius: 50%;
+  background: #2979ff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 4px rgba(41, 121, 255, 0.8);
+  pointer-events: none;
+  z-index: 5;
+}
 
 
 
@@ -1080,8 +1355,9 @@ main {
 
   .game-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto auto auto auto auto;
     grid-template-areas:
+      "abilities"
       "player-black"
       "board"
       "player-white"
@@ -1090,10 +1366,21 @@ main {
 
   .game-layout.flipped {
     grid-template-areas:
+      "abilities"
       "player-white"
       "board"
       "player-black"
       "side";
+  }
+
+  /* Not enough vertical room to keep the rail level with the board here —
+     both clusters sit side by side in one compact row instead. */
+  #ability-rail,
+  .game-layout.flipped #ability-rail {
+    height: auto;
+    flex-direction: row;
+    justify-content: center;
+    gap: 16px;
   }
 
   .board-wrapper { width: 100%; height: auto; aspect-ratio: 1; }
@@ -1112,6 +1399,10 @@ main {
   
   .augment-cards {
     grid-template-columns: 1fr;
+  }
+
+  .augment-list {
+    flex-direction: column;
   }
 }
 
@@ -1158,47 +1449,175 @@ main {
 .square.stunlock-preview.light { background-color: #d17fe8 !important; }
 .square.stunlock-preview.dark  { background-color: #ab47bc !important; }
 
-/* Stunlock side panel */
-.stunlock-panel {
-  background: linear-gradient(135deg, #f3e8fb 0%, #ede0f7 100%);
-  border: 1.5px solid #b56cd6;
-  border-radius: 8px;
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  box-shadow: 0 2px 8px rgba(120, 40, 180, 0.10);
-}
-.stunlock-panel.hidden { display: none; }
+/* ===== Solar Strike Augment ===== */
 
-.stunlock-panel-title {
-  font-weight: 700;
-  font-size: 14px;
-  color: #7b1fa2;
-  margin-bottom: 5px;
-  letter-spacing: 0.2px;
+/* Board: marked-for-destruction square overlay (amber tint, sun icon) */
+.square.solar-marked::after {
+  content: '☀';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: calc(var(--board-size) / 8 * 0.38);
+  opacity: 0.72;
+  pointer-events: none;
+  z-index: 8;
+  line-height: 1;
+}
+.square.solar-marked.light { background-color: #f5d38a; }
+.square.solar-marked.dark  { background-color: #d9a441; }
+
+/* Board: solar strike targeting — selectable 3x3 centers glow amber */
+.square.solarstrike-target::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 152, 0, 0.18);
+  pointer-events: none;
+  z-index: 2;
+}
+.square.solarstrike-target.light { background-color: #ffe0b2; }
+.square.solarstrike-target.dark  { background-color: #ffb74d; }
+
+/* Hovered 3x3 preview — distinct bright highlight over the block */
+.square.solarstrike-preview {
+  outline: 3px solid #ef6c00;
+  outline-offset: -3px;
+  z-index: 3;
+}
+.square.solarstrike-preview.light { background-color: #ffcc80 !important; }
+.square.solarstrike-preview.dark  { background-color: #fb8c00 !important; }
+
+/* ===== Troll Corps / Clubbing Augment ===== */
+
+/* Board: clubbing targeting — selectable adjacent quadrants glow green */
+.square.clubbing-target::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(76, 175, 80, 0.18);
+  pointer-events: none;
+  z-index: 2;
+}
+.square.clubbing-target.light { background-color: #c8e6c9; }
+.square.clubbing-target.dark  { background-color: #66bb6a; }
+
+/* Hovered quadrant preview — distinct bright highlight over the 2×2 cells */
+.square.clubbing-preview {
+  outline: 3px solid #2e7d32;
+  outline-offset: -3px;
+  z-index: 3;
+}
+.square.clubbing-preview.light { background-color: #81c784 !important; }
+.square.clubbing-preview.dark  { background-color: #388e3c !important; }
+
+/* ===== Silver Bullet Augment ===== */
+
+/* Board: silver bullet targeting — enemy units in range glow steel-gray */
+.square.silverbullet-target::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(158, 158, 158, 0.25);
+  pointer-events: none;
+  z-index: 2;
+}
+.square.silverbullet-target.light { background-color: #e0e0e0; }
+.square.silverbullet-target.dark  { background-color: #9e9e9e; }
+
+/* Hovered target preview — distinct bright highlight */
+.square.silverbullet-preview {
+  outline: 3px solid #616161;
+  outline-offset: -3px;
+  z-index: 3;
+}
+.square.silverbullet-preview.light { background-color: #bdbdbd !important; }
+.square.silverbullet-preview.dark  { background-color: #757575 !important; }
+
+/* ===== Apprentice Corps / Unstable Fireball Augment ===== */
+
+/* Board: fireball targeting — the single valid target glows red-orange */
+.square.fireball-target::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(244, 67, 54, 0.22);
+  pointer-events: none;
+  z-index: 2;
+}
+.square.fireball-target.light { background-color: #ffccbc; }
+.square.fireball-target.dark  { background-color: #e64a19; }
+
+/* Hovered target preview — distinct bright highlight */
+.square.fireball-preview {
+  outline: 3px solid #d84315;
+  outline-offset: -3px;
+  z-index: 3;
+}
+.square.fireball-preview.light { background-color: #ff8a65 !important; }
+.square.fireball-preview.dark  { background-color: #bf360c !important; }
+
+/* ===== Apprentice Corps / Unstable Teleport Augment ===== */
+
+/* Board: teleport targeting — every free eligible field glows violet-blue */
+.square.teleport-target::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(103, 58, 183, 0.18);
+  pointer-events: none;
+  z-index: 2;
+}
+.square.teleport-target.light { background-color: #d1c4e9; }
+.square.teleport-target.dark  { background-color: #7e57c2; }
+
+/* Hovered target preview — distinct bright highlight */
+.square.teleport-preview {
+  outline: 3px solid #512da8;
+  outline-offset: -3px;
+  z-index: 3;
+}
+.square.teleport-preview.light { background-color: #b39ddb !important; }
+.square.teleport-preview.dark  { background-color: #4527a0 !important; }
+
+/* Blue ring around the Apprentice's silhouette, left on both the origin and
+   landing square for one turn after an Unstable Teleport resolves — a
+   lighter-weight marker than last-move, present alongside it, flagging
+   "a teleport happened at this square" specifically (last-move alone
+   doesn't distinguish a teleport from a normal step). Still shows as a bare
+   ring on an empty square (the vanish outcome's origin square). */
+.square.teleport-marked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 76%;
+  height: 76%;
+  border-radius: 50%;
+  border: 3px solid #2979ff;
+  box-shadow: 0 0 6px rgba(41, 121, 255, 0.75);
+  pointer-events: none;
+  z-index: 6;
 }
 
-.stunlock-panel-hint {
-  font-size: 12px;
-  color: #555;
-  margin-bottom: 10px;
-  line-height: 1.45;
+/* Small fire icon left for one turn on any square a unit just died on, shared
+   by Unstable Fireball, Ring of Fire, and Solar Strike (see fireDeathMarked)
+   — an "something burned here" marker, distinct from those abilities' own
+   targeting/aim overlays (fireball-target, solarstrike-target, ...). */
+.square.fire-death-marked::after {
+  content: '🔥';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: calc(var(--board-size) / 8 * 0.38);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 8;
+  line-height: 1;
 }
 
-.stunlock-panel-buttons {
-  display: flex;
-  gap: 8px;
-}
-.stunlock-panel-buttons .btn {
-  flex: 1;
-  padding: 8px 10px;
-  font-size: 12px;
-}
-.stunlock-panel-buttons .btn-primary {
-  background: #8e24aa;
-}
-.stunlock-panel-buttons .btn-primary:hover {
-  background: #ab47bc;
-}
 
 /* ===== Multiplayer UI ===== */
 

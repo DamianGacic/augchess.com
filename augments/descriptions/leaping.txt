@@ -1,1 +1,1 @@
-Your pawns may take a double step straight forward at any time, even jumping over pieces. They cannot capture this way.
+Your pawns may take a double step straight forward at any time, even jumping over pieces. They cannot capture this way. Applies to Apprentices, Ghouls, and Guardsmen too (not Archers) — for Ghouls it also lets their 2-square charge jump over whatever's in the way.

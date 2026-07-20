@@ -1,0 +1,1 @@
+Select your Queen and press Q before moving anything else this turn to mark a 3×3 area, centered up to 2 squares away from her, for destruction. You must still move a different piece afterward to end your turn — the Queen can't be the one that moves. Whatever's left standing in the marked squares once both players have taken one more turn is destroyed.

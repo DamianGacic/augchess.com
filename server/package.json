@@ -1,0 +1,13 @@
+{
+  "name": "augchess-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Authoritative game server for AugChess — holds canonical state per room, both players (and spectators) sync over WebSocket.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

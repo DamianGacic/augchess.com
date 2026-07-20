@@ -1,0 +1,1 @@
+Exchanges all your pawns for Archers. An archer moves forward or diagonally onto empty squares but never captures by moving there. Instead it can shoot the square two rows ahead, or either square flanking it, instantly killing whatever stands there without the archer leaving its square.

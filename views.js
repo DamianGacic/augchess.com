@@ -48,7 +48,8 @@ function renderAugmentsPage() {
     if (!augmentsByCost[aug.cost]) augmentsByCost[aug.cost] = [];
     augmentsByCost[aug.cost].push(aug);
   });
-  [1, 2].forEach(cost => {
+  const costs = Object.keys(augmentsByCost).map(Number).sort((a, b) => a - b);
+  costs.forEach(cost => {
     if (!augmentsByCost[cost] || augmentsByCost[cost].length === 0) return;
     const section = document.createElement('div');
     section.className = 'augments-by-cost';
@@ -175,7 +176,7 @@ function initNavigation() {
 
   startGameBtn.addEventListener('click', () => {
     showView('game');
-    startAugmentDraft();
+    showGameSettings();
   });
 
   document.getElementById('create-game-link-btn').addEventListener('click', () => {

@@ -1,0 +1,1 @@
+Exchanges all your pawns for Spearmen. A spearman moves and captures only one square straight ahead — never diagonally. It still double-steps from its starting square onto open ground, and promotes like a normal pawn. Its braced spear cuts both ways: any unit that captures a Spearman by charging in from directly ahead is impaled and dies with it.
