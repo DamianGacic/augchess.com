@@ -43,7 +43,7 @@
 
       case 'move': {
         if (state.phase !== 'playing') return 'Not currently playing';
-        const move = chessEngine.findRequestedMove(state, color, action.from, action.to, action.promotion);
+        const move = chessEngine.findRequestedMove(state, color, action.from, action.to, action.promotion, action.exit);
         if (typeof move === 'string') return move;
         const { pendingTargeting } = chessEngine.executeMove(state, color, move, action.promotion);
         if (!pendingTargeting) afterTurnSettles(state);

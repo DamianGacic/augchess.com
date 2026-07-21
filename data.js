@@ -25,17 +25,17 @@ const FIGURE_TYPE_NAMES = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: '
 
 const FIGURES = [
   // Pawns
-  { id: 'archer',      name: 'Archer',      replaces: 'p', image: null, desc: 'A nimble archer who moves quietly forward or diagonally, then strikes from a distance — the field two squares ahead, or either square flanking it — without ever leaving its position.' },
+  { id: 'archer',      name: 'Archer',      replaces: 'p', image: 'archer-black.png', desc: 'A nimble archer who moves quietly forward or diagonally, then strikes from a distance — the field two squares ahead, or either square flanking it — without ever leaving its position.' },
   { id: 'apprentice',  name: 'Apprentice',  replaces: 'p', image: null, desc: 'A cautious apprentice who has not yet learned to fight. It advances forward or diagonally onto open ground but can never capture a thing.' },
-  { id: 'ghoul',       name: 'Ghoul',       replaces: 'p', image: null, desc: 'A relentless ghoul that shambles straight ahead, clawing at the square directly before it — or leaping two fields to strike beyond — but never diagonally.' },
+  { id: 'ghoul',       name: 'Ghoul',       replaces: 'p', image: 'ghoul0.png', desc: 'A relentless ghoul that shambles straight ahead, clawing at the square directly before it — or leaping two fields to strike beyond — but never diagonally.' },
   { id: 'guardsman',   name: 'Guardsman',   replaces: 'p', image: null, desc: 'A disciplined guardsman who can shift to any adjacent square, yet still strikes only in the classic forward-diagonal pawn pattern.' },
-  { id: 'spearman',    name: 'Spearman',    replaces: 'p', image: null, desc: 'A braced spearman who only ever moves or strikes one square straight ahead — but any foe that charges in from directly ahead to cut it down is skewered in turn.' },
+  { id: 'spearman',    name: 'Spearman',    replaces: 'p', image: 'spearman-black.png', desc: 'A braced spearman who only ever moves or strikes one square straight ahead — but any foe that charges in from directly ahead to cut it down is skewered in turn.' },
   // Knights
   { id: 'cavalry',     name: 'Cavalry',     replaces: 'n', image: null, desc: 'A mounted warrior who charges across the field. Details coming soon.' },
   // Bishops
-  { id: 'longbowman',  name: 'Longbowman',  replaces: 'b', image: null, desc: 'A skilled longbowman who steps to any free adjacent square, then strikes any unit exactly two squares away in a straight or diagonal line — without ever closing the distance.' },
+  { id: 'longbowman',  name: 'Longbowman',  replaces: 'b', image: 'longbowman-black.png', desc: 'A skilled longbowman who steps to any free adjacent square, then strikes any unit exactly two squares away in a straight or diagonal line — without ever closing the distance.' },
   // Rooks
-  { id: 'troll',       name: 'Troll',       replaces: 'r', image: null, desc: 'A hulking troll who dominates the ranks and files, walking as far as it likes along either — but only onto open ground, never capturing by moving. Once a turn it can instead club an entire adjacent quadrant, flattening every unit inside.' },
+  { id: 'troll',       name: 'Troll',       replaces: 'r', image: 'troll-black.png', desc: 'A hulking troll who dominates the ranks and files, walking as far as it likes along either — but only onto open ground, never capturing by moving. Once a turn it can instead club an entire adjacent quadrant, flattening every unit inside.' },
   // Queens
   { id: 'sorceress',   name: 'Sorceress',   replaces: 'q', image: null, desc: 'A powerful sorceress who bends the rules of movement. Details coming soon.' },
   // Kings

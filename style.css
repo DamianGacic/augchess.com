@@ -455,28 +455,59 @@ main {
 
 .piece.dragging { opacity: 0.4; }
 
-/* Figure pieces (e.g. the Troll) that use a cut-out silhouette image instead of
-   the glyph font. There's one baked PNG per side rather than a single mask
-   tinted via currentColor: the white one has .piece.white's dark edge
-   (-webkit-text-stroke, above) baked into its pixels, since text-stroke only
-   works on font glyphs and does nothing for an image. Baking it in also
-   sidesteps -webkit-mask-image + filter:drop-shadow, which don't compose
-   reliably together across browsers. */
-.piece.figure-troll,
-#drag-ghost.figure-troll {
+/* Figure pieces (Troll, Spearman, Longbowman, Archer) that use a cut-out
+   silhouette image instead of the glyph font. There's one baked PNG per side
+   rather than a single mask tinted via currentColor: the white one has
+   .piece.white's dark edge (-webkit-text-stroke, above) baked into its pixels,
+   since text-stroke only works on font glyphs and does nothing for an image.
+   Baking it in also sidesteps -webkit-mask-image + filter:drop-shadow, which
+   don't compose reliably together across browsers.
+   Images live in figures/images/ under one naming scheme: <figureId>-white.png
+   / <figureId>-black.png, where <figureId> matches the FIGURES id in data.js. */
+.piece.figure-troll, #drag-ghost.figure-troll,
+.piece.figure-spearman, #drag-ghost.figure-spearman,
+.piece.figure-longbowman, #drag-ghost.figure-longbowman,
+.piece.figure-archer, #drag-ghost.figure-archer,
+.piece.figure-ghoul, #drag-ghost.figure-ghoul {
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
 }
-.piece.white.figure-troll, #drag-ghost.white.figure-troll { background-image: url("troll1-white.png"); }
-.piece.black.figure-troll, #drag-ghost.black.figure-troll { background-image: url("troll1-black.png"); }
+.piece.white.figure-troll, #drag-ghost.white.figure-troll { background-image: url("figures/images/troll-white.png"); }
+.piece.black.figure-troll, #drag-ghost.black.figure-troll { background-image: url("figures/images/troll-black.png"); }
+.piece.white.figure-spearman, #drag-ghost.white.figure-spearman { background-image: url("figures/images/spearman-white.png"); }
+.piece.black.figure-spearman, #drag-ghost.black.figure-spearman { background-image: url("figures/images/spearman-black.png"); }
+.piece.white.figure-longbowman, #drag-ghost.white.figure-longbowman { background-image: url("figures/images/longbowman-white.png"); }
+.piece.black.figure-longbowman, #drag-ghost.black.figure-longbowman { background-image: url("figures/images/longbowman-black.png"); }
+.piece.white.figure-archer, #drag-ghost.white.figure-archer { background-image: url("figures/images/archer-white.png"); }
+.piece.black.figure-archer, #drag-ghost.black.figure-archer { background-image: url("figures/images/archer-black.png"); }
+/* Ghoul has no white/black variant — one shared, uncolored artwork set
+   (figures/images/ghoul0.png .. ghoul4.png), so which file is used comes from
+   an inline background-image style set in app.js (see ghoulSkinFile) rather
+   than a per-color rule here. Side is instead distinguished with a brightness
+   filter — lighter for White, darker for Black — same idea as the baked-in
+   per-color shading the other figures get, just applied live since there's
+   only one grey source image to work with. */
+.piece.white.figure-ghoul, #drag-ghost.white.figure-ghoul { filter: brightness(1.6); }
+.piece.black.figure-ghoul, #drag-ghost.black.figure-ghoul { filter: brightness(0.7); }
+
+/* Ghouls read a bit small next to the other figures at the shared 85% size,
+   so they get their own slightly larger box (~14% bigger). */
+.piece.figure-ghoul { width: 97%; height: 97%; }
 
 /* #drag-ghost otherwise sizes itself from its text glyph's font-size — with no
    glyph (the background image supplies the shape instead) it has no intrinsic
    box, so it needs an explicit size to render into. */
-#drag-ghost.figure-troll {
+#drag-ghost.figure-troll,
+#drag-ghost.figure-spearman,
+#drag-ghost.figure-longbowman,
+#drag-ghost.figure-archer {
   width: calc(var(--board-size) / 8 * 0.85);
   height: calc(var(--board-size) / 8 * 0.85);
+}
+#drag-ghost.figure-ghoul {
+  width: calc(var(--board-size) / 8 * 0.97);
+  height: calc(var(--board-size) / 8 * 0.97);
 }
 
 /* Host pieces that carry an occupant (rook garrisoning a pawn, knight carrying a
@@ -1039,31 +1070,6 @@ main {
   z-index: 5;
 }
 
-/* Small icon marking a pawn/bishop that's been exchanged for a ranged figure
-   (Spearman, Archer, Longbowman) — purely informational, drawn in the opposite
-   corner from the Stunlock/Teleport badges above so the two never collide. */
-.figure-badge {
-  position: absolute;
-  bottom: -6%;
-  left: -6%;
-  width: 36%;
-  height: 36%;
-  border-radius: 50%;
-  background-color: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
-  background-size: 62%;
-  background-repeat: no-repeat;
-  background-position: 52% 52%;
-  pointer-events: none;
-  z-index: 5;
-}
-.figure-badge-spear {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cline x1='4' y1='21' x2='16' y2='9' stroke='%238d6e42' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpolygon points='14,11 19,3 22,5 17,13' fill='%23b0b0b0' stroke='%23555555' stroke-width='0.5'/%3E%3C/svg%3E");
-}
-.figure-badge-bow {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 2 Q16 12 7 22' fill='none' stroke='%237a4a25' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='7' y1='2' x2='7' y2='22' stroke='%23999999' stroke-width='1'/%3E%3Cline x1='2' y1='12' x2='19' y2='12' stroke='%235a5a5a' stroke-width='1.8' stroke-linecap='round'/%3E%3Cpolygon points='19,12 14,9 14,15' fill='%235a5a5a'/%3E%3C/svg%3E");
-}
-
 /* Small dot marking an Apprentice that still has Unstable Teleport available —
    purely informational, same corner as the Stunlock charge badge above. */
 .teleport-ready-badge {
@@ -1423,6 +1429,41 @@ main {
 }
 .square.stunned.light { background-color: #d9b3e8; }
 .square.stunned.dark  { background-color: #a666c4; }
+
+/* ===== Breaking Rank Augment ===== */
+
+/* Board: a Ghoul that already auto-charged this turn — locked until it's
+   this color's turn again. Overlay mirrors the move-log glyph (💥). */
+.square.broke-rank::after {
+  content: '💥';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: calc(var(--board-size) / 8 * 0.34);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 8;
+  line-height: 1;
+  filter: grayscale(60%);
+}
+.square.broke-rank.light { background-color: #e0d0d0; }
+.square.broke-rank.dark  { background-color: #a88686; }
+
+/* Rejected-selection feedback: a quick shake + red flash on the square the
+   user just tried (and failed) to select. */
+@keyframes square-ping {
+  0%   { box-shadow: inset 0 0 0 3px rgba(220, 50, 50, 0.85); transform: translateX(0); }
+  20%  { transform: translateX(-4px); }
+  40%  { transform: translateX(4px); }
+  60%  { transform: translateX(-3px); }
+  80%  { transform: translateX(3px); }
+  100% { box-shadow: inset 0 0 0 3px rgba(220, 50, 50, 0); transform: translateX(0); }
+}
+.square.ping {
+  animation: square-ping 0.4s ease-out;
+  z-index: 9;
+}
 
 /* When also selected */
 .square.stunned.selected.light { background-color: #c47cd6; }

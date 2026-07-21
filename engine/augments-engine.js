@@ -182,6 +182,7 @@
     if (!valid) return 'That target is out of range or not a valid line of sight';
 
     if (state.mannedTowers[targetSq]) delete state.mannedTowers[targetSq];
+    delete state.mannedTowerOrigin[targetSq];
     clearMountedIfCaptured(state, targetSq);
     state.game.remove(targetSq);
 
@@ -273,6 +274,7 @@
 
     quadrantSquares(f, r).forEach(sq => {
       if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
+      delete state.mannedTowerOrigin[sq];
       clearMountedIfCaptured(state, sq);
       if (pieceAt(state, sq)) state.game.remove(sq);
     });
@@ -323,6 +325,7 @@
 
     if (killTarget) {
       if (state.mannedTowers[targetSq]) delete state.mannedTowers[targetSq];
+      delete state.mannedTowerOrigin[targetSq];
       clearMountedIfCaptured(state, targetSq);
       state.game.remove(targetSq);
       state.fireDeathMarked[targetSq] = 2;
@@ -334,6 +337,7 @@
     }
     if (killCaster) {
       if (state.mannedTowers[apprenticeSq]) delete state.mannedTowers[apprenticeSq];
+      delete state.mannedTowerOrigin[apprenticeSq];
       clearMountedIfCaptured(state, apprenticeSq);
       state.game.remove(apprenticeSq);
       state.fireDeathMarked[apprenticeSq] = 2;
@@ -439,6 +443,7 @@
     }
 
     if (state.mannedTowers[apprenticeSq]) delete state.mannedTowers[apprenticeSq];
+    delete state.mannedTowerOrigin[apprenticeSq];
     clearMountedIfCaptured(state, apprenticeSq);
     state.game.remove(apprenticeSq);
     delete state.apprenticeTeleportUsed[color][apprenticeSq];

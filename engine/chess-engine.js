@@ -23,6 +23,10 @@
   function newGame(state) {
     state.game = new Chess();
     state.mannedTowers = {};
+    // Which piece type garrisoned each manned tower — 'b' for a Longbowman
+    // (grants shooting from the tower), absent/undefined for everything else
+    // (a plain pawn-type garrison, which can only occupy/vacate the tower).
+    state.mannedTowerOrigin = {};
     state.mounted = { w: null, b: null };
     state.specialSelect = null;
     state.moveLog = [];
@@ -30,6 +34,23 @@
     state.gameOverText = '';
     state.ghoulJustMoved = { w: [], b: [] }; // arrays (not Set) — this gets JSON-broadcast
     state.ghoulBrokeRank = { w: [], b: [] }; // squares of Ghouls that broke rank this turn — can't be moved again until it's this color's turn again
+
+    // Which of the GHOUL_SKIN_COUNT ghoul artwork variants (see figures/images/
+    // ghoul<N>.png) is drawn on each square — assigned once per side at setup
+    // so a ragtag mob of ghouls doesn't render as identical clones, then
+    // carried from square to square as each one moves (see the top of
+    // applyMoveToState, same carry-forward pattern as apprenticeTeleportUsed).
+    state.ghoulSkin = { w: {}, b: {} };
+    ['w', 'b'].forEach(color => {
+      if (figurePawnType(state, color) !== 'ghoul') return;
+      const rank = color === 'w' ? '2' : '7';
+      const skins = FILES.map((_, i) => i % GHOUL_SKIN_COUNT);
+      for (let i = skins.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [skins[i], skins[j]] = [skins[j], skins[i]];
+      }
+      FILES.forEach((file, i) => { state.ghoulSkin[color][file + rank] = skins[i]; });
+    });
 
     state.stunlockCharges = { w: {}, b: {} };
     state.stunnedSquares = {};
@@ -116,6 +137,7 @@
   //  SQUARE / COORDINATE HELPERS
   // ═══════════════════════════════════════════════════════════════════════
   const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+  const GHOUL_SKIN_COUNT = 5; // ghoul0.png .. ghoul4.png in figures/images/
 
   function sqToFR(sq) {
     return { f: FILES.indexOf(sq[0]), r: parseInt(sq[1]) - 1 };
@@ -156,6 +178,7 @@
     const piece = pieceAt(state, sq);
     if (!piece || piece.color !== turn) return [];
     if (state.stunnedSquares[sq] > 0) return [];
+    if (state.ghoulBrokeRank[turn].includes(sq)) return [];
 
     let moves = [];
 
@@ -168,6 +191,15 @@
     const rookFigure = piece.type === 'r' ? figureRookType(state, turn) : null;
     const bishopFigure = piece.type === 'b' ? figureBishopType(state, turn) : null;
     const needsManualCheck = !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) || anyFigureBishopsInPlay(state);
+
+    // Checked ahead of the Rook's own move set below: on the rare square
+    // where a shot lines up with a square the Rook could also slide/capture
+    // into, dedupeMoves keeps whichever of the two was pushed first, and the
+    // garrisoned shooter's option should win that tie over the tower itself
+    // relocating.
+    if (state.mannedTowers[sq] === turn) {
+      moves.push(...generateTowerShootMoves(state, sq, turn));
+    }
 
     if (figure) {
       moves.push(...generateFigurePawnMoves(state, sq, turn, figure));
@@ -187,7 +219,10 @@
       if (piece.type === 'p' && has(state, turn, 'leaping')) moves.push(...generateLeapingMoves(state, sq, turn));
     }
 
-    if (piece.type === 'p' && has(state, turn, 'watchtowers')) {
+    if (piece.type === 'p' && has(state, turn, 'watchtowers') && figure !== 'ghoul') {
+      moves.push(...generateTowerEntryMoves(state, sq, turn));
+    }
+    if (piece.type === 'b' && has(state, turn, 'watchtowers') && bishopFigure === 'longbowman') {
       moves.push(...generateTowerEntryMoves(state, sq, turn));
     }
     if (piece.type === 'k' && has(state, turn, 'mounting')) {
@@ -470,6 +505,7 @@
   function applyBreakingRankCaptures(state, charges, color) {
     for (const { from, to } of charges) {
       if (state.mannedTowers[to]) delete state.mannedTowers[to];
+      delete state.mannedTowerOrigin[to];
       clearMountedIfCaptured(state, to);
       if (pieceAt(state, to)) state.game.remove(to);
       state.game.remove(from);
@@ -511,6 +547,7 @@
       for (const sq of kingAuraSquares(kingSq)) {
         if (!pieceAt(state, sq)) continue;
         if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
+        delete state.mannedTowerOrigin[sq];
         clearMountedIfCaptured(state, sq);
         state.game.remove(sq);
         state.moveLog.push({ san: '🌩' + sq, color });
@@ -554,6 +591,7 @@
           entry.turns++;
           if (entry.turns >= 2) {
             if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
+            delete state.mannedTowerOrigin[sq];
             clearMountedIfCaptured(state, sq);
             state.game.remove(sq);
             state.fireDeathMarked[sq] = 2;
@@ -686,6 +724,28 @@
         const tp = pieceAt(state, target);
         if (!tp || tp.color !== color || tp.type !== 'r') continue;
         res.push({ from: sq, to: target, special: 'towerEnter' });
+      }
+    }
+    return res;
+  }
+
+  // A manned tower's garrison can shoot from inside it exactly like it would
+  // in the open — an Archer with archerShootRangeSquares, a Longbowman with
+  // longbowShootRangeSquares — without leaving the tower. Which pattern (if
+  // any) applies depends on what walked in (mannedTowerOrigin), not on the
+  // Rook standing there: a plain pawn/apprentice/spearman/guardsman garrison
+  // has nothing to shoot with and this returns nothing for it.
+  function generateTowerShootMoves(state, sq, color) {
+    const res = [];
+    if (state.mannedTowerOrigin[sq] === 'b') {
+      for (const target of longbowShootRangeSquares(sq)) {
+        const tp = pieceAt(state, target);
+        if (tp && tp.color !== color) res.push({ from: sq, to: target, special: 'longbowmanShoot', captured: tp.type });
+      }
+    } else if (figurePawnType(state, color) === 'archer') {
+      for (const target of archerShootRangeSquares(sq, color)) {
+        const tp = pieceAt(state, target);
+        if (tp && tp.color !== color) res.push({ from: sq, to: target, special: 'archerShoot', captured: tp.type });
       }
     }
     return res;
@@ -839,6 +899,7 @@
     return {
       fen: state.game.fen(),
       mannedTowers: { ...state.mannedTowers },
+      mannedTowerOrigin: { ...state.mannedTowerOrigin },
       mounted: { ...state.mounted },
       specialSelect: state.specialSelect ? { ...state.specialSelect } : null,
       gameOver: state.gameOver, gameOverText: state.gameOverText,
@@ -851,15 +912,22 @@
       apprenticeTeleportUsed: state.apprenticeTeleportUsed
         ? { w: { ...state.apprenticeTeleportUsed.w }, b: { ...state.apprenticeTeleportUsed.b } }
         : undefined,
+      // Same speculative-mutation concern as apprenticeTeleportUsed above —
+      // applyMoveToState carries ghoulSkin forward unconditionally.
+      ghoulSkin: state.ghoulSkin
+        ? { w: { ...state.ghoulSkin.w }, b: { ...state.ghoulSkin.b } }
+        : undefined,
     };
   }
 
   function restoreSnapshot(state, snap) {
     state.game.load(snap.fen);
     state.mannedTowers = { ...snap.mannedTowers };
+    state.mannedTowerOrigin = { ...snap.mannedTowerOrigin };
     state.mounted = { ...snap.mounted };
     state.specialSelect = snap.specialSelect ? { ...snap.specialSelect } : null;
     state.gameOver = snap.gameOver;
+    if (snap.ghoulSkin) state.ghoulSkin = snap.ghoulSkin;
     state.gameOverText = snap.gameOverText;
     if (snap.apprenticeTeleportUsed) state.apprenticeTeleportUsed = snap.apprenticeTeleportUsed;
   }
@@ -892,8 +960,21 @@
       delete state.apprenticeTeleportUsed.b[m.to];
     }
 
+    // Carry the moving piece's assigned ghoul artwork variant (see newGame)
+    // from m.from to m.to, regardless of move type — same rationale as
+    // apprenticeTeleportUsed just above: whatever skin was recorded at m.to
+    // belonged to a piece that's no longer there.
+    if (state.ghoulSkin) {
+      const skin = state.ghoulSkin[color][m.from];
+      delete state.ghoulSkin.w[m.to];
+      delete state.ghoulSkin.b[m.to];
+      delete state.ghoulSkin[color][m.from];
+      if (skin !== undefined) state.ghoulSkin[color][m.to] = skin;
+    }
+
     if (m.standard) {
       if (state.mannedTowers[m.to]) delete state.mannedTowers[m.to];
+      delete state.mannedTowerOrigin[m.to];
       const mv = { from: m.from, to: m.to };
       if (m.promotion) mv.promotion = m.promotion;
       state.game.move(mv);
@@ -901,11 +982,16 @@
         const c = state.mannedTowers[m.from];
         delete state.mannedTowers[m.from];
         state.mannedTowers[m.to] = c;
+        if (state.mannedTowerOrigin[m.from]) {
+          state.mannedTowerOrigin[m.to] = state.mannedTowerOrigin[m.from];
+          delete state.mannedTowerOrigin[m.from];
+        }
       }
       return;
     }
 
     if (state.mannedTowers[m.to]) delete state.mannedTowers[m.to];
+    delete state.mannedTowerOrigin[m.to];
     clearMountedIfCaptured(state, m.to);
 
     const movedPiece = pieceAt(state, m.from);
@@ -943,13 +1029,18 @@
         break;
       }
       case 'towerEnter': {
+        const enteringType = movedPiece.type;
         state.game.remove(m.from);
         state.mannedTowers[m.to] = color;
+        if (enteringType === 'b') state.mannedTowerOrigin[m.to] = 'b';
+        else delete state.mannedTowerOrigin[m.to];
         break;
       }
       case 'towerLeave': {
         delete state.mannedTowers[m.from];
-        state.game.put({ type: 'p', color }, m.to);
+        const wasBishop = state.mannedTowerOrigin[m.from] === 'b';
+        delete state.mannedTowerOrigin[m.from];
+        state.game.put({ type: wasBishop ? 'b' : 'p', color }, m.to);
         break;
       }
       case 'mount': {
@@ -982,6 +1073,10 @@
           const c = state.mannedTowers[m.from];
           delete state.mannedTowers[m.from];
           state.mannedTowers[m.to] = c;
+          if (state.mannedTowerOrigin[m.from]) {
+            state.mannedTowerOrigin[m.to] = state.mannedTowerOrigin[m.from];
+            delete state.mannedTowerOrigin[m.from];
+          }
         }
         break;
       }
@@ -1050,7 +1145,17 @@
   // Finds+validates the move a client asked for (by from/to/promotion) against
   // the CURRENT legal move list — the server never trusts a client-provided
   // move object wholesale, only the from/to/promotion intent.
-  function findRequestedMove(state, color, from, to, promotionChoice) {
+  //
+  // `exitIntent` disambiguates the one case where a single square legitimately
+  // has two unrelated move sets: a manned tower's square can either slide as
+  // the rook underneath (carrying its garrison along) or have its garrisoned
+  // pawn step off on foot, and a mounted King's square can either move like a
+  // knight or dismount, leaving the knight behind. The client tells us which
+  // one the player meant (the "double-click to arm exit" gesture); we still
+  // independently regenerate the exit move set from scratch rather than
+  // trusting anything else about the client's request — `exitIntent` only
+  // picks which generator runs, same trust boundary as before.
+  function findRequestedMove(state, color, from, to, promotionChoice, exitIntent) {
     if (state.gameOver) return 'Game is over';
     if (state.pendingStunlock) return 'A Stunlock cast is pending — resolve it first';
     if (color !== state.game.turn()) return 'Not your turn';
@@ -1062,7 +1167,8 @@
     if (state.solarStrikeCastThisTurn && piece.type === 'q') {
       return 'The Queen cannot move the same turn Solar Strike was cast';
     }
-    const legal = generateMoves(state, from);
+    const canExit = exitIntent && (state.mannedTowers[from] === color || state.mounted[color] === from);
+    const legal = canExit ? generateExitMoves(state, from) : generateMoves(state, from);
     const move = legal.find(m => m.to === to);
     if (!move) return 'Illegal move';
     if (move.needsPromo && !promotionChoice) return 'A promotion piece is required';
@@ -1086,6 +1192,7 @@
 
     if (impaled) {
       if (state.mannedTowers[m.to]) delete state.mannedTowers[m.to];
+      delete state.mannedTowerOrigin[m.to];
       clearMountedIfCaptured(state, m.to);
       if (pieceAt(state, m.to)) state.game.remove(m.to);
     }
@@ -1143,6 +1250,7 @@
       if (state.solarMarked[sq] <= 0) {
         delete state.solarMarked[sq];
         if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
+        delete state.mannedTowerOrigin[sq];
         clearMountedIfCaptured(state, sq);
         if (pieceAt(state, sq)) {
           state.game.remove(sq);

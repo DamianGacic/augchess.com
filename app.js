@@ -371,7 +371,11 @@ function attemptMove(from, to) {
 }
 
 function submitMove(move, promotionChoice) {
-  dispatch({ type: 'move', from: move.from, to: move.to, promotion: promotionChoice });
+  // towerLeave/dismount share their origin square with an unrelated move set
+  // (the manned rook sliding, or the mounted King riding) — this tells the
+  // server which one the double-click-armed selection actually meant.
+  const exit = move.special === 'towerLeave' || move.special === 'dismount';
+  dispatch({ type: 'move', from: move.from, to: move.to, promotion: promotionChoice, exit });
   selectedSquare = null;
   legalMoves = [];
   if (!netMode) return; // hotseat: dispatch() already re-rendered via engine.applyAction
@@ -398,6 +402,34 @@ function showPromotionModal(color) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  FIGURE IMAGES
+// ═══════════════════════════════════════════════════════════════════════════════
+// Figures (Troll, Spearman, Longbowman, Archer, Ghoul) render as a cut-out
+// image instead of the glyph font — see figures/images/ and the .figure-<id>
+// rules in style.css. Returns the CSS class to add (e.g. 'figure-troll') or
+// null if this piece type/color combo has no custom image and should use the
+// glyph.
+function figureImageKey(state, pieceType, color) {
+  if (pieceType === 'p' && figurePawnType(state, color) === 'spearman') return 'spearman';
+  if (pieceType === 'p' && figurePawnType(state, color) === 'archer') return 'archer';
+  if (pieceType === 'p' && figurePawnType(state, color) === 'ghoul') return 'ghoul';
+  if (pieceType === 'b' && figureBishopType(state, color) === 'longbowman') return 'longbowman';
+  if (pieceType === 'r' && figureRookType(state, color) === 'troll') return 'troll';
+  return null;
+}
+
+// Ghouls share one un-tinted artwork set across both colors (unlike the other
+// figures, which bake a white/black edge into separate PNGs), with each of
+// the GHOUL_SKIN_COUNT variants assigned per-square at game setup (see
+// newGame in chess-engine.js) so a side's ghouls read as a ragtag mob rather
+// than identical clones. Falls back to variant 0 if a square's assignment is
+// somehow missing (e.g. a ghoul that arrived via an older/incompatible state).
+function ghoulSkinFile(state, sq, color) {
+  const idx = state.ghoulSkin && state.ghoulSkin[color] ? state.ghoulSkin[color][sq] : undefined;
+  return `figures/images/ghoul${idx !== undefined ? idx : 0}.png`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  RENDER BOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 function renderBoard() {
@@ -415,7 +447,17 @@ function renderBoard() {
   let longbowShootRange = null;
   if (selectedSquare) {
     const selPiece = pieceAt(state, selectedSquare);
-    if (selPiece && selPiece.type === 'p') {
+    const mannedColor = state.mannedTowers[selectedSquare];
+    if (mannedColor) {
+      // A manned tower's board square holds the Rook underneath, not the
+      // garrison — its shoot range (if any) comes from what walked in, same
+      // as generateTowerShootMoves.
+      if (state.mannedTowerOrigin[selectedSquare] === 'b') {
+        longbowShootRange = longbowShootRangeSquares(selectedSquare);
+      } else if (figurePawnType(state, mannedColor) === 'archer') {
+        archerShootRange = archerShootRangeSquares(selectedSquare, mannedColor);
+      }
+    } else if (selPiece && selPiece.type === 'p') {
       const selFigure = figurePawnType(state, selPiece.color);
       if (selFigure === 'archer') archerShootRange = archerShootRangeSquares(selectedSquare, selPiece.color);
       else if (selFigure === 'ghoul') ghoulChargeRange = ghoulChargeSquares(state, selectedSquare, selPiece.color);
@@ -485,6 +527,8 @@ function renderBoard() {
 
       if (state.stunnedSquares[sq] > 0) sqEl.classList.add('stunned');
 
+      if (state.ghoulBrokeRank[state.game.turn()].includes(sq)) sqEl.classList.add('broke-rank');
+
       if (stunlockTargeting && state.pendingStunlock) {
         const validQuads = getStunlockQuadrants(state.pendingStunlock.bishopSq);
         const isTargetable = validQuads.some(({ f: qf, r: qr }) => quadrantSquares(qf, qr).includes(sq));
@@ -543,17 +587,18 @@ function renderBoard() {
       const piece = pieceAt(state, sq);
       if (state.mannedTowers[sq]) {
         const color = state.mannedTowers[sq];
-        const isTroll = figureRookType(state, color) === 'troll';
+        const figureKey = figureImageKey(state, 'r', color);
         const pieceEl = document.createElement('div');
-        pieceEl.className = 'piece manned-tower ' + (color === 'w' ? 'white' : 'black') + (isTroll ? ' figure-troll' : '');
-        if (!isTroll) pieceEl.textContent = PIECES[color + 'R'];
+        pieceEl.className = 'piece manned-tower ' + (color === 'w' ? 'white' : 'black') + (figureKey ? ' figure-' + figureKey : '');
+        if (!figureKey) pieceEl.textContent = PIECES[color + 'R'];
         pieceEl.dataset.square = sq;
         attachPieceHandlers(pieceEl, sq);
 
+        const isBishopGarrison = state.mannedTowerOrigin[sq] === 'b';
         const badge = document.createElement('div');
         badge.className = 'tower-pawn-badge ' + (color === 'w' ? 'white' : 'black');
-        badge.textContent = PIECES[color + 'P'];
-        badge.title = 'Drag the pawn out of the tower';
+        badge.textContent = PIECES[color + (isBishopGarrison ? 'B' : 'P')];
+        badge.title = isBishopGarrison ? 'Drag the Longbowman out of the tower' : 'Drag the pawn out of the tower';
         badge.addEventListener('mousedown', (ev) => {
           ev.stopPropagation(); ev.preventDefault();
           beginBadgeDrag(sq, color, ev.clientX, ev.clientY, false);
@@ -594,10 +639,11 @@ function renderBoard() {
 
         sqEl.appendChild(pieceEl);
       } else if (piece) {
-        const isTroll = piece.type === 'r' && figureRookType(state, piece.color) === 'troll';
+        const figureKey = figureImageKey(state, piece.type, piece.color);
         const pieceEl = document.createElement('div');
-        pieceEl.className = 'piece ' + (piece.color === 'w' ? 'white' : 'black') + (isTroll ? ' figure-troll' : '');
-        if (!isTroll) pieceEl.textContent = PIECES[piece.color + piece.type.toUpperCase()];
+        pieceEl.className = 'piece ' + (piece.color === 'w' ? 'white' : 'black') + (figureKey ? ' figure-' + figureKey : '');
+        if (!figureKey) pieceEl.textContent = PIECES[piece.color + piece.type.toUpperCase()];
+        if (figureKey === 'ghoul') pieceEl.style.backgroundImage = `url("${ghoulSkinFile(state, sq, piece.color)}")`;
         pieceEl.dataset.square = sq;
         if (piece.color !== state.game.turn() || state.gameOver || !isMyTurn()) pieceEl.style.cursor = 'default';
         attachPieceHandlers(pieceEl, sq);
@@ -616,21 +662,6 @@ function renderBoard() {
           teleportBadge.className = 'teleport-ready-badge';
           teleportBadge.title = 'Unstable Teleport ready (select this Apprentice, then its ability slot)';
           pieceEl.appendChild(teleportBadge);
-        }
-
-        if (piece.type === 'p' && figurePawnType(state, piece.color) === 'spearman') {
-          const spearBadge = document.createElement('div');
-          spearBadge.className = 'figure-badge figure-badge-spear';
-          spearBadge.title = 'Spearman';
-          pieceEl.appendChild(spearBadge);
-        }
-
-        if ((piece.type === 'p' && figurePawnType(state, piece.color) === 'archer') ||
-            (piece.type === 'b' && figureBishopType(state, piece.color) === 'longbowman')) {
-          const bowBadge = document.createElement('div');
-          bowBadge.className = 'figure-badge figure-badge-bow';
-          bowBadge.title = piece.type === 'p' ? 'Archer' : 'Longbowman';
-          pieceEl.appendChild(bowBadge);
         }
 
         sqEl.appendChild(pieceEl);
@@ -770,6 +801,8 @@ function onSquareClick(e) {
     const move = legalMoves.find(m => m.to === sq);
     if (move) { attemptMove(selectedSquare, sq); return; }
 
+    if (isGhoulLocked(sq)) { pingLockedGhoul(sq); deselectSquare(); return; }
+
     const piece = pieceAt(state, sq);
     const isOwnMovable = (piece && piece.color === turn) || (state.mannedTowers[sq] === turn) || (state.mounted[turn] === sq);
     if (isOwnMovable && !(state.specialSelect && state.specialSelect.square === selectedSquare)) {
@@ -777,6 +810,7 @@ function onSquareClick(e) {
     }
     deselectSquare();
   } else {
+    if (isGhoulLocked(sq)) { pingLockedGhoul(sq); return; }
     selectSquare(sq);
   }
 }
@@ -797,7 +831,9 @@ function armSpecialExit(sq, turn) {
 function beginBadgeDrag(sq, color, x, y, isTouch) {
   if (state.gameOver || color !== state.game.turn() || !isMyTurn()) return;
   armSpecialExit(sq, color);
-  const occupant = state.mannedTowers[sq] ? color + 'P' : color + 'K';
+  const occupant = state.mannedTowers[sq]
+    ? color + (state.mannedTowerOrigin[sq] === 'b' ? 'B' : 'P')
+    : color + 'K';
   startDrag(sq, x, y, { glyphKey: occupant, color, fromBadge: true });
   if (isTouch) {
     document.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -827,6 +863,30 @@ function deselectSquare() {
   renderBoard();
 }
 
+// A Ghoul that auto-charged via Breaking Rank this turn can't be moved again
+// until it's this color's turn again (server-enforced in findRequestedMove) —
+// this mirrors that lock on the client so selection attempts get a visible
+// "no" instead of silently doing nothing.
+function isGhoulLocked(sq) {
+  const turn = state.game.turn();
+  const piece = pieceAt(state, sq);
+  return !!piece && piece.color === turn && state.ghoulBrokeRank[turn].includes(sq);
+}
+
+function pingSquare(sq) {
+  const sqEl = boardEl.querySelector(`.square[data-square="${sq}"]`);
+  if (!sqEl) return;
+  sqEl.classList.remove('ping');
+  void sqEl.offsetWidth; // restart the CSS animation if it's already running
+  sqEl.classList.add('ping');
+  setTimeout(() => sqEl.classList.remove('ping'), 400);
+}
+
+function pingLockedGhoul(sq) {
+  pingSquare(sq);
+  flashStatus("This Ghoul already broke rank — it can't move again this turn");
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  DRAG-TO-MOVE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -839,6 +899,7 @@ function onPieceMouseDown(e) {
   const piece = pieceAt(state, sq);
   const isOwn = (piece && piece.color === turn) || (state.mannedTowers[sq] === turn) || (state.mounted[turn] === sq);
   if (!isOwn) return;
+  if (isGhoulLocked(sq)) { pingLockedGhoul(sq); return; }
 
   e.preventDefault();
   startDrag(sq, e.clientX, e.clientY);
@@ -855,6 +916,7 @@ function onPieceTouchStart(e) {
   const piece = pieceAt(state, sq);
   const isOwn = (piece && piece.color === turn) || (state.mannedTowers[sq] === turn) || (state.mounted[turn] === sq);
   if (!isOwn) return;
+  if (isGhoulLocked(sq)) { pingLockedGhoul(sq); return; }
   e.preventDefault();
   const touch = e.touches[0];
 
@@ -875,31 +937,32 @@ function startDrag(sq, x, y, dragInfo) {
 
   dragState = { fromSquare: sq, fromBadge: !!(dragInfo && dragInfo.fromBadge) };
 
-  let glyph, color, badgeKey = null, isTroll = false;
+  let glyph, color, badgeKey = null, figureKey = null;
   if (dragInfo && dragInfo.glyphKey) {
     glyph = PIECES[dragInfo.glyphKey];
     color = dragInfo.color;
-    isTroll = dragInfo.glyphKey[1] === 'R' && figureRookType(state, color) === 'troll';
+    figureKey = figureImageKey(state, dragInfo.glyphKey[1].toLowerCase(), color);
   } else if (state.mannedTowers[sq]) {
     color = state.mannedTowers[sq];
     glyph = PIECES[color + 'R'];
-    badgeKey = color + 'P';
-    isTroll = figureRookType(state, color) === 'troll';
+    badgeKey = color + (state.mannedTowerOrigin[sq] === 'b' ? 'B' : 'P');
+    figureKey = figureImageKey(state, 'r', color);
   } else {
     const piece = pieceAt(state, sq);
     color = piece.color;
     glyph = PIECES[color + piece.type.toUpperCase()];
-    isTroll = piece.type === 'r' && figureRookType(state, color) === 'troll';
+    figureKey = figureImageKey(state, piece.type, color);
     if (state.mounted[color] === sq && piece.type === 'k') {
       glyph = PIECES[color + 'N'];
       badgeKey = color + 'K';
-      isTroll = false;
+      figureKey = null;
     }
   }
 
-  dragGhost.className = (color === 'w' ? 'white' : 'black') + (isTroll ? ' figure-troll' : '');
+  dragGhost.className = (color === 'w' ? 'white' : 'black') + (figureKey ? ' figure-' + figureKey : '');
   dragGhost.innerHTML = '';
-  dragGhost.textContent = isTroll ? '' : glyph;
+  dragGhost.textContent = figureKey ? '' : glyph;
+  dragGhost.style.backgroundImage = figureKey === 'ghoul' ? `url("${ghoulSkinFile(state, sq, color)}")` : '';
   if (badgeKey) {
     dragGhost.classList.add('has-occupant');
     const ghostBadge = document.createElement('span');
@@ -1056,7 +1119,10 @@ function updateCaptured() {
     const cell = board[r][f];
     if (cell) counts[cell.color][cell.type]++;
   }
-  for (const sq in state.mannedTowers) counts[state.mannedTowers[sq]].p++;
+  for (const sq in state.mannedTowers) {
+    const garrisonType = state.mannedTowerOrigin[sq] === 'b' ? 'b' : 'p';
+    counts[state.mannedTowers[sq]][garrisonType]++;
+  }
 
   const capturedByW = [];
   const capturedByB = [];
