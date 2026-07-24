@@ -8,7 +8,7 @@
 (function (root) {
   const isNode = typeof module !== 'undefined' && module.exports;
   const chessEngine = isNode ? require('./chess-engine.js') : root;
-  const { pieceAt, frToSq, sqToFR, findKingSquare, isKingAttacked, has,
+  const { pieceAt, frToSq, sqToFR, findKingSquare, isKingAttacked, isCheckDoomedByFire, has,
     figurePawnType, anyFigurePawnsInPlay, figureRookType, anyFigureRooksInPlay,
     figureBishopType, anyFigureBishopsInPlay, squareAttackedBy,
     snapshotState, restoreSnapshot } = chessEngine;
@@ -22,7 +22,11 @@
 
     const hasActiveStun = Object.keys(state.stunnedSquares).some(sq => state.stunnedSquares[sq] > 0);
 
-    if (!state.mounted.w && !state.mounted.b && !hasActiveStun && !anyFigurePawnsInPlay(state) && !anyFigureRooksInPlay(state) && !anyFigureBishopsInPlay(state)) {
+    // Also bumped to the manual path below whenever the current check is
+    // doomed to burn away in Ring of Fire (see isCheckDoomedByFire) —
+    // chess.js's own in_checkmate() has no notion of that and would call
+    // the game over a move early.
+    if (!state.mounted.w && !state.mounted.b && !hasActiveStun && !anyFigurePawnsInPlay(state) && !anyFigureRooksInPlay(state) && !anyFigureBishopsInPlay(state) && !isCheckDoomedByFire(state, state.game.turn())) {
       if (state.game.in_checkmate()) {
         const winner = state.game.turn() === 'w' ? 'Black' : 'White';
         state.gameOver = true; state.gameOverText = `♛ ${winner} wins by checkmate!`;
@@ -336,7 +340,8 @@
           break;
         }
       }
-      return !isKingAttacked(state, color);
+      if (!isKingAttacked(state, color)) return true;
+      return isCheckDoomedByFire(state, color);
     } catch (err) {
       return false;
     } finally {

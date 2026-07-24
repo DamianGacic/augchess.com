@@ -466,6 +466,28 @@ function renderBoard() {
     }
   }
 
+  // Lightning Aura: once armed for a color, highlight the 8 squares
+  // currently touching that King — it follows the King as it moves, so this
+  // is recomputed fresh every render rather than cached in state.
+  const lightningZones = {};
+  for (const color of ['w', 'b']) {
+    if (!state.lightningActive[color]) continue;
+    const kingSq = state.mounted[color] || findKingSquare(state, color);
+    if (kingSq) lightningZones[color] = { kingSq, zone: kingAuraSquares(kingSq) };
+  }
+
+  // Ring of Fire: same zone highlight as Lightning Aura, but a unit standing
+  // in it only dies after a SECOND consecutive turn-end check — state.fireAura
+  // already tracks exactly which squares are mid-countdown (see
+  // checkRingOfFire), so those get their own "about to burn" warning on top
+  // of the ambient zone tint, shown before the kill actually happens.
+  const fireZones = {};
+  for (const color of ['w', 'b']) {
+    if (!state.fireActive[color]) continue;
+    const kingSq = state.mounted[color] || findKingSquare(state, color);
+    if (kingSq) fireZones[color] = { kingSq, zone: kingAuraSquares(kingSq) };
+  }
+
   for (let r = 0; r < 8; r++) {
     for (let f = 0; f < 8; f++) {
       const rank = displayRanks[r];
@@ -583,6 +605,21 @@ function renderBoard() {
       if (state.solarMarked[sq] > 0) sqEl.classList.add('solar-marked');
       if (state.teleportMarked[sq] > 0) sqEl.classList.add('teleport-marked');
       if (state.fireDeathMarked[sq] > 0) sqEl.classList.add('fire-death-marked');
+
+      for (const color of ['w', 'b']) {
+        const lz = lightningZones[color];
+        if (!lz) continue;
+        if (sq === lz.kingSq) sqEl.classList.add('lightning-king');
+        else if (lz.zone.includes(sq)) sqEl.classList.add('lightning-zone');
+      }
+
+      for (const color of ['w', 'b']) {
+        const fz = fireZones[color];
+        if (!fz) continue;
+        if (sq === fz.kingSq) sqEl.classList.add('fire-king');
+        else if (fz.zone.includes(sq)) sqEl.classList.add('fire-zone');
+      }
+      if (state.fireAura[sq] && state.fireAura[sq].turns >= 1) sqEl.classList.add('fire-priming');
 
       const piece = pieceAt(state, sq);
       if (state.mannedTowers[sq]) {

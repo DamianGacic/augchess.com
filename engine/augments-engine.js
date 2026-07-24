@@ -193,7 +193,7 @@
     return null;
   }
 
-  // ── I Am Lightning (King) ────────────────────────────────────────────────
+  // ── Lightning Aura (King) ────────────────────────────────────────────────
   // One-shot, once per game: arms the King's permanent lightning aura. From
   // then on checkKingsLightning (chess-engine.js) enforces it at the end of
   // every turn, for the rest of the game — this function only flips the
@@ -204,18 +204,18 @@
   function castKingsLightning(state, color) {
     if (state.gameOver) return 'Game is over';
     if (color !== state.game.turn()) return 'Not your turn';
-    if (!has(state, color, 'kingsLightning')) return 'You do not have I Am Lightning';
-    if (state.lightningActive[color]) return 'I Am Lightning is already active';
+    if (!has(state, color, 'kingsLightning')) return 'You do not have Lightning Aura';
+    if (state.lightningActive[color]) return 'Lightning Aura is already active';
 
     state.lightningActive[color] = true;
-    state.moveLog.push({ san: '🌩 I Am Lightning', color });
+    state.moveLog.push({ san: '🌩 Lightning Aura', color });
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
   }
 
   // ── Ring of Fire (King) ──────────────────────────────────────────────────
-  // Same activation as I Am Lightning — one-shot, once per game, no
+  // Same activation as Lightning Aura — one-shot, once per game, no
   // targeting, consumes the turn immediately via flipTurnFen. checkRingOfFire
   // (chess-engine.js) then enforces the slower burn at the end of every turn
   // for the rest of the game. See castAbility dispatch in engine/index.js for

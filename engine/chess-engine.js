@@ -190,7 +190,11 @@
     const figure = piece.type === 'p' ? figurePawnType(state, turn) : null;
     const rookFigure = piece.type === 'r' ? figureRookType(state, turn) : null;
     const bishopFigure = piece.type === 'b' ? figureBishopType(state, turn) : null;
-    const needsManualCheck = !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) || anyFigureBishopsInPlay(state);
+    // Also forced whenever the current check is doomed to burn away in Ring
+    // of Fire (see isCheckDoomedByFire) — chess.js's own move generator has
+    // no idea that's coming and would refuse to offer any move that doesn't
+    // address the check by its own (correct, but here too strict) rules.
+    const needsManualCheck = !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) || anyFigureBishopsInPlay(state) || isCheckDoomedByFire(state, turn);
 
     // Checked ahead of the Rook's own move set below: on the rare square
     // where a shot lines up with a square the Rook could also slide/capture
@@ -521,7 +525,7 @@
     if (state.mounted.b === sq) state.mounted.b = null;
   }
 
-  // ── King auras (I Am Lightning / Ring of Fire) ───────────────────────────
+  // ── King auras (Lightning Aura / Ring of Fire) ───────────────────────────
   // Shared square math for both King auras below: the 8 squares touching
   // wherever that King currently stands, not a fixed zone — it follows the
   // King as it moves.
@@ -805,13 +809,14 @@
   //  CHECK DETECTION
   // ═══════════════════════════════════════════════════════════════════════
   function filterIntoCheck(state, moves, color) {
-    const needsManualCheck = !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) || anyFigureBishopsInPlay(state);
+    const needsManualCheck = !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) || anyFigureBishopsInPlay(state) || isCheckDoomedByFire(state, color);
     return moves.filter(m => {
       if (m.standard && !needsManualCheck) return true;
       const snap = snapshotState(state);
       try {
         applyMoveToState(state, m, color, true);
-        return !isKingAttacked(state, color);
+        if (!isKingAttacked(state, color)) return true;
+        return isCheckDoomedByFire(state, color);
       } finally {
         restoreSnapshot(state, snap);
       }
@@ -822,6 +827,60 @@
     const kingSq = state.mounted[color] || findKingSquare(state, color);
     if (!kingSq) return false;
     return squareAttackedBy(state, kingSq, color === 'w' ? 'b' : 'w');
+  }
+
+  // Every enemy piece currently attacking `color`'s King (not just whether
+  // one exists, like squareAttackedBy/isKingAttacked above) — needed to tell
+  // whether ALL of them are about to burn away, below.
+  function kingCheckers(state, color) {
+    const kingSq = state.mounted[color] || findKingSquare(state, color);
+    if (!kingSq) return [];
+    const byColor = color === 'w' ? 'b' : 'w';
+    const board = state.game.board();
+    const { f: tf, r: tr } = sqToFR(kingSq);
+    const checkers = [];
+    for (let br = 0; br < 8; br++) {
+      for (let bf = 0; bf < 8; bf++) {
+        const cell = board[br][bf];
+        if (!cell || cell.color !== byColor) continue;
+        const pf = bf, pr = 7 - br;
+        const psq = frToSq(pf, pr);
+        if (state.mounted[byColor] === psq && cell.type === 'k') {
+          if (knightAttacks(pf, pr, tf, tr)) checkers.push(psq);
+          continue;
+        }
+        if (attacksSquare(state, cell.type, cell.color, pf, pr, tf, tr)) checkers.push(psq);
+      }
+    }
+    return checkers;
+  }
+
+  // A checking piece that's already spent one turn standing in this King's
+  // Ring of Fire (state.fireAura entry with turns >= 1 — see
+  // checkRingOfFire) is guaranteed to burn away at the very end of THIS
+  // turn, before the other player ever gets to act on the check again — so
+  // it doesn't actually need a normal response. True only when EVERY
+  // current checker is one of these doomed pieces, and — checked by
+  // literally removing them from a scratch copy of the board — doing so
+  // doesn't leave the King attacked by anything else (a queen/rook/bishop
+  // they were blocking, or a separate attacker already in play).
+  function isCheckDoomedByFire(state, color) {
+    if (!state.fireActive || !state.fireActive[color]) return false;
+    const checkers = kingCheckers(state, color);
+    if (!checkers.length) return false;
+    const allDoomed = checkers.every(sq => {
+      const entry = state.fireAura[sq];
+      return entry && entry.color === color && entry.turns >= 1;
+    });
+    if (!allDoomed) return false;
+
+    const snap = snapshotState(state);
+    try {
+      checkers.forEach(sq => state.game.remove(sq));
+      return !isKingAttacked(state, color);
+    } finally {
+      restoreSnapshot(state, snap);
+    }
   }
 
   function squareAttackedBy(state, sq, byColor) {
@@ -1317,7 +1376,7 @@
     archerShootRangeSquares, longbowShootRangeSquares, ghoulChargeSquares, ghoulLegalChargeTargets,
     generateLeapingMoves, generateKingsPawnMoves, generateTowerEntryMoves,
     generateMountMoves, generateMountedKingMoves,
-    filterIntoCheck, isKingAttacked, squareAttackedBy, attacksSquare, clearPath,
+    filterIntoCheck, isKingAttacked, kingCheckers, isCheckDoomedByFire, squareAttackedBy, attacksSquare, clearPath,
     applyMoveToState, executeMove, describeMove, findRequestedMove, flipTurnFen,
     checkBreakingRank, applyBreakingRankCaptures, clearMountedIfCaptured,
     tickStunCounters, tickSolarMarks, tickTeleportMarks, tickFireDeathMarks,

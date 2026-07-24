@@ -63,7 +63,7 @@
         // never sets pendingStunlock, so this only fires for Stunlock.
         const stunlockResolved = wasPending && !state.pendingStunlock;
         // Advance, Silver Bullet, Clubbing, Unstable Fireball, Unstable
-        // Teleport, I Am Lightning, and Ring of Fire all flip state.game's
+        // Teleport, Lightning Aura, and Ring of Fire all flip state.game's
         // turn themselves (see castAdvance/castSilverBullet/castClubbing/
         // castUnstableFireball/castUnstableTeleport/castKingsLightning/
         // castRingOfFire) since they consume the turn on their own, with no

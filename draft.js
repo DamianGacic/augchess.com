@@ -10,6 +10,8 @@ const augmentModal        = document.getElementById('augment-modal');
 const augmentColOther     = document.getElementById('augment-col-other');
 const augmentColExchange  = document.getElementById('augment-col-exchange');
 const augmentColAbility   = document.getElementById('augment-col-ability');
+const augmentSlotsWhite   = document.getElementById('augment-slots-white');
+const augmentSlotsBlack   = document.getElementById('augment-slots-black');
 const augmentTurnText  = document.getElementById('augment-turn-text');
 const apWhiteEl       = document.getElementById('ap-white');
 const apBlackEl       = document.getElementById('ap-black');
@@ -63,6 +65,78 @@ function augmentColumn(aug) {
   return augmentColOther;
 }
 
+// Follow-up augments unlocked once `id` is owned (e.g. Ghoul Corps unlocks
+// Deviant and Breaking Rank). These never appear in the main grid — they
+// only render as skill-tree children under their parent's slot card.
+function augmentChildren(id) {
+  return AUGMENTS.filter(a => a.requires === id);
+}
+
+function buildSlotCard(aug, extraClass) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = 'augment-slot-card' + (extraClass ? ' ' + extraClass : '');
+  card.innerHTML = `<span class="as-cost">${aug.cost}</span><span class="as-name">${aug.name}</span>`;
+  card.title = aug.desc;
+  return card;
+}
+
+// Renders one player's side panel: plain picks (no follow-ups) on top, then
+// picks that unlocked a follow-up augment, each immediately followed by
+// that follow-up — greyed out until it's actually taken.
+function renderAugmentSlots(color, container) {
+  container.innerHTML = '';
+  const ds = state.draftState;
+  const ownedIds = ds.owned[color];
+  const topLevel = ownedIds.filter(id => augmentChildren(id).length === 0 && !AUGMENTS.find(a => a.id === id).requires);
+  const withChildren = ownedIds.filter(id => augmentChildren(id).length > 0);
+
+  topLevel.forEach(id => {
+    const aug = AUGMENTS.find(a => a.id === id);
+    if (!aug) return;
+    const card = buildSlotCard(aug, 'picked');
+    card.addEventListener('click', () => showAugmentDetail(aug));
+    container.appendChild(card);
+  });
+
+  withChildren.forEach(id => {
+    const aug = AUGMENTS.find(a => a.id === id);
+    if (!aug) return;
+    const group = document.createElement('div');
+    group.className = 'augment-slot-group';
+
+    const parentCard = buildSlotCard(aug, 'picked');
+    parentCard.addEventListener('click', () => showAugmentDetail(aug));
+    group.appendChild(parentCard);
+
+    augmentChildren(id).forEach(childAug => {
+      const owned = ownedIds.includes(childAug.id);
+      const childCard = buildSlotCard(childAug, owned ? 'picked child' : 'greyed child');
+      if (owned) {
+        childCard.addEventListener('click', () => showAugmentDetail(childAug));
+      } else {
+        const affordable = ds.points[color] >= childAug.cost;
+        const canInteractHere = !state.gameOver && ds.current === color && (!netMode || myColor === color);
+        if (affordable && canInteractHere) {
+          childCard.addEventListener('click', () => dispatch({ type: 'draftPick', augId: childAug.id }));
+        } else {
+          childCard.disabled = true;
+        }
+      }
+      group.appendChild(childCard);
+    });
+
+    container.appendChild(group);
+  });
+
+  if (!topLevel.length && !withChildren.length) {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'augment-slot-placeholder';
+    placeholder.textContent = 'No picks yet';
+    container.appendChild(placeholder);
+  }
+}
+
 function renderDraft() {
   const ds = state.draftState;
   apWhiteEl.textContent = ds.points.w;
@@ -82,14 +156,19 @@ function renderDraft() {
 
   const byPrice = [...AUGMENTS].sort((a, b) => a.cost - b.cost);
   byPrice.forEach(aug => {
-    if (aug.requires && !ds.owned[ds.current].includes(aug.requires)) return;
+    // Extension augments never show in the main grid — once their
+    // prerequisite is owned they appear only as a skill-tree child under
+    // their parent's slot card (see renderAugmentSlots).
+    if (aug.requires) return;
+    // Already-owned picks move to the current player's side panel instead
+    // of lingering (disabled) in the grid.
+    if (ds.owned[ds.current].includes(aug.id)) return;
 
     const card = document.createElement('button');
     card.className = 'augment-card cost-' + aug.cost;
 
     const ownerW = ds.owned.w.includes(aug.id);
     const ownerB = ds.owned.b.includes(aug.id);
-    const ownedByCurrent = ds.owned[ds.current].includes(aug.id);
     const affordable = ds.points[ds.current] >= aug.cost;
     const exType = exchangeType(aug);
     const conflictsWithOwned = exType && ds.owned[ds.current].some(ownedId => {
@@ -98,7 +177,7 @@ function renderDraft() {
     });
     const otherColor = ds.current === 'w' ? 'b' : 'w';
     const takenByOpponent = ds.owned[otherColor].includes(aug.id);
-    const disabled = ownedByCurrent || !affordable || conflictsWithOwned || takenByOpponent || !canInteract;
+    const disabled = !affordable || conflictsWithOwned || takenByOpponent || !canInteract;
 
     if (disabled) card.classList.add('disabled');
 
@@ -119,6 +198,9 @@ function renderDraft() {
     }
     augmentColumn(aug).appendChild(card);
   });
+
+  renderAugmentSlots('w', augmentSlotsWhite);
+  renderAugmentSlots('b', augmentSlotsBlack);
 }
 
 // ─── Draft Button Listeners ───────────────────────────────────────────────────

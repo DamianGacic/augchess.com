@@ -20,7 +20,7 @@ const ABILITY_META = {
   solarStrike: { icon: '☀', label: 'Solar Strike' },
   breakingRank: { icon: '💥', label: 'Breaking Rank (passive)' },
   advance: { icon: '⏫', label: 'Advance' },
-  kingsLightning: { icon: '🌩', label: 'I Am Lightning' },
+  kingsLightning: { icon: '🌩', label: 'Lightning Aura' },
   ringOfFire: { icon: '🔥', label: 'Ring of Fire' },
   clubbing: { icon: '🔨', label: 'Clubbing' },
   silverBullet: { icon: '🎯', label: 'Silver Bullet' },
