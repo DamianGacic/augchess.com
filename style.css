@@ -2072,3 +2072,78 @@ main {
     display: none; /* too cramped on mobile header */
   }
 }
+
+/* ===== Profile / Auth ===== */
+.profile-wrap {
+  position: relative;
+  margin-left: 16px;
+}
+
+.profile-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-panel-alt);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.profile-btn:hover {
+  background: var(--border);
+}
+
+.profile-btn.signed-in {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.profile-menu {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 200px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 600;
+}
+
+.profile-menu.hidden { display: none; }
+
+.profile-email {
+  font-size: 13px;
+  color: var(--text-secondary);
+  word-break: break-all;
+  margin-bottom: 10px;
+}
+
+.auth-modal-content {
+  max-width: 340px;
+}
+
+.auth-email-input {
+  width: 100%;
+  padding: 10px 12px;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.auth-status-msg {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 10px 0;
+  min-height: 16px;
+}

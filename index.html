@@ -19,6 +19,15 @@
         <button class="nav-btn" id="nav-augments">Augments</button>
         <button class="nav-btn" id="nav-figures">Figures</button>
       </nav>
+      <div class="profile-wrap">
+        <button class="profile-btn" id="profile-btn" title="Account" aria-label="Account">
+          <span class="profile-icon">&#128100;</span>
+        </button>
+        <div id="profile-menu" class="profile-menu hidden">
+          <div id="profile-email" class="profile-email"></div>
+          <button class="btn btn-secondary" id="sign-out-btn">Sign out</button>
+        </div>
+      </div>
     </header>
 
     <!-- Homepage View -->
@@ -276,6 +285,18 @@
         <button class="btn btn-primary" id="close-detail-btn">Close</button>
       </div>
     </div>
+
+    <!-- Auth modal (optional sign-in; never required to play) -->
+    <div id="auth-modal" class="modal hidden">
+      <div class="modal-content auth-modal-content">
+        <h3>Sign in</h3>
+        <p class="augment-subtitle">Optional — sync your profile across devices. Playing and sharing game links never requires an account.</p>
+        <input type="email" id="auth-email-input" class="auth-email-input" placeholder="you@example.com" autocomplete="email" />
+        <button class="btn btn-primary" id="auth-send-link-btn">Send magic link</button>
+        <p id="auth-status-msg" class="auth-status-msg"></p>
+        <button class="btn btn-secondary" id="auth-close-btn">Close</button>
+      </div>
+    </div>
   </div>
 
   <script src="chess.js"></script>
@@ -286,6 +307,9 @@
   <script src="engine/augments-engine.js"></script>
   <script src="engine/index.js"></script>
   <script src="netclient.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="auth.js"></script>
   <script src="stunlock.js"></script>
   <script src="abilities.js"></script>
   <script src="solarstrike.js"></script>
