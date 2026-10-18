@@ -512,6 +512,7 @@
   function globalAbilitiesFor(state, color) {
     const list = [];
     if (has(state, color, 'breakingRank')) list.push({ id: 'breakingRank', passive: true });
+    if (has(state, color, 'coronation')) list.push({ id: 'coronation', passive: true });
     if (has(state, color, 'advance') && !state.advanceUsed[color]) list.push({ id: 'advance' });
     if (has(state, color, 'kingsLightning')) {
       list.push(state.lightningActive[color] ? { id: 'kingsLightning', passive: true } : { id: 'kingsLightning' });
