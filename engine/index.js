@@ -46,7 +46,11 @@
         const move = chessEngine.findRequestedMove(state, color, action.from, action.to, action.promotion, action.exit);
         if (typeof move === 'string') return move;
         const { pendingTargeting } = chessEngine.executeMove(state, color, move, action.promotion);
-        if (!pendingTargeting) afterTurnSettles(state);
+        // A Swift shot holds its own turn open (see applyMoveToState) for an
+        // optional follow-up step — don't settle until that's resolved
+        // (either this same move just resolved it, or it declines via
+        // cancelAbility below).
+        if (!pendingTargeting && !state.pendingSwiftMove) afterTurnSettles(state);
         return null;
       }
 
@@ -74,9 +78,16 @@
         return err;
       }
 
-      case 'cancelAbility':
+      case 'cancelAbility': {
         if (state.phase !== 'playing') return 'Not currently playing';
-        return augmentsEngine.cancelAbility(state, color);
+        // Declining a pending Swift follow-up move is the one cancelAbility
+        // path that actually finishes a turn (the shot already happened and
+        // left it open) — settle once it clears.
+        const wasPendingSwift = !!state.pendingSwiftMove;
+        const err = augmentsEngine.cancelAbility(state, color);
+        if (!err && wasPendingSwift && !state.pendingSwiftMove) afterTurnSettles(state);
+        return err;
+      }
 
       case 'newGame': {
         if (state.phase === 'settings' || state.phase === 'draft') return 'A game is already being set up';
@@ -110,6 +121,7 @@
     chessEngine.checkRingOfFire(state);
     chessEngine.tickTeleportMarks(state);
     chessEngine.tickFireDeathMarks(state);
+    chessEngine.tickWarmWelcomeMarks(state);
     gameOverEngine.evaluateGameOver(state);
   }
 

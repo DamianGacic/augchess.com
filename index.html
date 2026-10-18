@@ -25,6 +25,15 @@
         </button>
         <div id="profile-menu" class="profile-menu hidden">
           <div id="profile-email" class="profile-email"></div>
+          <div class="profile-displayname-row">
+            <span id="profile-displayname-label"></span>
+            <button class="link-btn" id="profile-displayname-edit-btn">Edit</button>
+          </div>
+          <div id="profile-displayname-form" class="profile-displayname-form hidden">
+            <input type="text" id="profile-displayname-input" class="auth-email-input" placeholder="Display name" maxlength="20" autocomplete="off" />
+            <button class="btn btn-primary" id="profile-displayname-save-btn">Save</button>
+            <p id="profile-displayname-status" class="auth-status-msg"></p>
+          </div>
           <button class="btn btn-secondary" id="sign-out-btn">Sign out</button>
         </div>
       </div>
@@ -45,15 +54,11 @@
         <div class="features">
           <div class="feature-card">
             <h3>Classic Chess</h3>
-            <p>Play traditional chess with all the standard rules and pieces</p>
+            <p>Play traditional chess with all the standard rules and pieces.<br>Unless a specific rule change is chosen by either player, the game works just as you know it</p>
           </div>
           <div class="feature-card">
             <h3>Powerful Augments</h3>
-            <p>Choose from unique augments that give your pieces special abilities</p>
-          </div>
-          <div class="feature-card">
-            <h3>Strategic Depth</h3>
-            <p>Combine chess strategy with augment selection for a fresh experience</p>
+            <p>Choose from unique augments that give your side special advantages.<br>Beware: Treat augment selection as a serious part of the game.<br>Choose wisely, or you may find yourself in a bout that is near impossible to win.</p>
           </div>
         </div>
       </main>
@@ -292,6 +297,8 @@
         <h3>Sign in</h3>
         <p class="augment-subtitle">Optional — sync your profile across devices. Playing and sharing game links never requires an account.</p>
         <input type="email" id="auth-email-input" class="auth-email-input" placeholder="you@example.com" autocomplete="email" />
+        <input type="text" id="auth-displayname-input" class="auth-email-input" placeholder="Display name (optional)" maxlength="20" autocomplete="off" />
+        <p class="auth-hint">You can leave this blank and choose or change it anytime from your profile menu.</p>
         <button class="btn btn-primary" id="auth-send-link-btn">Send magic link</button>
         <p id="auth-status-msg" class="auth-status-msg"></p>
         <button class="btn btn-secondary" id="auth-close-btn">Close</button>

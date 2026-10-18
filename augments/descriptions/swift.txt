@@ -1,0 +1,1 @@
+Requires Archers. Firing an arrow no longer uses up an Archer's whole turn: after it shoots, that same Archer may also step to an open adjacent square before the turn passes — or you can end the turn right there, same as before. Doesn't grant a second shot.

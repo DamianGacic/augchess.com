@@ -1225,6 +1225,25 @@ main {
   z-index: 5;
 }
 
+/* Small hourglass marking an Archer that just shot and can't shoot again
+   this turn (it can still move) — same corner as the badges above. */
+.archer-cooldown-badge {
+  position: absolute;
+  top: -6%;
+  right: -6%;
+  width: 34%;
+  height: 34%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--board-size) / 8 * 0.26);
+  line-height: 1;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.9));
+  pointer-events: none;
+  z-index: 5;
+}
+
 
 
 
@@ -1809,6 +1828,21 @@ main {
   line-height: 1;
 }
 
+/* Small bow icon left for one turn on any square Warm Welcome just fired
+   on — same ticking pattern/duration as fire-death-marked above. */
+.square.warm-welcome-marked::after {
+  content: '🏹';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: calc(var(--board-size) / 8 * 0.38);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 8;
+  line-height: 1;
+}
+
 /* ===== Lightning Aura Augment ===== */
 
 /* Board: once armed, the 8 squares currently touching that King glow
@@ -2126,6 +2160,34 @@ main {
   margin-bottom: 10px;
 }
 
+.profile-displayname-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-bright);
+  margin-bottom: 10px;
+}
+
+.profile-displayname-form.hidden { display: none; }
+
+.profile-displayname-form .auth-email-input {
+  margin: 0 0 8px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link-btn:hover { text-decoration: underline; }
+
 .auth-modal-content {
   max-width: 340px;
 }
@@ -2146,4 +2208,10 @@ main {
   color: var(--text-secondary);
   margin: 10px 0;
   min-height: 16px;
+}
+
+.auth-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: -6px 0 12px;
 }

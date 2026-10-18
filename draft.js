@@ -65,7 +65,7 @@ function augmentColumn(aug) {
   return augmentColOther;
 }
 
-// Follow-up augments unlocked once `id` is owned (e.g. Ghoul Corps unlocks
+// Follow-up augments unlocked once `id` is owned (e.g. Ghouls unlocks
 // Deviant and Breaking Rank). These never appear in the main grid — they
 // only render as skill-tree children under their parent's slot card.
 function augmentChildren(id) {

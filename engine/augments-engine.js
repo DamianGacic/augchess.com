@@ -519,6 +519,7 @@
     if (has(state, color, 'ringOfFire')) {
       list.push(state.fireActive[color] ? { id: 'ringOfFire', passive: true } : { id: 'ringOfFire' });
     }
+    if (has(state, color, 'warmWelcome')) list.push({ id: 'warmWelcome', passive: true });
     return list;
   }
 
@@ -556,8 +557,20 @@
     return 'Unknown ability: ' + id;
   }
 
+  // Declines a pending Swift follow-up move — the shot itself already
+  // happened and held the turn open (see applyMoveToState in
+  // chess-engine.js); declining just closes it out with the one flip that
+  // was deferred, same as if Swift had never applied.
+  function declineSwiftMove(state, color) {
+    if (state.pendingSwiftMove.color !== color) return 'Not your move to decline';
+    state.pendingSwiftMove = null;
+    state.game.load(flipTurnFen(state));
+    return null;
+  }
+
   function cancelAbility(state, color) {
     if (state.pendingStunlock) return cancelStunlock(state, color);
+    if (state.pendingSwiftMove) return declineSwiftMove(state, color);
     if (state.armedAbility && color === state.game.turn()) {
       state.armedAbility = null;
       return null;

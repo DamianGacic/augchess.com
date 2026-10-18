@@ -1,0 +1,1 @@
+Requires Ring of Fire. Your King's ring of fire burns hotter and wider — its range extends one square further in every direction, from the 8 squares touching the King to the full 24 squares within two steps of him. Everything else about Ring of Fire is unchanged.

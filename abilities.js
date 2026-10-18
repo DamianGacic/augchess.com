@@ -26,6 +26,7 @@ const ABILITY_META = {
   silverBullet: { icon: '🎯', label: 'Silver Bullet' },
   unstableFireball: { icon: '🔥', label: 'Unstable Fireball' },
   unstableTeleport: { icon: '✨', label: 'Unstable Teleport' },
+  warmWelcome: { icon: '👋', label: 'Warm Welcome (passive)' },
 };
 
 function renderAbilityBar() {
@@ -175,6 +176,7 @@ function castGlobalAbility(key, color) {
 // Esc/Backspace: cancel whatever's in progress but not yet resolved.
 function cancelArmedAbility() {
   if (stunlockTargeting && state.pendingStunlock) { onStunlockSkip(); return; }
+  if (state.pendingSwiftMove) { dispatch({ type: 'cancelAbility' }); return; }
   if (solarStrikeTargeting) { cancelSolarStrikeTargeting(); return; }
   if (silverBulletTargeting) { cancelSilverBulletTargeting(); return; }
   if (unstableFireballTargeting) { cancelUnstableFireballTargeting(); return; }

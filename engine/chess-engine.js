@@ -96,6 +96,29 @@
     state.fireDeathMarked = {};
 
     state.lastMove = null;
+
+    // Archer shoot cooldown: an Archer that fired can't fire again on its
+    // very next turn (Quickdraw waives this) — keyed by the Archer's own
+    // square, ticks like stunnedSquares (set to 2, so it survives the
+    // opponent's reply and clears right as the caster's own next turn
+    // begins — see tickArcherCooldown/executeMove).
+    state.archerCooldown = { w: {}, b: {} };
+
+    // Swift: an Archer that shot may optionally also step once more before
+    // the turn passes. Set by executeMove right after a Swift-augmented
+    // shot (which also holds the turn open — see applyMoveToState); cleared
+    // once that follow-up step happens or is explicitly declined (see
+    // cancelAbility in augments-engine.js).
+    state.pendingSwiftMove = null;
+
+    // Warm Welcome: a passive per-color trap on a shared cooldown (in
+    // plies) — ticks down in executeMove, reset to full both when it fires
+    // (checkWarmWelcomeForLanding) and whenever any of that color's Archers
+    // fires a normal shot, so the trap and manual shooting share one
+    // resource. warmWelcomeMarked is purely the "it just fired here"
+    // one-turn visual marker, same ticking pattern as fireDeathMarked.
+    state.warmWelcomeCooldown = { w: 0, b: 0 };
+    state.warmWelcomeMarked = {};
   }
 
   function has(state, color, augId) {
@@ -323,22 +346,37 @@
     return res;
   }
 
+  // Forward-left/forward/forward-right always; Nimble adds the two direct
+  // sideways squares and the direct square behind — everything except the
+  // two rear diagonals.
+  function archerStepOffsets(state, color) {
+    const dir = color === 'w' ? 1 : -1;
+    const offsets = [[-1, dir], [0, dir], [1, dir]];
+    if (has(state, color, 'nimble')) offsets.push([-1, 0], [1, 0], [0, -dir]);
+    return offsets;
+  }
+
+  function isArcherOnCooldown(state, color, sq) {
+    return !!(state.archerCooldown && state.archerCooldown[color] && state.archerCooldown[color][sq] > 0);
+  }
+
   function generateArcherMoves(state, sq, color) {
     const { f, r } = sqToFR(sq);
-    const dir = color === 'w' ? 1 : -1;
     const res = [];
 
-    for (const df of [-1, 0, 1]) {
-      const target = frToSq(f + df, r + dir);
+    for (const [df, dr] of archerStepOffsets(state, color)) {
+      const target = frToSq(f + df, r + dr);
       if (target && isEmpty(state, target)) {
-        const promo = isPromoRank(color, r + dir);
+        const promo = isPromoRank(color, r + dr);
         res.push({ from: sq, to: target, special: 'archerStep', promotion: promo ? 'q' : undefined, needsPromo: promo });
       }
     }
-    for (const target of archerShootRangeSquares(sq, color)) {
-      const tp = pieceAt(state, target);
-      if (tp && tp.color !== color) {
-        res.push({ from: sq, to: target, special: 'archerShoot', captured: tp.type });
+    if (!isArcherOnCooldown(state, color, sq)) {
+      for (const target of archerShootRangeSquares(sq, color)) {
+        const tp = pieceAt(state, target);
+        if (tp && tp.color !== color) {
+          res.push({ from: sq, to: target, special: 'archerShoot', captured: tp.type });
+        }
       }
     }
     return res;
@@ -529,11 +567,27 @@
   // Shared square math for both King auras below: the 8 squares touching
   // wherever that King currently stands, not a fixed zone — it follows the
   // King as it moves.
-  const KING_ADJACENT_OFFSETS = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
-
-  function kingAuraSquares(kingSq) {
+  // `radius` in Chebyshev squares — 1 (the default) is the 8 squares
+  // touching the King; Inferno widens Ring of Fire's own aura to 2 (the 24
+  // squares within two steps) via ringOfFireRadius below.
+  function kingAuraSquares(kingSq, radius) {
+    radius = radius || 1;
     const { f, r } = sqToFR(kingSq);
-    return KING_ADJACENT_OFFSETS.map(([df, dr]) => frToSq(f + df, r + dr)).filter(Boolean);
+    const res = [];
+    for (let df = -radius; df <= radius; df++) {
+      for (let dr = -radius; dr <= radius; dr++) {
+        if (df === 0 && dr === 0) continue;
+        const sq = frToSq(f + df, r + dr);
+        if (sq) res.push(sq);
+      }
+    }
+    return res;
+  }
+
+  // Inferno extends Ring of Fire's own aura by 1 in every direction — never
+  // Lightning Aura's, which always stays at the base 8-square radius.
+  function ringOfFireRadius(state, color) {
+    return has(state, color, 'inferno') ? 2 : 1;
   }
 
   // Once state.lightningActive[color] is set (via castKingsLightning in
@@ -575,7 +629,7 @@
       if (!state.fireActive[color]) continue;
       const kingSq = findKingSquare(state, color);
       if (!kingSq) continue;
-      const auraSquares = kingAuraSquares(kingSq);
+      const auraSquares = kingAuraSquares(kingSq, ringOfFireRadius(state, color));
       const auraSet = new Set(auraSquares);
 
       for (const sq of Object.keys(state.fireAura)) {
@@ -746,7 +800,7 @@
         const tp = pieceAt(state, target);
         if (tp && tp.color !== color) res.push({ from: sq, to: target, special: 'longbowmanShoot', captured: tp.type });
       }
-    } else if (figurePawnType(state, color) === 'archer') {
+    } else if (figurePawnType(state, color) === 'archer' && !isArcherOnCooldown(state, color, sq)) {
       for (const target of archerShootRangeSquares(sq, color)) {
         const tp = pieceAt(state, target);
         if (tp && tp.color !== color) res.push({ from: sq, to: target, special: 'archerShoot', captured: tp.type });
@@ -915,7 +969,7 @@
         const dir = color === 'w' ? 1 : -1;
         const figure = figurePawnType(state, color);
         if (figure === 'apprentice') return false;
-        if (figure === 'archer') return dr === 2 * dir && adf <= 1;
+        if (figure === 'archer') return !isArcherOnCooldown(state, color, frToSq(pf, pr)) && dr === 2 * dir && adf <= 1;
         if (figure === 'ghoul') {
           const straight = adf === 0 && (dr === dir || dr === 2 * dir);
           const diag = has(state, color, 'deviant') && adf === adr && (adf === 1 || adf === 2) && dr === adf * dir;
@@ -1184,7 +1238,15 @@
         if (Math.abs(toR - fromR) === 2) epTargetSquare = frToSq(sqToFR(m.from).f, (fromR + toR) / 2);
       }
     }
-    state.game.load(flipTurnFen(state, stripCastleColor, epTargetSquare));
+    // Swift: a shot doesn't end the turn — the flip only happens once the
+    // shooting Archer's own optional follow-up step resolves (or is
+    // declined — see cancelAbility in augments-engine.js). Doesn't affect
+    // the speculative testOnly path (filterIntoCheck never reads
+    // state.game.turn(), and always restores via snapshotState anyway).
+    const holdsTurnOpen = m.special === 'archerShoot' && has(state, color, 'swift');
+    if (!holdsTurnOpen) {
+      state.game.load(flipTurnFen(state, stripCastleColor, epTargetSquare));
+    }
   }
 
   function describeMove(m, piece) {
@@ -1218,6 +1280,9 @@
     if (state.gameOver) return 'Game is over';
     if (state.pendingStunlock) return 'A Stunlock cast is pending — resolve it first';
     if (color !== state.game.turn()) return 'Not your turn';
+    if (state.pendingSwiftMove && state.pendingSwiftMove.color === color && from !== state.pendingSwiftMove.archerSq) {
+      return 'Resolve the Swift follow-up move first';
+    }
     const piece = pieceAt(state, from);
     if (!piece || piece.color !== color) return 'No piece of yours there';
     if (state.ghoulBrokeRank[color].includes(from)) {
@@ -1246,8 +1311,14 @@
     if (promotionChoice) m.promotion = promotionChoice;
 
     const impaled = isSpearmanImpaled(state, m, color);
+    // Computed BEFORE applying — a Swift shot sets a fresh pendingSwiftMove
+    // for itself inside this very call (see below), which must not be
+    // confused with resolving an already-pending one.
+    const resolvesSwiftMove = !!(state.pendingSwiftMove && state.pendingSwiftMove.color === color && state.pendingSwiftMove.archerSq === m.from);
 
     applyMoveToState(state, m, color, false);
+
+    if (resolvesSwiftMove) state.pendingSwiftMove = null;
 
     if (impaled) {
       if (state.mannedTowers[m.to]) delete state.mannedTowers[m.to];
@@ -1261,8 +1332,42 @@
       state.ghoulJustMoved[color].push(m.to);
     }
 
-    tickStunCounters(state);
-    tickSolarMarks(state);
+    // A Swift follow-up step is a second executeMove call for what's really
+    // still one logical turn (the shot already ticked everything once) — skip
+    // the per-ply ticks here so nothing (including the shot's own fresh
+    // archer cooldown) decrements twice for a single turn.
+    if (!resolvesSwiftMove) {
+      tickStunCounters(state);
+      tickSolarMarks(state);
+    }
+
+    // Archer shoot cooldown — tick existing cooldowns (from earlier moves)
+    // FIRST, so a cooldown armed by THIS move isn't immediately decremented
+    // in the same call. Carries forward across a plain step (incl. walking
+    // into/out of a manned tower); a fresh shot arms it (skipped entirely
+    // under Quickdraw) and, under Swift, opens a pending follow-up step.
+    if (!resolvesSwiftMove) tickArcherCooldown(state);
+    delete state.archerCooldown.w[m.to];
+    delete state.archerCooldown.b[m.to];
+    if (m.special === 'archerStep' || m.special === 'towerEnter' || m.special === 'towerLeave') {
+      const cd = state.archerCooldown[color][m.from];
+      delete state.archerCooldown[color][m.from];
+      if (cd !== undefined) state.archerCooldown[color][m.to] = cd;
+    } else if (m.special === 'archerShoot') {
+      if (!has(state, color, 'quickdraw')) state.archerCooldown[color][m.from] = 2;
+      if (has(state, color, 'swift')) state.pendingSwiftMove = { color, archerSq: m.from };
+    }
+
+    // Warm Welcome — same tick-before-set ordering as archerCooldown above,
+    // so a reset armed by THIS move (whether the manual-shot reset just
+    // below, or the passive trigger in checkWarmWelcomeForLanding) survives
+    // this call intact. Also skipped on a Swift follow-up for the same
+    // one-tick-per-logical-turn reason as above.
+    if (!resolvesSwiftMove) tickWarmWelcomeCooldown(state);
+    if (m.special === 'archerShoot' && has(state, color, 'warmWelcome')) {
+      state.warmWelcomeCooldown[color] = WARM_WELCOME_COOLDOWN;
+    }
+    checkWarmWelcomeForLanding(state, m.to, color);
 
     // A Longbowman's shot doesn't relocate it — its charge (if any) stays put
     // rather than transferring to the (now-emptied) target square.
@@ -1300,6 +1405,81 @@
     for (const sq of Object.keys(state.stunnedSquares)) {
       state.stunnedSquares[sq]--;
       if (state.stunnedSquares[sq] <= 0) delete state.stunnedSquares[sq];
+    }
+  }
+
+  function tickArcherCooldown(state) {
+    for (const color of ['w', 'b']) {
+      for (const sq of Object.keys(state.archerCooldown[color])) {
+        state.archerCooldown[color][sq]--;
+        if (state.archerCooldown[color][sq] <= 0) delete state.archerCooldown[color][sq];
+      }
+    }
+  }
+
+  // ── Warm Welcome (passive) ──────────────────────────────────────────────
+  // 8 plies == 4 of the owning player's own turns.
+  const WARM_WELCOME_COOLDOWN = 8;
+
+  function tickWarmWelcomeCooldown(state) {
+    for (const color of ['w', 'b']) {
+      if (state.warmWelcomeCooldown[color] > 0) state.warmWelcomeCooldown[color]--;
+    }
+  }
+
+  // Every square one of `color`'s Archers currently threatens — free-standing
+  // ones, and any garrisoned in a manned watchtower (a Longbowman garrison
+  // shoots a different pattern, so it's excluded here).
+  function archerThreatSquares(state, color) {
+    const threatened = new Set();
+    if (figurePawnType(state, color) === 'archer') {
+      const board = state.game.board();
+      for (let br = 0; br < 8; br++) {
+        for (let bf = 0; bf < 8; bf++) {
+          const cell = board[br][bf];
+          if (!cell || cell.color !== color || cell.type !== 'p') continue;
+          const sq = frToSq(bf, 7 - br);
+          archerShootRangeSquares(sq, color).forEach(t => threatened.add(t));
+        }
+      }
+      for (const sq of Object.keys(state.mannedTowers)) {
+        if (state.mannedTowers[sq] !== color || state.mannedTowerOrigin[sq] === 'b') continue;
+        archerShootRangeSquares(sq, color).forEach(t => threatened.add(t));
+      }
+    }
+    return threatened;
+  }
+
+  // Called from executeMove with the move that just landed — if `landedSq`
+  // now holds an enemy unit standing in a Warm Welcome color's threat zone,
+  // and that color's trap is off cooldown, it fires for free (no turn spent)
+  // and goes back on cooldown. Independent of any individual Archer's own
+  // shoot cooldown — Warm Welcome has its own dedicated resource.
+  function checkWarmWelcomeForLanding(state, landedSq, moverColor) {
+    if (!landedSq) return;
+    for (const color of ['w', 'b']) {
+      if (color === moverColor) continue;
+      if (!has(state, color, 'warmWelcome')) continue;
+      if (state.warmWelcomeCooldown[color] > 0) continue;
+      const piece = pieceAt(state, landedSq);
+      if (!piece || piece.color !== moverColor) continue;
+      if (!archerThreatSquares(state, color).has(landedSq)) continue;
+
+      if (state.mannedTowers[landedSq]) delete state.mannedTowers[landedSq];
+      delete state.mannedTowerOrigin[landedSq];
+      clearMountedIfCaptured(state, landedSq);
+      state.game.remove(landedSq);
+      state.warmWelcomeMarked[landedSq] = 2;
+      state.moveLog.push({ san: '🏹' + landedSq, color });
+      state.warmWelcomeCooldown[color] = WARM_WELCOME_COOLDOWN;
+    }
+  }
+
+  // Same ticking pattern/duration as tickTeleportMarks/tickFireDeathMarks.
+  function tickWarmWelcomeMarks(state) {
+    for (const sq of Object.keys(state.warmWelcomeMarked)) {
+      state.warmWelcomeMarked[sq]--;
+      if (state.warmWelcomeMarked[sq] <= 0) delete state.warmWelcomeMarked[sq];
     }
   }
 
@@ -1374,13 +1554,15 @@
     generateApprenticeMoves, generateArcherMoves, generateGhoulMoves, generateGuardsmenMoves,
     generateSpearmanMoves, generateTrollMoves, generateLongbowmanMoves, isSpearmanImpaled,
     archerShootRangeSquares, longbowShootRangeSquares, ghoulChargeSquares, ghoulLegalChargeTargets,
+    archerStepOffsets, isArcherOnCooldown, archerThreatSquares,
     generateLeapingMoves, generateKingsPawnMoves, generateTowerEntryMoves,
     generateMountMoves, generateMountedKingMoves,
     filterIntoCheck, isKingAttacked, kingCheckers, isCheckDoomedByFire, squareAttackedBy, attacksSquare, clearPath,
     applyMoveToState, executeMove, describeMove, findRequestedMove, flipTurnFen,
     checkBreakingRank, applyBreakingRankCaptures, clearMountedIfCaptured,
     tickStunCounters, tickSolarMarks, tickTeleportMarks, tickFireDeathMarks,
-    kingAuraSquares, checkKingsLightning, checkRingOfFire,
+    tickArcherCooldown, tickWarmWelcomeCooldown, tickWarmWelcomeMarks, checkWarmWelcomeForLanding,
+    kingAuraSquares, ringOfFireRadius, checkKingsLightning, checkRingOfFire,
     snapshotState, restoreSnapshot,
     serializeState,
   };

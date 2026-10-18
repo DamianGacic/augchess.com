@@ -120,13 +120,15 @@
           break;
         }
         if (figure === 'archer') {
-          for (const df of [-1, 0, 1]) {
-            const tf = f + df, tr = r + dir;
+          for (const [df, dr2] of chessEngine.archerStepOffsets(state, color)) {
+            const tf = f + df, tr = r + dr2;
             if (onBoard(tf, tr) && !occ(tf, tr)) pushPawn(moves, tf, tr, promoRank);
           }
-          for (const df of [-1, 0, 1]) {
-            const tf = f + df, tr = r + 2 * dir;
-            if (onBoard(tf, tr) && occByEnemy(tf, tr)) moves.push({ to: frToSq(tf, tr), kind: 'shoot' });
+          if (!chessEngine.isArcherOnCooldown(state, color, sq)) {
+            for (const df of [-1, 0, 1]) {
+              const tf = f + df, tr = r + 2 * dir;
+              if (onBoard(tf, tr) && occByEnemy(tf, tr)) moves.push({ to: frToSq(tf, tr), kind: 'shoot' });
+            }
           }
           break;
         }

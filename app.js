@@ -317,6 +317,12 @@ function renderAll() {
   settingsModal.classList.add('hidden');
   augmentModal.classList.add('hidden');
   syncStunlockTargeting();
+  // Swift: once a shot leaves a follow-up step pending, auto-select that
+  // Archer for whoever's resolving it so its (restricted) step options show
+  // immediately — mirrors syncStunlockTargeting's auto-begin above.
+  if (state.pendingSwiftMove && state.pendingSwiftMove.color === currentActor()) {
+    selectedSquare = state.pendingSwiftMove.archerSq;
+  }
   if (selectedSquare) legalMoves = computeLegalMovesFor(selectedSquare);
   if (!clockStarted && state.moveLog.length >= 2) { clockStarted = true; startClock(); }
   switchClock();
@@ -485,7 +491,7 @@ function renderBoard() {
   for (const color of ['w', 'b']) {
     if (!state.fireActive[color]) continue;
     const kingSq = state.mounted[color] || findKingSquare(state, color);
-    if (kingSq) fireZones[color] = { kingSq, zone: kingAuraSquares(kingSq) };
+    if (kingSq) fireZones[color] = { kingSq, zone: kingAuraSquares(kingSq, ringOfFireRadius(state, color)) };
   }
 
   for (let r = 0; r < 8; r++) {
@@ -605,6 +611,7 @@ function renderBoard() {
       if (state.solarMarked[sq] > 0) sqEl.classList.add('solar-marked');
       if (state.teleportMarked[sq] > 0) sqEl.classList.add('teleport-marked');
       if (state.fireDeathMarked[sq] > 0) sqEl.classList.add('fire-death-marked');
+      if (state.warmWelcomeMarked[sq] > 0) sqEl.classList.add('warm-welcome-marked');
 
       for (const color of ['w', 'b']) {
         const lz = lightningZones[color];
@@ -699,6 +706,14 @@ function renderBoard() {
           teleportBadge.className = 'teleport-ready-badge';
           teleportBadge.title = 'Unstable Teleport ready (select this Apprentice, then its ability slot)';
           pieceEl.appendChild(teleportBadge);
+        }
+
+        if (piece.type === 'p' && figurePawnType(state, piece.color) === 'archer' && isArcherOnCooldown(state, piece.color, sq)) {
+          const cooldownBadge = document.createElement('div');
+          cooldownBadge.className = 'archer-cooldown-badge';
+          cooldownBadge.textContent = '⏳';
+          cooldownBadge.title = 'Still nocking an arrow — can\'t shoot this turn (can still move)';
+          pieceEl.appendChild(cooldownBadge);
         }
 
         sqEl.appendChild(pieceEl);
@@ -1097,6 +1112,10 @@ function updateStatus() {
   }
   if (unstableTeleportTargeting && pendingUnstableTeleport) {
     statusText.textContent = '✨ Choose a field to teleport to (Esc to cancel)';
+    return;
+  }
+  if (state.pendingSwiftMove) {
+    statusText.textContent = '🏹 Swift: move the Archer, or press Esc to end the turn';
     return;
   }
 

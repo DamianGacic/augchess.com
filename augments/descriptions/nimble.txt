@@ -1,0 +1,1 @@
+Requires Archers. Your Archers can now also step directly sideways or directly backward onto an open square, in addition to their usual forward and forward-diagonal steps. Their shot never changes — always the field two squares ahead, or either square flanking it.
