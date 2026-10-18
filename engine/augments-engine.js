@@ -233,6 +233,26 @@
     return null;
   }
 
+  // ── Relentless Advance ───────────────────────────────────────────────────
+  // Same activation as Lightning Aura/Ring of Fire — one-shot, once per
+  // game, no targeting, consumes the turn immediately via flipTurnFen.
+  // checkRelentlessAdvance (chess-engine.js) then nudges 2 random pawn-type
+  // units forward at the end of every one of this color's own turns, for
+  // the rest of the game. See castAbility dispatch in engine/index.js for
+  // the afterTurnSettles() call this then needs.
+  function castRelentlessAdvance(state, color) {
+    if (state.gameOver) return 'Game is over';
+    if (color !== state.game.turn()) return 'Not your turn';
+    if (!has(state, color, 'relentlessAdvance')) return 'You do not have Relentless Advance';
+    if (state.relentlessAdvanceActive[color]) return 'Relentless Advance is already active';
+
+    state.relentlessAdvanceActive[color] = true;
+    state.moveLog.push({ san: '⏩ Relentless Advance', color });
+    state.armedAbility = null;
+    state.game.load(flipTurnFen(state));
+    return null;
+  }
+
   // ── Clubbing (Troll) ────────────────────────────────────────────────────
   // Aimed the same way as Stunlock — any 2×2 quadrant window overlapping the
   // Troll's own square, sliding freely rather than snapped to a fixed grid
@@ -520,6 +540,9 @@
     if (has(state, color, 'ringOfFire')) {
       list.push(state.fireActive[color] ? { id: 'ringOfFire', passive: true } : { id: 'ringOfFire' });
     }
+    if (has(state, color, 'relentlessAdvance')) {
+      list.push(state.relentlessAdvanceActive[color] ? { id: 'relentlessAdvance', passive: true } : { id: 'relentlessAdvance' });
+    }
     if (has(state, color, 'warmWelcome')) list.push({ id: 'warmWelcome', passive: true });
     return list;
   }
@@ -551,6 +574,7 @@
     if (id === 'advance') return castAdvance(state, color);
     if (id === 'kingsLightning') return castKingsLightning(state, color);
     if (id === 'ringOfFire') return castRingOfFire(state, color);
+    if (id === 'relentlessAdvance') return castRelentlessAdvance(state, color);
     if (id === 'silverBullet') return castSilverBullet(state, color, params.unitSq, params.center);
     if (id === 'clubbing') return castClubbing(state, color, params.unitSq, params.quadrant);
     if (id === 'unstableFireball') return castUnstableFireball(state, color, params.unitSq, params.center);
@@ -582,7 +606,7 @@
   const exportsObj = {
     getStunlockQuadrants, quadrantSquares, castStunlock, cancelStunlock,
     getSolarStrikeCenters, solarStrikeSquares, castSolarStrike, castAdvance,
-    castKingsLightning, castRingOfFire,
+    castKingsLightning, castRingOfFire, castRelentlessAdvance,
     getSilverBulletTargets, castSilverBullet,
     getClubbingQuadrants, castClubbing,
     getFireballTargets, castUnstableFireball,

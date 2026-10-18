@@ -74,6 +74,8 @@
     state.fireActive = { w: false, b: false };
     state.fireAura = {};
 
+    state.relentlessAdvanceActive = { w: false, b: false };
+
     // Unstable Teleport: each individual Apprentice may only ever cast it
     // once, so this tracks *which square currently holds an Apprentice that
     // has already used it* (not a per-color used-once flag) — applyMoveToState
@@ -660,6 +662,65 @@
           state.fireAura[sq] = { turns: 1, sig, color };
         }
       }
+    }
+  }
+
+  // Once state.relentlessAdvanceActive[color] is set (via
+  // castRelentlessAdvance in augments-engine.js), each of that color's own
+  // turn-ends nudges 2 randomly chosen pawn-type units (a plain Pawn or any
+  // Corps figure built on 'p') one step forward, or has one strike down an
+  // enemy forward/diagonally-forward instead if the straight-ahead square
+  // isn't free. Unlike Ring of Fire/Lightning Aura's king auras, this only
+  // fires on the activating color's own turn-end — state.game.turn() has
+  // already flipped to the other side by the time afterTurnSettles calls
+  // this, so "color just moved" is state.game.turn() !== color.
+  function checkRelentlessAdvance(state) {
+    if (state.gameOver) return;
+    for (const color of ['w', 'b']) {
+      if (!state.relentlessAdvanceActive[color]) continue;
+      if (state.game.turn() === color) continue;
+
+      const dir = color === 'w' ? 1 : -1;
+      const board = state.game.board();
+      const pawnSquares = [];
+      for (let br = 0; br < 8; br++) {
+        for (let bf = 0; bf < 8; bf++) {
+          const cell = board[br][bf];
+          if (cell && cell.color === color && cell.type === 'p') pawnSquares.push(frToSq(bf, 7 - br));
+        }
+      }
+      for (let i = pawnSquares.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pawnSquares[i], pawnSquares[j]] = [pawnSquares[j], pawnSquares[i]];
+      }
+
+      pawnSquares.slice(0, 2).forEach(sq => {
+        const { f, r } = sqToFR(sq);
+        const forwardSq = frToSq(f, r + dir);
+        if (!forwardSq) return;
+
+        if (isEmpty(state, forwardSq)) {
+          state.game.remove(sq);
+          state.game.put({ type: isPromoRank(color, r + dir) ? 'q' : 'p', color }, forwardSq);
+          state.moveLog.push({ san: '⏩' + sq + '-' + forwardSq, color });
+          return;
+        }
+
+        const strikeSquares = [forwardSq, frToSq(f - 1, r + dir), frToSq(f + 1, r + dir)].filter(Boolean);
+        const target = strikeSquares.find(s => {
+          const p = pieceAt(state, s);
+          return p && p.color !== color;
+        });
+        if (!target) return;
+
+        if (state.mannedTowers[target]) delete state.mannedTowers[target];
+        delete state.mannedTowerOrigin[target];
+        clearMountedIfCaptured(state, target);
+        state.game.remove(target);
+        state.game.remove(sq);
+        state.game.put({ type: isPromoRank(color, r + dir) ? 'q' : 'p', color }, target);
+        state.moveLog.push({ san: '⏩' + sq + 'x' + target, color });
+      });
     }
   }
 
@@ -1562,7 +1623,7 @@
     checkBreakingRank, applyBreakingRankCaptures, clearMountedIfCaptured,
     tickStunCounters, tickSolarMarks, tickTeleportMarks, tickFireDeathMarks,
     tickArcherCooldown, tickWarmWelcomeCooldown, tickWarmWelcomeMarks, checkWarmWelcomeForLanding,
-    kingAuraSquares, ringOfFireRadius, checkKingsLightning, checkRingOfFire,
+    kingAuraSquares, ringOfFireRadius, checkKingsLightning, checkRingOfFire, checkRelentlessAdvance,
     snapshotState, restoreSnapshot,
     serializeState,
   };
