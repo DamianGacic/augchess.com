@@ -317,6 +317,7 @@ function renderAll() {
   settingsModal.classList.add('hidden');
   augmentModal.classList.add('hidden');
   syncStunlockTargeting();
+  syncRaiseTheDeadTargeting();
   if (selectedSquare) legalMoves = computeLegalMovesFor(selectedSquare);
   if (!clockStarted && state.moveLog.length >= 2) { clockStarted = true; startClock(); }
   switchClock();
@@ -602,6 +603,13 @@ function renderBoard() {
         sqEl.classList.add('can-move');
       }
 
+      if (raiseDeadTargeting) {
+        const validTargets = getRaiseTheDeadTargets(state, raiseDeadColor);
+        if (validTargets.includes(sq)) sqEl.classList.add('raisedead-target');
+        if (raiseDeadHoverSq === sq) sqEl.classList.add('raisedead-preview');
+        sqEl.classList.add('can-move');
+      }
+
       if (state.solarMarked[sq] > 0) sqEl.classList.add('solar-marked');
       if (state.teleportMarked[sq] > 0) sqEl.classList.add('teleport-marked');
       if (state.fireDeathMarked[sq] > 0) sqEl.classList.add('fire-death-marked');
@@ -754,6 +762,7 @@ function onSquareClick(e) {
   const turn = state.game.turn();
 
   if (state.pendingStunlock && !stunlockTargeting) return;
+  if (state.pendingRaiseTheDead && !raiseDeadTargeting) return;
 
   if (stunlockTargeting && state.pendingStunlock) {
     if (stunlockHoverQuad) {
@@ -816,6 +825,12 @@ function onSquareClick(e) {
   if (unstableTeleportTargeting && pendingUnstableTeleport) {
     const validTargets = getTeleportTargets(state, pendingUnstableTeleport.color);
     if (validTargets.includes(sq)) applyUnstableTeleportToTarget(sq);
+    return;
+  }
+
+  if (raiseDeadTargeting) {
+    const validTargets = getRaiseTheDeadTargets(state, raiseDeadColor);
+    if (validTargets.includes(sq)) applyRaiseTheDeadToTarget(sq);
     return;
   }
 
@@ -1097,6 +1112,12 @@ function updateStatus() {
   }
   if (unstableTeleportTargeting && pendingUnstableTeleport) {
     statusText.textContent = '✨ Choose a field to teleport to (Esc to cancel)';
+    return;
+  }
+  if (raiseDeadTargeting) {
+    statusText.textContent = state.pendingRaiseTheDead
+      ? '💀 Raise more Ghouls, or press Z to end your turn'
+      : '💀 Choose fields to raise Ghouls (Esc to cancel)';
     return;
   }
 

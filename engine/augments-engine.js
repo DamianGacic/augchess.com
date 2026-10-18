@@ -15,7 +15,7 @@
 (function (root) {
   const isNode = typeof module !== 'undefined' && module.exports;
   const chessEngine = isNode ? require('./chess-engine.js') : root;
-  const { sqToFR, frToSq, pieceAt, has, isEmpty, isPromoRank, flipTurnFen, clearMountedIfCaptured, figurePawnType } = chessEngine;
+  const { sqToFR, frToSq, pieceAt, has, isEmpty, isPromoRank, flipTurnFen, clearMountedIfCaptured, figurePawnType, kingAuraSquares, findKingSquare } = chessEngine;
 
   // ── Stunlock ──────────────────────────────────────────────────────────
   function getStunlockQuadrants(bishopSq) {
@@ -231,6 +231,93 @@
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
+  }
+
+  // ── Raise the Dead (King, requires Ghoul Corps) ─────────────────────────
+  // Valid squares: any free square touching the King (kingAuraSquares), plus
+  // — per file — the single free square nearest that color's own back rank
+  // with nothing free standing behind it (an ally, an enemy, or the board
+  // edge itself all count as "blocked"; only another free square behind it
+  // disqualifies a candidate). See the loop below: for a given file, a free
+  // square at (f, r) qualifies unless the square directly behind it
+  // (toward home, i.e. r - dir) exists AND is itself free.
+  function getRaiseTheDeadTargets(state, color) {
+    const dir = color === 'w' ? 1 : -1;
+    const targets = new Set();
+    const kingSq = findKingSquare(state, color);
+    if (kingSq) {
+      kingAuraSquares(kingSq).forEach(sq => { if (isEmpty(state, sq)) targets.add(sq); });
+    }
+    for (let f = 0; f < 8; f++) {
+      for (let r = 0; r < 8; r++) {
+        const sq = frToSq(f, r);
+        if (!isEmpty(state, sq)) continue;
+        const behindSq = frToSq(f, r - dir);
+        if (behindSq && isEmpty(state, behindSq)) continue; // something free behind it — disqualified
+        targets.add(sq);
+      }
+    }
+    return Array.from(targets);
+  }
+
+  // Unlike every other ability, this one can resolve any number of times
+  // before the turn actually ends: each successful raise stays armed
+  // (state.pendingRaiseTheDead marks the session, mirroring
+  // state.pendingStunlock) so the player can keep clicking valid squares.
+  // The turn only actually ends — flipping state.game's turn via
+  // flipTurnFen, same as Advance/Ring of Fire/Lightning Aura — once the
+  // graveyard or the valid-target list runs dry (finishRaiseTheDeadTurn,
+  // called automatically below) or the player ends it early via
+  // endRaiseTheDead (the 'Z' key client-side). See castAbility dispatch in
+  // engine/index.js for how it detects a turn-ending cast here (comparing
+  // state.game.turn() before/after, since unlike the other turn-consuming
+  // abilities this doesn't flip every single cast).
+  function castRaiseTheDead(state, color, targetSq) {
+    if (state.gameOver) return 'Game is over';
+    if (color !== state.game.turn()) return 'Not your turn';
+    if (!has(state, color, 'raiseTheDead')) return 'You do not have Raise the Dead';
+    if (state.pendingRaiseTheDead && state.pendingRaiseTheDead.color !== color) return 'Not your turn';
+    if (!state.pendingRaiseTheDead && state.turnNumber < state.raiseTheDeadCooldownUntil[color]) {
+      return 'Raise the Dead is on cooldown';
+    }
+    if ((state.ghoulGraveyard[color] || 0) <= 0) return 'No dead Ghouls available to raise';
+    if (!targetSq) return 'A target square is required';
+    const validTargets = getRaiseTheDeadTargets(state, color);
+    if (!validTargets.includes(targetSq)) return 'That is not a valid square to raise a Ghoul';
+
+    state.game.put({ type: 'p', color }, targetSq);
+    state.ghoulGraveyard[color]--;
+    state.pendingRaiseTheDead = { color };
+    state.moveLog.push({ san: '💀' + targetSq, color });
+    state.armedAbility = null;
+
+    if (state.ghoulGraveyard[color] <= 0 || getRaiseTheDeadTargets(state, color).length === 0) {
+      finishRaiseTheDeadTurn(state, color);
+    }
+    return null;
+  }
+
+  // The 'Z' key: end the turn early, keeping whatever's been raised so far.
+  function endRaiseTheDead(state, color) {
+    if (state.gameOver) return 'Game is over';
+    if (!state.pendingRaiseTheDead || state.pendingRaiseTheDead.color !== color) return 'No Raise the Dead cast is pending';
+    if (color !== state.game.turn()) return 'Not your turn';
+    finishRaiseTheDeadTurn(state, color);
+    return null;
+  }
+
+  // Shared by both the auto-exhaustion path in castRaiseTheDead and the
+  // manual endRaiseTheDead: locks in a one-turn cooldown (state.turnNumber
+  // is still at its pre-this-settle value here — see the comment on
+  // state.turnNumber in newGame — so +4 lands exactly on this color's turn
+  // after next: +1 for this turn settling, +1 for the opponent's reply,
+  // +1 for this color's very next [blocked] turn, +1 for the opponent's
+  // reply to that, landing on this color's following turn) and flips the
+  // turn the same way Advance/Ring of Fire/Lightning Aura do.
+  function finishRaiseTheDeadTurn(state, color) {
+    state.raiseTheDeadCooldownUntil[color] = state.turnNumber + 4;
+    state.pendingRaiseTheDead = null;
+    state.game.load(flipTurnFen(state));
   }
 
   // ── Clubbing (Troll) ────────────────────────────────────────────────────
@@ -494,6 +581,17 @@
     if (piece.type === 'k' && has(state, piece.color, 'silverBullet') && !state.silverBulletUsed[piece.color]) {
       list.push({ id: 'silverBullet', key: 'Q' });
     }
+    if (piece.type === 'k' && has(state, piece.color, 'raiseTheDead') &&
+        (state.ghoulGraveyard[piece.color] || 0) > 0 &&
+        state.turnNumber >= state.raiseTheDeadCooldownUntil[piece.color]) {
+      // Slot assignment elsewhere (abilities.js) is purely positional —
+      // whatever's at list[3] renders under, and answers to, the King's R
+      // slot — so pad past Silver Bullet's Q (if present) to land there,
+      // matching the user-facing "press R" requirement regardless of what
+      // else is in the list.
+      while (list.length < 3) list.push(null);
+      list.push({ id: 'raiseTheDead', key: 'R' });
+    }
     if (piece.type === 'r' && has(state, piece.color, 'trolls')) {
       list.push({ id: 'clubbing', key: 'Q' });
     }
@@ -544,6 +642,11 @@
 
   function castAbility(state, color, id, params) {
     params = params || {};
+    // Raise the Dead holds a turn open across multiple casts (see
+    // castRaiseTheDead) — nothing else should be castable mid-session.
+    if (state.pendingRaiseTheDead && id !== 'raiseTheDead') {
+      return 'A Raise the Dead cast is pending — resolve it first';
+    }
     if (id === 'stunlock') return castStunlock(state, color, params.center);
     if (id === 'solarStrike') return castSolarStrike(state, color, params.unitSq, params.center);
     if (id === 'advance') return castAdvance(state, color);
@@ -553,6 +656,7 @@
     if (id === 'clubbing') return castClubbing(state, color, params.unitSq, params.quadrant);
     if (id === 'unstableFireball') return castUnstableFireball(state, color, params.unitSq, params.center);
     if (id === 'unstableTeleport') return castUnstableTeleport(state, color, params.unitSq, params.center);
+    if (id === 'raiseTheDead') return castRaiseTheDead(state, color, params.target);
     return 'Unknown ability: ' + id;
   }
 
@@ -573,6 +677,7 @@
     getClubbingQuadrants, castClubbing,
     getFireballTargets, castUnstableFireball,
     getTeleportTargets, castUnstableTeleport,
+    getRaiseTheDeadTargets, castRaiseTheDead, endRaiseTheDead,
     unitAbilitiesFor, globalAbilitiesFor, armAbility, castAbility, cancelAbility,
   };
 

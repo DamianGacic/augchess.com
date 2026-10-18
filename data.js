@@ -57,6 +57,7 @@ const AUGMENTS = [
   // Ghoul follow-ups — only offered to a player once they own Ghoul Corps.
   { id: 'deviant',      name: 'Deviant',      cost: 2, desc: 'Loading description...', requires: 'ghouls' },
   { id: 'breakingRank', name: 'Breaking Rank', cost: 3, desc: 'Loading description...', requires: 'ghouls', category: 'ability' },
+  { id: 'raiseTheDead', name: 'Raise the Dead', cost: 7, desc: 'Loading description...', requires: 'ghouls', category: 'ability' },
   { id: 'solarStrike',  name: 'Solar Strike',  cost: 3, desc: 'Loading description...', category: 'ability' },
   { id: 'advance',      name: 'Advance',       cost: 3, desc: 'Loading description...', category: 'ability' },
   { id: 'silverBullet', name: 'Silver Bullet', cost: 3, desc: 'Loading description...', category: 'ability' },

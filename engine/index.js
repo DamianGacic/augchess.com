@@ -17,8 +17,28 @@
     return draftEngine.createRoomState();
   }
 
-  // Returns null on success, or a short string reason on rejection.
+  // Returns null on success, or a short string reason on rejection. Wraps
+  // the actual dispatch (dispatchAction) with a before/after Ghoul-count
+  // diff for Raise the Dead's graveyard — a net decrease anywhere in the
+  // engine (a normal capture, Ring of Fire, Clubbing, Solar Strike, a
+  // Spearman impale, ...) means Ghouls died, so this is a generic catch-all
+  // rather than instrumenting every individual capture/kill call site. See
+  // chessEngine.ghoulCount's own comment for the accepted promotion
+  // imprecision.
   function applyAction(state, color, action) {
+    const beforeW = state.game ? chessEngine.ghoulCount(state, 'w') : 0;
+    const beforeB = state.game ? chessEngine.ghoulCount(state, 'b') : 0;
+    const err = dispatchAction(state, color, action);
+    if (state.game) {
+      const deadW = Math.max(0, beforeW - chessEngine.ghoulCount(state, 'w'));
+      const deadB = Math.max(0, beforeB - chessEngine.ghoulCount(state, 'b'));
+      if (deadW) state.ghoulGraveyard.w += deadW;
+      if (deadB) state.ghoulGraveyard.b += deadB;
+    }
+    return err;
+  }
+
+  function dispatchAction(state, color, action) {
     switch (action.type) {
       case 'settingsUpdate':
         return draftEngine.updateSettings(state, action.minutes, action.points);
@@ -43,6 +63,7 @@
 
       case 'move': {
         if (state.phase !== 'playing') return 'Not currently playing';
+        if (state.pendingRaiseTheDead) return 'A Raise the Dead cast is pending — resolve it first';
         const move = chessEngine.findRequestedMove(state, color, action.from, action.to, action.promotion, action.exit);
         if (typeof move === 'string') return move;
         const { pendingTargeting } = chessEngine.executeMove(state, color, move, action.promotion);
@@ -57,6 +78,7 @@
       case 'castAbility': {
         if (state.phase !== 'playing') return 'Not currently playing';
         const wasPending = !!state.pendingStunlock;
+        const turnBeforeCast = state.game.turn();
         const err = augmentsEngine.castAbility(state, color, action.id, action);
         // A Stunlock cast resolving is what finally lets the turn pass (the
         // move that armed it already happened) — settle now. Solar Strike
@@ -70,7 +92,22 @@
         // chess.js move() to do it — settle right after, same as any other
         // turn-ending action.
         const turnConsumingIds = ['advance', 'silverBullet', 'clubbing', 'unstableFireball', 'unstableTeleport', 'kingsLightning', 'ringOfFire'];
-        if (!err && (stunlockResolved || turnConsumingIds.includes(action.id))) afterTurnSettles(state);
+        // Raise the Dead is turn-consuming too, but not on every cast — it
+        // can stay armed across several raises (see castRaiseTheDead), only
+        // actually flipping state.game's turn once the session is
+        // exhausted. Comparing turn() before/after this cast is how we
+        // detect that a turn-ending flip just happened, since a fixed id
+        // check (like turnConsumingIds above) can't distinguish "raised one,
+        // staying armed" from "raised the last one, session over".
+        const raiseTheDeadResolved = action.id === 'raiseTheDead' && state.game.turn() !== turnBeforeCast;
+        if (!err && (stunlockResolved || raiseTheDeadResolved || turnConsumingIds.includes(action.id))) afterTurnSettles(state);
+        return err;
+      }
+
+      case 'endRaiseTheDead': {
+        if (state.phase !== 'playing') return 'Not currently playing';
+        const err = augmentsEngine.endRaiseTheDead(state, color);
+        if (!err) afterTurnSettles(state);
         return err;
       }
 
@@ -105,6 +142,11 @@
   // Breaking Rank checks in and game-over gets (re-)evaluated, exactly
   // mirroring the old client's executeMove/applyStunlockToQuadrant tails.
   function afterTurnSettles(state) {
+    // Plain "how many turns have fully settled" counter — see the comment on
+    // state.turnNumber in chess-engine.js's newGame. Used by Raise the
+    // Dead's one-turn cooldown (chess.js's own move counter doesn't work
+    // here since Figure-type moves bypass it entirely).
+    state.turnNumber = (state.turnNumber || 0) + 1;
     chessEngine.checkBreakingRank(state, state.game.turn());
     chessEngine.checkKingsLightning(state);
     chessEngine.checkRingOfFire(state);

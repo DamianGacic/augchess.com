@@ -26,6 +26,7 @@ const ABILITY_META = {
   silverBullet: { icon: '🎯', label: 'Silver Bullet' },
   unstableFireball: { icon: '🔥', label: 'Unstable Fireball' },
   unstableTeleport: { icon: '✨', label: 'Unstable Teleport' },
+  raiseTheDead: { icon: '💀', label: 'Raise the Dead' },
 };
 
 function renderAbilityBar() {
@@ -60,6 +61,9 @@ function isAbilityArmed(ability, key) {
   if (ability.id === 'unstableTeleport') {
     return unstableTeleportTargeting && pendingUnstableTeleport && pendingUnstableTeleport.apprenticeSq === selectedSquare;
   }
+  if (ability.id === 'raiseTheDead') {
+    return raiseDeadTargeting && raiseDeadKingSq === selectedSquare;
+  }
   return false;
 }
 
@@ -77,6 +81,10 @@ function renderAbilitySlot(color, key, ability) {
     icon.textContent = meta.icon;
     el.appendChild(icon);
     el.title = meta.label + ' (' + key + ')';
+    if (ability.id === 'raiseTheDead') {
+      const available = state.ghoulGraveyard[color] || 0;
+      el.title += ' — ' + available + (available === 1 ? ' Ghoul available' : ' Ghouls available');
+    }
     el.dataset.abilityId = ability.id;
   } else {
     el.title = '';
@@ -156,6 +164,16 @@ function toggleUnitAbility(key, color) {
     return;
   }
 
+  if (ability.id === 'raiseTheDead') {
+    if (raiseDeadTargeting && raiseDeadKingSq === selectedSquare) {
+      cancelRaiseTheDeadTargeting();
+    } else {
+      beginRaiseTheDeadTargeting(selectedSquare, color);
+    }
+    renderAbilityBar();
+    return;
+  }
+
   dispatch({ type: 'armAbility', key, unitSq: selectedSquare });
 }
 
@@ -179,6 +197,7 @@ function cancelArmedAbility() {
   if (silverBulletTargeting) { cancelSilverBulletTargeting(); return; }
   if (unstableFireballTargeting) { cancelUnstableFireballTargeting(); return; }
   if (unstableTeleportTargeting) { cancelUnstableTeleportTargeting(); return; }
+  if (raiseDeadTargeting) { cancelRaiseTheDeadTargeting(); return; }
   if (state.armedAbility) { dispatch({ type: 'cancelAbility' }); }
 }
 
@@ -193,6 +212,9 @@ document.addEventListener('keydown', (e) => {
   }
   if (!isMyTurn()) return;
   const key = e.key.toUpperCase();
+  // Z: end a Raise the Dead turn early, keeping whatever's been raised —
+  // see onRaiseTheDeadEndTurn (raisethedead.js). No-op if not targeting.
+  if (key === 'Z') { onRaiseTheDeadEndTurn(); return; }
   if (ABILITY_UNIT_KEYS.includes(key) || ABILITY_GLOBAL_KEYS.includes(key)) toggleAbility(key, state.game.turn());
 });
 
