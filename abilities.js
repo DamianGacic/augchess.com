@@ -22,6 +22,7 @@ const ABILITY_META = {
   advance: { icon: '⏫', label: 'Advance' },
   kingsLightning: { icon: '🌩', label: 'Lightning Aura' },
   ringOfFire: { icon: '🔥', label: 'Ring of Fire' },
+  relentlessAdvance: { icon: '⏩', label: 'Relentless Advance' },
   clubbing: { icon: '🔨', label: 'Clubbing' },
   silverBullet: { icon: '🎯', label: 'Silver Bullet' },
   unstableFireball: { icon: '🔥', label: 'Unstable Fireball' },

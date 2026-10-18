@@ -63,13 +63,13 @@
         // never sets pendingStunlock, so this only fires for Stunlock.
         const stunlockResolved = wasPending && !state.pendingStunlock;
         // Advance, Silver Bullet, Clubbing, Unstable Fireball, Unstable
-        // Teleport, Lightning Aura, and Ring of Fire all flip state.game's
-        // turn themselves (see castAdvance/castSilverBullet/castClubbing/
-        // castUnstableFireball/castUnstableTeleport/castKingsLightning/
-        // castRingOfFire) since they consume the turn on their own, with no
-        // chess.js move() to do it — settle right after, same as any other
-        // turn-ending action.
-        const turnConsumingIds = ['advance', 'silverBullet', 'clubbing', 'unstableFireball', 'unstableTeleport', 'kingsLightning', 'ringOfFire'];
+        // Teleport, Lightning Aura, Ring of Fire, and Relentless Advance all
+        // flip state.game's turn themselves (see castAdvance/castSilverBullet/
+        // castClubbing/castUnstableFireball/castUnstableTeleport/
+        // castKingsLightning/castRingOfFire/castRelentlessAdvance) since they
+        // consume the turn on their own, with no chess.js move() to do it —
+        // settle right after, same as any other turn-ending action.
+        const turnConsumingIds = ['advance', 'silverBullet', 'clubbing', 'unstableFireball', 'unstableTeleport', 'kingsLightning', 'ringOfFire', 'relentlessAdvance'];
         if (!err && (stunlockResolved || turnConsumingIds.includes(action.id))) afterTurnSettles(state);
         return err;
       }
@@ -108,6 +108,7 @@
     chessEngine.checkBreakingRank(state, state.game.turn());
     chessEngine.checkKingsLightning(state);
     chessEngine.checkRingOfFire(state);
+    chessEngine.checkRelentlessAdvance(state);
     chessEngine.tickTeleportMarks(state);
     chessEngine.tickFireDeathMarks(state);
     gameOverEngine.evaluateGameOver(state);
