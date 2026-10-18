@@ -20,6 +20,19 @@
     if (!wK) { state.gameOver = true; state.gameOverText = '♛ Black wins — King captured!'; return; }
     if (!bK) { state.gameOver = true; state.gameOverText = '♛ White wins — King captured!'; return; }
 
+    // Coronation: an instant win the moment that color's King is sitting on
+    // the opponent's back rank, however it got there (a plain King step, or
+    // riding in as a mounted knight per the Mounting augment — wK/bK above
+    // already resolve to the mounted square when applicable). Checked ahead
+    // of checkmate/stalemate since reaching the back rank ends the game
+    // outright, with no regard for whose move is next.
+    if (has(state, 'w', 'coronation') && wK[1] === '8') {
+      state.gameOver = true; state.gameOverText = '👑 White wins — King reached the enemy back rank!'; return;
+    }
+    if (has(state, 'b', 'coronation') && bK[1] === '1') {
+      state.gameOver = true; state.gameOverText = '👑 Black wins — King reached the enemy back rank!'; return;
+    }
+
     const hasActiveStun = Object.keys(state.stunnedSquares).some(sq => state.stunnedSquares[sq] > 0);
 
     // Also bumped to the manual path below whenever the current check is

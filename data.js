@@ -62,6 +62,7 @@ const AUGMENTS = [
   { id: 'silverBullet', name: 'Silver Bullet', cost: 3, desc: 'Loading description...', category: 'ability' },
   { id: 'kingsLightning', name: 'Lightning Aura', cost: 5, desc: 'Loading description...', category: 'ability' },
   { id: 'ringOfFire', name: 'Ring of Fire', cost: 3, desc: 'Loading description...', category: 'ability' },
+  { id: 'coronation', name: 'Coronation', cost: 5, desc: 'Loading description...', category: 'ability' },
   // Apprentice Corps follow-ups — only offered to a player once they own Apprentice Corps.
   { id: 'unstableFireball', name: 'Unstable Fireball', cost: 3, desc: 'Loading description...', requires: 'apprentices', category: 'ability' },
   { id: 'unstableTeleport', name: 'Unstable Teleport', cost: 2, desc: 'Loading description...', requires: 'apprentices', category: 'ability' },

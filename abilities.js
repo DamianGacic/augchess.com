@@ -19,6 +19,7 @@ const ABILITY_META = {
   stunlock: { icon: '⚡', label: 'Stunlock' },
   solarStrike: { icon: '☀', label: 'Solar Strike' },
   breakingRank: { icon: '💥', label: 'Breaking Rank (passive)' },
+  coronation: { icon: '👑', label: 'Coronation (passive)' },
   advance: { icon: '⏫', label: 'Advance' },
   kingsLightning: { icon: '🌩', label: 'Lightning Aura' },
   ringOfFire: { icon: '🔥', label: 'Ring of Fire' },
