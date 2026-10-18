@@ -1744,6 +1744,29 @@ main {
 .square.silverbullet-preview.light { background-color: #bdbdbd !important; }
 .square.silverbullet-preview.dark  { background-color: #757575 !important; }
 
+/* ===== Raise the Dead Augment ===== */
+
+/* Board: raise-the-dead targeting — every valid square glows necrotic purple */
+.square.raisedead-target::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(123, 31, 162, 0.25);
+  pointer-events: none;
+  z-index: 2;
+}
+.square.raisedead-target.light { background-color: #ce93d8; }
+.square.raisedead-target.dark  { background-color: #6a1b9a; }
+
+/* Hovered target preview — distinct bright highlight */
+.square.raisedead-preview {
+  outline: 3px solid #4a148c;
+  outline-offset: -3px;
+  z-index: 3;
+}
+.square.raisedead-preview.light { background-color: #ba68c8 !important; }
+.square.raisedead-preview.dark  { background-color: #6a1b9a !important; }
+
 /* ===== Apprentice Corps / Unstable Fireball Augment ===== */
 
 /* Board: fireball targeting — the single valid target glows red-orange */

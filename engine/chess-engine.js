@@ -76,6 +76,20 @@
 
     state.relentlessAdvanceActive = { w: false, b: false };
 
+    // Raise the Dead: state.ghoulGraveyard is a per-color count of Ghouls
+    // available to raise, kept up to date by engine/index.js's applyAction
+    // wrapper (a before/after board diff around every action — see
+    // ghoulCount below) rather than by instrumenting every capture/kill site
+    // individually. state.turnNumber is a plain "how many turns have
+    // fully settled so far" counter (incremented once per afterTurnSettles
+    // call, regardless of color or move type — chess.js's own move counter
+    // doesn't work for this since Figure-type moves bypass it entirely) used
+    // to gate the one-turn cooldown in state.raiseTheDeadCooldownUntil.
+    state.ghoulGraveyard = { w: 0, b: 0 };
+    state.raiseTheDeadCooldownUntil = { w: 0, b: 0 };
+    state.pendingRaiseTheDead = null; // { color } while a raise session is open — see castRaiseTheDead
+    state.turnNumber = 0;
+
     // Unstable Teleport: each individual Apprentice may only ever cast it
     // once, so this tracks *which square currently holds an Apprentice that
     // has already used it* (not a per-color used-once flag) — applyMoveToState
@@ -138,6 +152,30 @@
 
   function anyFigurePawnsInPlay(state) {
     return figurePawnType(state, 'w') !== null || figurePawnType(state, 'b') !== null;
+  }
+
+  // How many of `color`'s pawn-type units (all Ghouls, uniformly, if they
+  // own Ghoul Corps at all — see figurePawnType) are currently on the
+  // board. Used by engine/index.js's applyAction wrapper to detect Ghoul
+  // deaths generically (a before/after diff) rather than instrumenting
+  // every individual capture/kill call site — a net decrease means Ghouls
+  // died (to any of the many ways a piece can be removed in this engine),
+  // a net increase means some were just raised by Raise the Dead. Note:
+  // a Ghoul promoting to Queen also decreases this count without it having
+  // died — a known, accepted imprecision (see castRaiseTheDead) since
+  // distinguishing "promoted" from "died" everywhere a piece can vanish
+  // would need touching every one of those sites individually.
+  function ghoulCount(state, color) {
+    if (!has(state, color, 'ghouls')) return 0;
+    const board = state.game.board();
+    let count = 0;
+    for (let br = 0; br < 8; br++) {
+      for (let bf = 0; bf < 8; bf++) {
+        const cell = board[br][bf];
+        if (cell && cell.color === color && cell.type === 'p') count++;
+      }
+    }
+    return count;
   }
 
   function figureRookType(state, color) {
@@ -1608,7 +1646,7 @@
   }
 
   const exportsObj = {
-    newGame, has, figurePawnType, anyFigurePawnsInPlay, figureRookType, anyFigureRooksInPlay,
+    newGame, has, figurePawnType, anyFigurePawnsInPlay, ghoulCount, figureRookType, anyFigureRooksInPlay,
     figureBishopType, anyFigureBishopsInPlay,
     sqToFR, frToSq, isEmpty, pieceAt, findKingSquare, isPromoRank,
     generateMoves, dedupeMoves, generateExitMoves,
