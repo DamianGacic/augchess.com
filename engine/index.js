@@ -158,10 +158,16 @@
     // Dead's one-turn cooldown (chess.js's own move counter doesn't work
     // here since Figure-type moves bypass it entirely).
     state.turnNumber = (state.turnNumber || 0) + 1;
+    const fenBefore = state.game.fen();
     chessEngine.checkBreakingRank(state, state.game.turn());
     chessEngine.checkKingsLightning(state);
     chessEngine.checkRingOfFire(state);
     chessEngine.checkRelentlessAdvance(state);
+    // These edit the board via put()/remove() behind chess.js's back, leaving
+    // its move history out of sync with the board — in_draw()'s repetition
+    // check then replays that history and throws (taking serializeState and
+    // the server broadcast down with it). Reloading drops the stale history.
+    if (state.game.fen() !== fenBefore) state.game.load(state.game.fen());
     chessEngine.tickTeleportMarks(state);
     chessEngine.tickFireDeathMarks(state);
     chessEngine.tickWarmWelcomeMarks(state);

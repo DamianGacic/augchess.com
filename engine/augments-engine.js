@@ -256,28 +256,22 @@
   // ── Raise the Dead (King, requires Ghouls) ─────────────────────────
   // Valid squares: any free square touching the King (kingAuraSquares), plus
   // — per file — the single free square nearest that color's own back rank
-  // with nothing free standing behind it (an ally, an enemy, or the board
-  // edge itself all count as "blocked"; only another free square behind it
-  // disqualifies a candidate). See the loop below: for a given file, a free
-  // square at (f, r) qualifies unless the square directly behind it
-  // (toward home, i.e. r - dir) exists AND is itself free.
+  // (walking up the file from home, the first free square found; everything
+  // behind it is by definition occupied or the board edge). Never that
+  // color's promotion rank — a raised Ghoul there could never move.
   function getRaiseTheDeadTargets(state, color) {
-    const dir = color === 'w' ? 1 : -1;
     const targets = new Set();
     const kingSq = findKingSquare(state, color);
     if (kingSq) {
       kingAuraSquares(kingSq).forEach(sq => { if (isEmpty(state, sq)) targets.add(sq); });
     }
     for (let f = 0; f < 8; f++) {
-      for (let r = 0; r < 8; r++) {
-        const sq = frToSq(f, r);
-        if (!isEmpty(state, sq)) continue;
-        const behindSq = frToSq(f, r - dir);
-        if (behindSq && isEmpty(state, behindSq)) continue; // something free behind it — disqualified
-        targets.add(sq);
+      for (let i = 0; i < 8; i++) {
+        const sq = frToSq(f, color === 'w' ? i : 7 - i);
+        if (isEmpty(state, sq)) { targets.add(sq); break; }
       }
     }
-    return Array.from(targets);
+    return Array.from(targets).filter(sq => !isPromoRank(color, sqToFR(sq).r));
   }
 
   // Unlike every other ability, this one can resolve any number of times
@@ -651,9 +645,11 @@
     if (state.gameOver) return 'Game is over';
     if (state.pendingStunlock) return 'A Stunlock cast is pending — resolve it first';
     if (color !== state.game.turn()) return 'Not your turn';
+    if (state.pendingSwiftMove) return 'Resolve the Swift follow-up move first';
     const piece = pieceAt(state, unitSq);
     if (!piece || piece.color !== color) return 'Not your piece';
-    const ability = unitAbilitiesFor(state, unitSq).find(a => a.key === key);
+    // Null-safe: Raise the Dead pads the King's list with nulls to land on R.
+    const ability = unitAbilitiesFor(state, unitSq).find(a => a && a.key === key);
     if (!ability) return 'No ability there to arm';
     if (ability.id !== 'stunlock') return 'That ability casts directly and does not arm';
 
@@ -672,6 +668,9 @@
     if (state.pendingRaiseTheDead && id !== 'raiseTheDead') {
       return 'A Raise the Dead cast is pending — resolve it first';
     }
+    // Same for a pending Swift follow-up step (see executeMove) — a
+    // turn-consuming cast here would flip the turn with it still pending.
+    if (state.pendingSwiftMove) return 'Resolve the Swift follow-up move first';
     if (id === 'stunlock') return castStunlock(state, color, params.center);
     if (id === 'solarStrike') return castSolarStrike(state, color, params.unitSq, params.center);
     if (id === 'advance') return castAdvance(state, color);

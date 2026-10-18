@@ -411,7 +411,8 @@
         res.push({ from: sq, to: target, special: 'archerStep', promotion: promo ? 'q' : undefined, needsPromo: promo });
       }
     }
-    if (!isArcherOnCooldown(state, color, sq)) {
+    const swiftFollowUp = !!(state.pendingSwiftMove && state.pendingSwiftMove.archerSq === sq);
+    if (!isArcherOnCooldown(state, color, sq) && !swiftFollowUp) {
       for (const target of archerShootRangeSquares(sq, color)) {
         const tp = pieceAt(state, target);
         if (tp && tp.color !== color) {
@@ -1394,6 +1395,9 @@
     const legal = canExit ? generateExitMoves(state, from) : generateMoves(state, from);
     const move = legal.find(m => m.to === to);
     if (!move) return 'Illegal move';
+    if (state.pendingSwiftMove && state.pendingSwiftMove.color === color && move.special === 'archerShoot') {
+      return 'Swift grants a follow-up step, not a second shot';
+    }
     if (move.needsPromo && !promotionChoice) return 'A promotion piece is required';
     return move;
   }
