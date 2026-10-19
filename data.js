@@ -27,7 +27,7 @@ const FIGURES = [
   // Pawns
   { id: 'archer',      name: 'Archer',      replaces: 'p', image: 'archer-black.png', desc: 'An archer who moves quietly forward or diagonally, then strikes from a distance — the field two squares ahead, or either square flanking it — without ever leaving its position. Needs a moment to nock a fresh arrow, so it can’t shoot again the turn right after it fires.' },
   { id: 'apprentice',  name: 'Apprentice',  replaces: 'p', image: null, desc: 'A cautious apprentice who has not yet learned to fight. It advances forward or diagonally onto open ground but can never capture a thing.' },
-  { id: 'ghoul',       name: 'Ghoul',       replaces: 'p', image: 'ghoul0.png', desc: 'A relentless ghoul that shambles straight ahead, clawing at the square directly before it — or leaping two fields to strike beyond — but never diagonally.' },
+  { id: 'ghoul',       name: 'Ghoul',       replaces: 'p', image: 'ghoul0.png', desc: 'A relentless ghoul that shambles straight ahead, clawing at the square directly before it — or charging an enemy two fields ahead across an empty square — but never diagonally.' },
   { id: 'guardsman',   name: 'Guardsman',   replaces: 'p', image: null, desc: 'A disciplined guardsman who can shift to any adjacent square, yet still strikes only in the classic forward-diagonal pawn pattern.' },
   { id: 'spearman',    name: 'Spearman',    replaces: 'p', image: 'spearman-black.png', desc: 'A braced spearman who only ever moves or strikes one square straight ahead — but any foe that charges in from directly ahead to cut it down is skewered in turn.' },
   // Knights
