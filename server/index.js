@@ -25,6 +25,7 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.jpg': 'image/jpeg',
   '.png': 'image/png',
+  '.svg': 'image/svg+xml',
 };
 
 function serveStatic(req, res) {

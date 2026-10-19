@@ -342,18 +342,27 @@ function computeLegalMovesFor(sq) {
 }
 
 function renderActiveAugments() {
-  activeAugmentsEl.querySelectorAll('.aa-item').forEach(e => e.remove());
+  activeAugmentsEl.querySelectorAll('.aa-side').forEach(e => e.remove());
   let count = 0;
   ['w', 'b'].forEach(c => {
+    if (!state.augments[c].length) return;
+    const side = document.createElement('div');
+    side.className = 'aa-side';
+    side.innerHTML = `<span class="aa-side-label ${c === 'w' ? 'white' : 'black'}" title="${c === 'w' ? 'White' : 'Black'}"></span>`;
+    const icons = document.createElement('div');
+    icons.className = 'aa-icons';
     state.augments[c].forEach(id => {
       const aug = AUGMENTS.find(a => a.id === id);
       const item = document.createElement('div');
       item.className = 'aa-item';
-      item.innerHTML = `<span class="aa-dot ${c === 'w' ? 'white' : 'black'}"></span>${aug.name}`;
-      item.title = aug.desc;
-      activeAugmentsEl.appendChild(item);
+      item.appendChild(augmentEmblem(aug));
+      item.dataset.augId = aug.id;
+      item.addEventListener('click', () => showAugmentDetail(aug));
+      icons.appendChild(item);
       count++;
     });
+    side.appendChild(icons);
+    activeAugmentsEl.appendChild(side);
   });
   activeAugmentsEl.classList.toggle('has-items', count > 0);
 }

@@ -24,6 +24,7 @@ const btnAugmentStart = document.getElementById('btn-augment-start');
 const settingsModal     = document.getElementById('settings-modal');
 const settingsTcOptions = document.getElementById('settings-tc-options');
 const settingsPtOptions = document.getElementById('settings-points-options');
+const settingsPtCustom  = document.getElementById('settings-points-custom');
 const btnSettingsStart  = document.getElementById('btn-settings-start');
 
 function showGameSettings() {
@@ -35,10 +36,27 @@ function syncSettingsUI() {
   settingsTcOptions.querySelectorAll('.tc-btn').forEach(b => {
     b.classList.toggle('selected', parseInt(b.dataset.minutes) === state.settings.minutes);
   });
+  let isPreset = false;
   settingsPtOptions.querySelectorAll('.tc-btn').forEach(b => {
-    b.classList.toggle('selected', parseInt(b.dataset.points) === state.settings.points);
+    const match = parseInt(b.dataset.points) === state.settings.points;
+    b.classList.toggle('selected', match);
+    if (match) isPreset = true;
   });
+  // A non-preset value (typed here, or by the other player online) lives in
+  // the custom field. Leave the field alone while it's being typed in.
+  settingsPtCustom.classList.toggle('selected', !isPreset);
+  if (document.activeElement !== settingsPtCustom) {
+    settingsPtCustom.value = isPreset ? '' : state.settings.points;
+  }
 }
+
+settingsPtCustom.addEventListener('input', () => {
+  const points = Number(settingsPtCustom.value);
+  if (Number.isInteger(points) && points >= 1 && points <= 99) {
+    dispatch({ type: 'settingsUpdate', minutes: state.settings.minutes, points });
+  }
+});
+settingsPtCustom.addEventListener('blur', syncSettingsUI);
 
 settingsTcOptions.querySelectorAll('.tc-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -76,8 +94,12 @@ function buildSlotCard(aug, extraClass) {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = 'augment-slot-card' + (extraClass ? ' ' + extraClass : '');
-  card.innerHTML = `<span class="as-cost">${aug.cost}</span><span class="as-name">${aug.name}</span>`;
-  card.title = aug.desc;
+  card.appendChild(augmentEmblem(aug));
+  const text = document.createElement('span');
+  text.className = 'as-text';
+  text.innerHTML = `<span class="as-name">${aug.name}</span><span class="as-cost">${aug.cost} pt${aug.cost === 1 ? '' : 's'}</span>`;
+  card.appendChild(text);
+  card.dataset.augId = aug.id;
   return card;
 }
 
@@ -186,12 +208,13 @@ function renderDraft() {
     if (ownerB) owners += '<span class="ac-owner black">B</span>';
 
     card.innerHTML = `
+      <img class="emblem" src="${augmentIconUrl(aug.id)}" alt="" draggable="false">
       <div class="ac-cost">${aug.cost}</div>
       <div class="ac-body">
         <div class="ac-name">${aug.name} ${owners}</div>
         <div class="ac-desc">${aug.desc}</div>
       </div>`;
-    card.title = aug.desc;
+    card.dataset.augId = aug.id;
 
     if (!disabled) {
       card.addEventListener('click', () => dispatch({ type: 'draftPick', augId: aug.id }));

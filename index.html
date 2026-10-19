@@ -4,14 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AugChess</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app">
     <header>
-      <div class="logo">
-        <span class="logo-icon">♟</span>
-        <span class="logo-text">augchess</span>
+      <div class="logo" id="logo-home" title="Home">
+        <img class="logo-mark" src="assets/logo.svg" alt="" />
+        <span class="logo-text"><span class="logo-accent">Aug</span>Chess</span>
       </div>
       <nav class="main-nav">
         <button class="nav-btn" id="nav-home">Home</button>
@@ -21,7 +25,7 @@
       </nav>
       <div class="profile-wrap">
         <button class="profile-btn" id="profile-btn" title="Account" aria-label="Account">
-          <span class="profile-icon">&#128100;</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
         </button>
         <div id="profile-menu" class="profile-menu hidden">
           <div id="profile-email" class="profile-email"></div>
@@ -42,25 +46,58 @@
     <!-- Homepage View -->
     <div id="home-view" class="view">
       <main class="home-main">
-        <div class="hero">
-          <h1>AugChess</h1>
-          <p>Experience chess with powerful augments that change the game</p>
-          <div class="hero-buttons">
-            <button class="btn btn-primary" id="start-game-btn">Start New Game</button>
-            <button class="btn btn-multiplayer" id="create-game-link-btn">🔗 Create Game Link</button>
+        <section class="hero">
+          <div class="hero-copy">
+            <div class="hero-eyebrow">Chess, augmented</div>
+            <h1>Draft your<br><span class="accent">edge.</span><br>Break the rules.</h1>
+            <p>Classic chess, until someone bids on an augment. Before every match, both players spend points on new units, abilities and rule-breaking powers. Draft carefully: a bad draft can lose the game before the first move.</p>
+            <div class="hero-buttons">
+              <button class="btn btn-primary btn-lg" id="start-game-btn">Start New Game</button>
+              <button class="btn btn-multiplayer btn-lg" id="create-game-link-btn">Create Game Link</button>
+            </div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="hero-board" id="hero-board"></div>
+          </div>
+        </section>
+
+        <div class="section-head">
+          <h2>How a match works</h2>
+          <p>Three phases, one winner.</p>
+        </div>
+        <div class="steps">
+          <div class="feature-card">
+            <span class="step-num">01</span>
+            <img class="emblem" src="augments/icons/coronation.svg" alt="" />
+            <h3>Set the stakes</h3>
+            <p>Agree on a time control and how many auction points each side gets to spend.</p>
+          </div>
+          <div class="feature-card">
+            <span class="step-num">02</span>
+            <img class="emblem" src="augments/icons/archers.svg" alt="" />
+            <h3>Draft augments</h3>
+            <p>Take turns picking augments. Swap your pawns for Archers or Ghouls, arm your King with Silver Bullet, or unlock follow-up upgrades.</p>
+          </div>
+          <div class="feature-card">
+            <span class="step-num">03</span>
+            <img class="emblem" src="augments/icons/solarStrike.svg" alt="" />
+            <h3>Play it out</h3>
+            <p>Everything else is ordinary chess. Use abilities with Q/W/E/R for the selected unit and A/S/D/F for global powers.</p>
           </div>
         </div>
-        
-        <div class="features">
-          <div class="feature-card">
-            <h3>Classic Chess</h3>
-            <p>Play traditional chess with all the standard rules and pieces.<br>Unless a specific rule change is chosen by either player, the game works just as you know it</p>
-          </div>
-          <div class="feature-card">
-            <h3>Powerful Augments</h3>
-            <p>Choose from unique augments that give your side special advantages.<br>Beware: Treat augment selection as a serious part of the game.<br>Choose wisely, or you may find yourself in a bout that is near impossible to win.</p>
-          </div>
+
+        <div class="section-head">
+          <h2>The Arsenal</h2>
+          <p>Every augment in the game. Click one for details.</p>
         </div>
+        <div class="augment-marquee">
+          <div class="marquee-track" id="augment-marquee"></div>
+        </div>
+
+        <footer class="site-footer">
+          <span>AugChess: chess with augmented rules.</span>
+          <span>Icons by <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> (Lorc, Delapouite et al.), <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a></span>
+        </footer>
       </main>
     </div>
 
@@ -169,9 +206,11 @@
     <!-- Augments View -->
     <div id="augments-view" class="view hidden">
       <main class="augments-main">
-        <h1>Augments</h1>
-        <p>Discover all available augments and their effects</p>
-        
+        <div class="page-head">
+          <h1>Augments</h1>
+          <p>Every power you can draft, and what it does to the board.</p>
+        </div>
+        <div class="filter-bar" id="augment-filters"></div>
         <div id="augments-container"></div>
       </main>
     </div>
@@ -179,8 +218,10 @@
     <!-- Figures View -->
     <div id="figures-view" class="view hidden">
       <main class="augments-main">
-        <h1>Figures</h1>
-        <p>Alternative figures that can replace standard pieces via exchange augments</p>
+        <div class="page-head">
+          <h1>Figures</h1>
+          <p>Alternative units that replace standard pieces through Unit Exchange augments.</p>
+        </div>
         <div id="figures-container"></div>
       </main>
     </div>
@@ -225,9 +266,10 @@
           <div class="time-control">
             <div class="time-control-label">Auction Points</div>
             <div class="time-control-options" id="settings-points-options">
-              <button class="tc-btn selected" data-points="3">3 pts</button>
-              <button class="tc-btn" data-points="7">7 pts</button>
-              <button class="tc-btn" data-points="12">12 pts</button>
+              <button class="tc-btn selected" data-points="4">4 pts</button>
+              <button class="tc-btn" data-points="9">9 pts</button>
+              <button class="tc-btn" data-points="14">14 pts</button>
+              <input type="number" class="tc-custom" id="settings-points-custom" min="1" max="99" step="1" placeholder="Custom" aria-label="Custom auction points" />
             </div>
           </div>
         </div>
@@ -284,9 +326,21 @@
     <!-- Augment Detail Modal -->
     <div id="augment-detail-modal" class="modal hidden">
       <div class="modal-content augment-detail-content">
-        <h3 id="detail-title">Augment Name</h3>
+        <div class="detail-head">
+          <img id="detail-icon" class="emblem detail-emblem" src="" alt="" />
+          <div class="detail-titles">
+            <h3 id="detail-title">Augment Name</h3>
+            <div class="detail-meta" id="detail-meta"></div>
+          </div>
+        </div>
         <div class="augment-detail-cost" id="detail-cost">Cost: 1</div>
-        <p id="detail-description">Augment description</p>
+        <div class="detail-body">
+          <div id="detail-demo" class="detail-demo"></div>
+          <div class="detail-rules">
+            <div class="aug-pop-label">How it works</div>
+            <p id="detail-description">Augment description</p>
+          </div>
+        </div>
         <button class="btn btn-primary" id="close-detail-btn">Close</button>
       </div>
     </div>
@@ -327,6 +381,8 @@
   <script src="raisethedead.js"></script>
   <script src="draft.js"></script>
   <script src="clock.js"></script>
+  <script src="augment-demos.js"></script>
+  <script src="augment-demo-player.js"></script>
   <script src="views.js"></script>
   <script src="app.js"></script>
 </body>

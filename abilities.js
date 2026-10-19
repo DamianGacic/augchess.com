@@ -16,20 +16,20 @@ const ABILITY_UNIT_KEYS = ['Q', 'W', 'E', 'R'];
 const ABILITY_GLOBAL_KEYS = ['A', 'S', 'D', 'F'];
 const ABILITY_COLORS = ['w', 'b'];
 const ABILITY_META = {
-  stunlock: { icon: '⚡', label: 'Stunlock' },
-  solarStrike: { icon: '☀', label: 'Solar Strike' },
-  breakingRank: { icon: '💥', label: 'Breaking Rank (passive)' },
-  coronation: { icon: '👑', label: 'Coronation (passive)' },
-  advance: { icon: '⏫', label: 'Advance' },
-  kingsLightning: { icon: '🌩', label: 'Lightning Aura' },
-  ringOfFire: { icon: '🔥', label: 'Ring of Fire' },
-  relentlessAdvance: { icon: '⏩', label: 'Relentless Advance' },
-  clubbing: { icon: '🔨', label: 'Clubbing' },
-  silverBullet: { icon: '🎯', label: 'Silver Bullet' },
-  unstableFireball: { icon: '🔥', label: 'Unstable Fireball' },
-  unstableTeleport: { icon: '✨', label: 'Unstable Teleport' },
-  warmWelcome: { icon: '👋', label: 'Warm Welcome (passive)' },
-  raiseTheDead: { icon: '💀', label: 'Raise the Dead' },
+  stunlock: { label: 'Stunlock' },
+  solarStrike: { label: 'Solar Strike' },
+  breakingRank: { label: 'Breaking Rank (passive)' },
+  coronation: { label: 'Coronation (passive)' },
+  advance: { label: 'Advance' },
+  kingsLightning: { label: 'Lightning Aura' },
+  ringOfFire: { label: 'Ring of Fire' },
+  relentlessAdvance: { label: 'Relentless Advance' },
+  clubbing: { label: 'Clubbing' },
+  silverBullet: { label: 'Silver Bullet' },
+  unstableFireball: { label: 'Unstable Fireball' },
+  unstableTeleport: { label: 'Unstable Teleport' },
+  warmWelcome: { label: 'Warm Welcome (passive)' },
+  raiseTheDead: { label: 'Raise the Dead' },
 };
 
 function renderAbilityBar() {
@@ -78,19 +78,24 @@ function renderAbilitySlot(color, key, ability) {
   el.classList.toggle('passive', !!(ability && ability.passive));
   el.classList.toggle('armed', !!(ability && !ability.passive && isAbilityArmed(ability, key)));
   if (ability) {
-    const meta = ABILITY_META[ability.id] || { icon: '?', label: ability.id };
-    const icon = document.createElement('span');
-    icon.className = 'ability-icon';
-    icon.textContent = meta.icon;
+    const meta = ABILITY_META[ability.id] || { label: ability.id };
+    const icon = document.createElement('img');
+    icon.className = 'ability-icon emblem';
+    icon.src = augmentIconUrl(ability.id);
+    icon.alt = meta.label;
+    icon.draggable = false;
     el.appendChild(icon);
-    el.title = meta.label + ' (' + key + ')';
+    let label = meta.label + ' (' + key + ')';
     if (ability.id === 'raiseTheDead') {
       const available = state.ghoulGraveyard[color] || 0;
-      el.title += ' — ' + available + (available === 1 ? ' Ghoul available' : ' Ghouls available');
+      label += ' — ' + available + (available === 1 ? ' Ghoul available' : ' Ghouls available');
     }
+    el.setAttribute('aria-label', label);
     el.dataset.abilityId = ability.id;
+    el.dataset.augId = demoIdFor(ability.id);
   } else {
-    el.title = '';
+    el.removeAttribute('aria-label');
+    delete el.dataset.augId;
     delete el.dataset.abilityId;
   }
 }

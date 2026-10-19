@@ -20,10 +20,13 @@
   const FIGURES = data.FIGURES;
 
   // ─── Settings phase ───────────────────────────────────────────────────────
+  const MIN_POINTS = 1;
+  const MAX_POINTS = 99;
+
   function createRoomState() {
     return {
       phase: 'settings', // 'settings' | 'draft' | 'playing' | 'gameover'
-      settings: { minutes: 3, points: 3, locked: false },
+      settings: { minutes: 3, points: 4, locked: false },
       draftState: null, // { points:{w,b}, current:'w'|'b', owned:{w:[],b:[]}, passed:{w,b} }
       augments: { w: [], b: [] },
     };
@@ -33,6 +36,11 @@
   function updateSettings(state, minutes, points) {
     if (state.phase !== 'settings') return 'Settings can only be changed before the draft starts';
     if (state.settings.locked) return 'Settings are already locked in';
+    // Points can be typed in freely (custom field), so bound them here where
+    // the server also enforces it.
+    if (!Number.isInteger(points) || points < MIN_POINTS || points > MAX_POINTS) {
+      return `Auction points must be a whole number from ${MIN_POINTS} to ${MAX_POINTS}`;
+    }
     state.settings.minutes = minutes;
     state.settings.points = points;
     return null;
