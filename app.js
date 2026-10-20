@@ -464,6 +464,16 @@ function renderBoard() {
   const displayRanks = flipped ? [...ranks].reverse() : ranks;
   const displayFiles = flipped ? [...files].reverse() : files;
 
+  // The side to move's King: red when it's in check, or 'check-incoming'
+  // when it isn't attacked yet but this move's Solar Strike will expose it.
+  // A check whose attacker is about to burn away isn't highlighted at all.
+  const toMove = state.game.turn();
+  const toMoveKingSq = state.mounted[toMove] || findKingSquare(state, toMove);
+  const kingCheckClass = toMoveKingSq && kingThreatenedAfterPly(state, toMove)
+    ? (isKingAttacked(state, toMove) ? 'in-check' : 'check-incoming')
+    : null;
+  const solarBurns = solarBurnsThisPly(state);
+
   let archerShootRange = null;
   let ghoulChargeRange = null;
   let longbowShootRange = null;
@@ -564,10 +574,7 @@ function renderBoard() {
         sqEl.classList.add('claw-range-preview');
       }
 
-      if (!state.mounted.w && !state.mounted.b && !anyFigurePawnsInPlay(state) && !anyFigureRooksInPlay(state) && !anyFigureBishopsInPlay(state) && state.game.in_check()) {
-        const kingSquare = findKingSquare(state, state.game.turn());
-        if (kingSquare === sq) sqEl.classList.add('in-check');
-      }
+      if (kingCheckClass && sq === toMoveKingSq) sqEl.classList.add(kingCheckClass);
 
       if (state.stunnedSquares[sq] > 0) sqEl.classList.add('stunned');
 
@@ -631,7 +638,15 @@ function renderBoard() {
         sqEl.classList.add('can-move');
       }
 
-      if (state.solarMarked[sq] > 0) sqEl.classList.add('solar-marked');
+      if (state.solarMarked[sq] > 0) {
+        sqEl.classList.add('solar-marked');
+        const burnsNow = solarBurns.includes(sq);
+        if (burnsNow) sqEl.classList.add('solar-imminent');
+        const mover = toMove === 'w' ? 'White' : 'Black', other = toMove === 'w' ? 'Black' : 'White';
+        sqEl.title = burnsNow
+          ? `Solar Strike: burns at the end of ${mover}'s move`
+          : `Solar Strike: burns at the end of ${other}'s next move`;
+      }
       if (state.teleportMarked[sq] > 0) sqEl.classList.add('teleport-marked');
       if (state.fireDeathMarked[sq] > 0) sqEl.classList.add('fire-death-marked');
       if (state.warmWelcomeMarked[sq] > 0) sqEl.classList.add('warm-welcome-marked');
@@ -1173,13 +1188,18 @@ function updateStatus() {
   }
 
   const sideToMove = state.game.turn();
-  const isChecked = (!state.mounted.w && !state.mounted.b && !anyFigurePawnsInPlay(state) && !anyFigureRooksInPlay(state) && !anyFigureBishopsInPlay(state))
-    ? state.game.in_check()
-    : isKingAttacked(state, sideToMove);
-  if (isChecked) {
-    const inCheck = sideToMove === 'w' ? 'White' : 'Black';
-    statusText.textContent = `⚠ ${inCheck} is in check!`;
+  const sideName = sideToMove === 'w' ? 'White' : 'Black';
+  const attacked = isKingAttacked(state, sideToMove);
+  const threatened = kingThreatenedAfterPly(state, sideToMove);
+  if (threatened) {
+    statusText.textContent = attacked
+      ? `⚠ ${sideName} is in check!`
+      : `⚠ The Solar Strike will expose ${sideName}'s King!`;
     statusBox.classList.add('check');
+    return;
+  }
+  if (attacked) {
+    statusText.textContent = `${sideName} to move — the checking unit burns at the end of this move`;
     return;
   }
 

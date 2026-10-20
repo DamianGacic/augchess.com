@@ -11,7 +11,7 @@
   const { pieceAt, frToSq, sqToFR, findKingSquare, isKingAttacked, isCheckDoomedByFire, has,
     figurePawnType, anyFigurePawnsInPlay, figureRookType, anyFigureRooksInPlay,
     figureBishopType, anyFigureBishopsInPlay, squareAttackedBy,
-    snapshotState, restoreSnapshot } = chessEngine;
+    generateMoves, generateExitMoves, needsManualCheck, kingThreatenedAfterPly } = chessEngine;
 
   function evaluateGameOver(state) {
     const wK = state.mounted.w || findKingSquare(state, 'w');
@@ -35,11 +35,11 @@
 
     const hasActiveStun = Object.keys(state.stunnedSquares).some(sq => state.stunnedSquares[sq] > 0);
 
-    // Also bumped to the manual path below whenever the current check is
-    // doomed to burn away in Ring of Fire (see isCheckDoomedByFire) —
-    // chess.js's own in_checkmate() has no notion of that and would call
-    // the game over a move early.
-    if (!state.mounted.w && !state.mounted.b && !hasActiveStun && !anyFigurePawnsInPlay(state) && !anyFigureRooksInPlay(state) && !anyFigureBishopsInPlay(state) && !isCheckDoomedByFire(state, state.game.turn())) {
+    // Bumped to the manual path below whenever chess.js can't judge this
+    // position on its own (see needsManualCheck) — e.g. a check doomed to
+    // burn away in Ring of Fire, or a Solar Strike about to open a line onto
+    // the King, which its in_checkmate() has no notion of.
+    if (!hasActiveStun && !needsManualCheck(state, state.game.turn())) {
       if (state.game.in_checkmate()) {
         const winner = state.game.turn() === 'w' ? 'Black' : 'White';
         state.gameOver = true; state.gameOverText = `♛ ${winner} wins by checkmate!`;
@@ -50,19 +50,24 @@
       state.gameOver = false; state.gameOverText = ''; return;
     }
 
-    let sideToMove, inCheck, canMove;
+    let sideToMove, inCheck, exposedByStrike, canMove;
     try {
       sideToMove = state.game.turn();
-      inCheck = isKingAttacked(state, sideToMove);
+      inCheck = kingThreatenedAfterPly(state, sideToMove);
+      exposedByStrike = inCheck && !isKingAttacked(state, sideToMove);
       canMove = sideToMoveHasSafeMove(state, sideToMove);
     } catch (err) {
-      console.error('evaluateGameOver (mounted/stunned) failed:', err);
+      console.error('evaluateGameOver (manual path) failed:', err);
       state.gameOver = false; state.gameOverText = ''; return;
     }
     if (!canMove) {
       if (inCheck) {
         const winner = sideToMove === 'w' ? 'Black' : 'White';
-        state.gameOver = true; state.gameOverText = `♛ ${winner} wins by checkmate!`;
+        const loser = sideToMove === 'w' ? 'White' : 'Black';
+        state.gameOver = true;
+        state.gameOverText = exposedByStrike
+          ? `♛ ${winner} wins by checkmate — the Solar Strike leaves ${loser}'s King defenceless!`
+          : `♛ ${winner} wins by checkmate!`;
       } else {
         state.gameOver = true; state.gameOverText = 'Draw — Stalemate';
       }
@@ -71,24 +76,27 @@
     state.gameOver = false; state.gameOverText = '';
   }
 
+  // Uses the exact generator the server validates moves with (incl. tower
+  // exits and dismounts), so "no legal move" here can never disagree with
+  // what a player is actually allowed to play.
   function sideToMoveHasSafeMove(state, color) {
     const board = state.game.board();
-    const myPieces = [];
-    for (let br = 0; br < 8; br++) {
-      for (let bf = 0; bf < 8; bf++) {
-        const cell = board[br][bf];
-        if (!cell || cell.color !== color) continue;
-        const sq = frToSq(bf, 7 - br);
-        if (state.stunnedSquares[sq] > 0) continue;
-        myPieces.push({ sq, type: cell.type, f: bf, r: 7 - br });
+    const wasOver = state.gameOver;
+    state.gameOver = false; // generateMoves returns nothing once the game is over
+    try {
+      for (let br = 0; br < 8; br++) {
+        for (let bf = 0; bf < 8; bf++) {
+          const cell = board[br][bf];
+          if (!cell || cell.color !== color) continue;
+          const sq = frToSq(bf, 7 - br);
+          if (generateMoves(state, sq).length) return true;
+          if ((state.mannedTowers[sq] === color || state.mounted[color] === sq) && generateExitMoves(state, sq).length) return true;
+        }
       }
+      return false;
+    } finally {
+      state.gameOver = wasOver;
     }
-    for (const p of myPieces) {
-      for (const c of pseudoMovesFor(state, color, p)) {
-        if (trySafeMove(state, color, p.sq, c)) return true;
-      }
-    }
-    return false;
   }
 
   function pseudoMovesFor(state, color, p) {
@@ -294,74 +302,6 @@
   function pushPawn(moves, tf, tr, promoRank) {
     if (tr === promoRank) moves.push({ to: frToSq(tf, tr), kind: 'plain', promotion: 'q' });
     else moves.push({ to: frToSq(tf, tr), kind: 'plain' });
-  }
-
-  function trySafeMove(state, color, from, candidate) {
-    const snap = snapshotState(state);
-    try {
-      const to = candidate.to;
-      if (state.mannedTowers[to]) delete state.mannedTowers[to];
-      switch (candidate.kind) {
-        case 'ride': {
-          if (pieceAt(state, to)) state.game.remove(to);
-          state.game.remove(from);
-          state.game.put({ type: 'k', color }, to);
-          state.mounted[color] = to;
-          break;
-        }
-        case 'dismount': {
-          state.game.remove(from);
-          state.game.put({ type: 'n', color }, from);
-          state.game.put({ type: 'k', color }, to);
-          state.mounted[color] = null;
-          break;
-        }
-        case 'mount': {
-          state.game.remove(from);
-          state.game.remove(to);
-          state.game.put({ type: 'k', color }, to);
-          state.mounted[color] = to;
-          break;
-        }
-        case 'shoot': {
-          if (pieceAt(state, to)) state.game.remove(to);
-          break;
-        }
-        case 'ep': {
-          const capSq = frToSq(sqToFR(to).f, sqToFR(from).r);
-          if (pieceAt(state, capSq)) state.game.remove(capSq);
-          state.game.remove(from);
-          state.game.put({ type: 'p', color }, to);
-          break;
-        }
-        case 'castleK':
-        case 'castleQ': {
-          const rank = color === 'w' ? '1' : '8';
-          const rookFrom = (candidate.kind === 'castleK' ? 'h' : 'a') + rank;
-          const rookTo = (candidate.kind === 'castleK' ? 'f' : 'd') + rank;
-          state.game.remove(from);
-          state.game.remove(rookFrom);
-          state.game.put({ type: 'k', color }, to);
-          state.game.put({ type: 'r', color }, rookTo);
-          break;
-        }
-        default: {
-          if (pieceAt(state, to)) state.game.remove(to);
-          const moving = pieceAt(state, from);
-          const placeType = candidate.promotion ? candidate.promotion : (moving ? moving.type : 'p');
-          state.game.remove(from);
-          state.game.put({ type: placeType, color }, to);
-          if (state.mannedTowers[from]) { const c = state.mannedTowers[from]; delete state.mannedTowers[from]; state.mannedTowers[to] = c; }
-          break;
-        }
-      }
-      if (!isKingAttacked(state, color)) return true;
-      return isCheckDoomedByFire(state, color);
-    } catch (err) {
-      return false;
-    } finally {
-      restoreSnapshot(state, snap);
-    }
   }
 
   const exportsObj = { evaluateGameOver, sideToMoveHasSafeMove, pseudoMovesFor };

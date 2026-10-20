@@ -221,11 +221,13 @@
       return;
     }
     const toMove = state.game.turn();
-    if (!chessEngine.isKingAttacked(state, toMove)) return;
+    if (!chessEngine.kingThreatenedAfterPly(state, toMove)) return;
+    // Not attacked yet, but the Solar Strike going off this move opens the King up.
+    const tag = chessEngine.isKingAttacked(state, toMove) ? 'Check!' : 'Check once the Solar Strike lands!';
     for (let i = state.moveLog.length - 1; i >= 0; i--) {
       const entry = state.moveLog[i];
       if (entry.kind !== 'turn') continue;
-      if (entry.text && !entry.text.endsWith('Check!')) entry.text += ' Check!';
+      if (entry.text && !entry.text.endsWith('Check!') && !entry.text.endsWith('lands!')) entry.text += ' ' + tag;
       break;
     }
   }

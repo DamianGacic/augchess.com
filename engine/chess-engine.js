@@ -357,11 +357,11 @@
     const figure = piece.type === 'p' ? figurePawnType(state, turn) : null;
     const rookFigure = piece.type === 'r' ? figureRookType(state, turn) : null;
     const bishopFigure = piece.type === 'b' ? figureBishopType(state, turn) : null;
-    // Also forced whenever the current check is doomed to burn away in Ring
-    // of Fire (see isCheckDoomedByFire) — chess.js's own move generator has
-    // no idea that's coming and would refuse to offer any move that doesn't
-    // address the check by its own (correct, but here too strict) rules.
-    const needsManualCheck = !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) || anyFigureBishopsInPlay(state) || isCheckDoomedByFire(state, turn);
+    // Also forced whenever the current check is doomed to burn away, or a
+    // Solar Strike/trap lands within this move (see needsManualCheck) —
+    // chess.js's own move generator has no idea that's coming and would
+    // refuse to offer moves by its own (correct, but here too strict) rules.
+    const manualCheck = needsManualCheck(state, turn);
 
     // Checked ahead of the Rook's own move set below: on the rare square
     // where a shot lines up with a square the Rook could also slide/capture
@@ -379,7 +379,7 @@
       moves.push(...generateTrollMoves(state, sq, turn));
     } else if (bishopFigure) {
       moves.push(...generateLongbowmanMoves(state, sq, turn));
-    } else if (needsManualCheck) {
+    } else if (manualCheck) {
       moves.push(...generatePseudoStandardMoves(state, sq, turn, piece));
       if (piece.type === 'p' && has(state, turn, 'leaping')) moves.push(...generateLeapingMoves(state, sq, turn));
     } else {
@@ -1090,18 +1090,84 @@
   //  CHECK DETECTION
   // ═══════════════════════════════════════════════════════════════════════
   function filterIntoCheck(state, moves, color) {
-    const needsManualCheck = !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) || anyFigureBishopsInPlay(state) || isCheckDoomedByFire(state, color);
-    return moves.filter(m => {
-      if (m.standard && !needsManualCheck) return true;
-      const snap = snapshotState(state);
-      try {
-        applyMoveToState(state, m, color, true);
-        if (!isKingAttacked(state, color)) return true;
-        return isCheckDoomedByFire(state, color);
-      } finally {
-        restoreSnapshot(state, snap);
-      }
+    const manual = needsManualCheck(state, color);
+    return moves.filter(m => (m.standard && !manual) || kingSurvivesMove(state, m, color));
+  }
+
+  // Whether chess.js's own check/mate logic can't be trusted for `color`'s
+  // move right now: augment units it doesn't know about, a mounted King, a
+  // check that's about to burn away, or an effect that lands inside the
+  // move itself (see hasDelayedEffects).
+  function needsManualCheck(state, color) {
+    return !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) ||
+      anyFigureBishopsInPlay(state) || isCheckDoomedByFire(state, color) || hasDelayedEffects(state, color);
+  }
+
+  // ── Delayed effects ─────────────────────────────────────────────────────
+  // Some effects land inside the very move that sets them off, after the
+  // unit has already stepped: a Solar Strike going off (executeMove's
+  // tickSolarMarks), a Spearman impaling its captor, a Warm Welcome arrow,
+  // and Lightning Aura once the turn settles. Legality and game-over have to
+  // judge the board those leave behind — otherwise a move "safely" walks
+  // into a King capture (a blocker burning away, the King stepping into a
+  // trap), or a check whose attacker is about to burn demands a response.
+
+  // Squares whose Solar Strike goes off at the end of the next move. A Swift
+  // follow-up step is still part of the shot's turn and doesn't tick.
+  function solarBurnsThisPly(state) {
+    if (state.pendingSwiftMove || !state.solarMarked) return [];
+    return Object.keys(state.solarMarked).filter(sq => state.solarMarked[sq] === 1);
+  }
+
+  function hasDelayedEffects(state, color) {
+    const enemy = color === 'w' ? 'b' : 'w';
+    return solarBurnsThisPly(state).length > 0 || has(state, enemy, 'warmWelcome') ||
+      !!(state.lightningActive && (state.lightningActive.w || state.lightningActive.b));
+  }
+
+  // A throwaway copy of the room state to play a move out on. The state is
+  // JSON-safe by design (it's broadcast as JSON); the move log is left out
+  // since nothing in a move reads it.
+  function cloneForSimulation(state) {
+    const { game, moveLog, ...rest } = state;
+    const sim = JSON.parse(JSON.stringify(rest));
+    sim.moveLog = [];
+    sim.game = new Chess(game.fen());
+    return sim;
+  }
+
+  function kingSafeOn(sim, color) {
+    if (!(sim.mounted[color] || findKingSquare(sim, color))) return false;
+    return !isKingAttacked(sim, color) || isCheckDoomedByFire(sim, color);
+  }
+
+  // Plays `m` out through the real executeMove (plus Lightning Aura, which
+  // strikes as the turn settles) on a copy, so every effect that lands
+  // within the move counts. Breaking Rank and Relentless Advance are left
+  // out on purpose: they're dice rolls, and legality can't depend on luck.
+  function kingSurvivesMove(state, m, color) {
+    const sim = cloneForSimulation(state);
+    executeMove(sim, color, m, m.promotion || (m.needsPromo ? 'q' : undefined));
+    if (!sim.pendingSwiftMove) checkKingsLightning(sim);
+    return kingSafeOn(sim, color);
+  }
+
+  // Whether `color`'s King is in real danger if `color` doesn't deal with it
+  // this move: attacked on the board left once this move's Solar Strike has
+  // gone off (opening lines, burning attackers, or burning the King itself),
+  // and not by an attacker that's about to burn in a Ring of Fire. This,
+  // not the bare board, is what "in check" means for status and game-over.
+  function kingThreatenedAfterPly(state, color) {
+    const burns = solarBurnsThisPly(state);
+    if (!burns.length) return isKingAttacked(state, color) && !isCheckDoomedByFire(state, color);
+    const sim = cloneForSimulation(state);
+    const kingSq = sim.mounted[color] || findKingSquare(sim, color);
+    if (!kingSq || burns.includes(kingSq)) return true;
+    burns.forEach(sq => {
+      delete sim.mannedTowers[sq];
+      if (pieceAt(sim, sq)) sim.game.remove(sq);
     });
+    return isKingAttacked(sim, color) && !isCheckDoomedByFire(sim, color);
   }
 
   function isKingAttacked(state, color) {
@@ -1861,7 +1927,8 @@
     archerStepOffsets, isArcherOnCooldown, archerThreatSquares,
     generateLeapingMoves, generateKingsPawnMoves, generateTowerEntryMoves,
     generateMountMoves, generateMountedKingMoves,
-    filterIntoCheck, isKingAttacked, kingCheckers, isCheckDoomedByFire, squareAttackedBy, attacksSquare, clearPath,
+    filterIntoCheck, needsManualCheck, solarBurnsThisPly, kingThreatenedAfterPly,
+    isKingAttacked, kingCheckers, isCheckDoomedByFire, squareAttackedBy, attacksSquare, clearPath,
     applyMoveToState, executeMove, describeMove, findRequestedMove, flipTurnFen,
     checkBreakingRank, applyBreakingRankCaptures, clearMountedIfCaptured,
     tickStunCounters, tickSolarMarks, tickTeleportMarks, tickFireDeathMarks,

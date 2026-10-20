@@ -433,6 +433,15 @@ main {
 .square.in-check.light { background-color: #ff6b6b; }
 .square.in-check.dark  { background-color: #cc3333; }
 
+/* Not attacked yet, but this move's Solar Strike will expose the King. */
+.square.check-incoming.light { background-color: #ff9a76; }
+.square.check-incoming.dark  { background-color: #d9603b; }
+.square.check-incoming { animation: check-incoming 1.1s ease-in-out infinite; }
+@keyframes check-incoming {
+  0%, 100% { box-shadow: inset 0 0 0 3px rgba(255, 70, 50, 0.95); }
+  50%      { box-shadow: inset 0 0 0 3px rgba(255, 70, 50, 0.25); }
+}
+
 /* Coordinate labels */
 .square .rank-label {
   position: absolute;
@@ -2260,6 +2269,15 @@ main {
 }
 .square.solar-marked.light { background-color: #f5d38a; }
 .square.solar-marked.dark  { background-color: #d9a441; }
+
+/* Goes off at the end of the move about to be made. */
+.square.solar-imminent.light { background-color: #ffb36b; }
+.square.solar-imminent.dark  { background-color: #e5832f; }
+.square.solar-imminent::after { opacity: 1; animation: solar-imminent 0.9s ease-in-out infinite; }
+@keyframes solar-imminent {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50%      { transform: translate(-50%, -50%) scale(1.25); }
+}
 
 /* Board: solar strike targeting — selectable 3x3 centers glow amber */
 .square.solarstrike-target::before {
