@@ -81,12 +81,7 @@ function buildDemoPiece(p) {
     b.className = 'teleport-ready-badge';
     el.appendChild(b);
   }
-  if (p.badges.includes('cooldown')) {
-    const b = document.createElement('div');
-    b.className = 'archer-cooldown-badge';
-    b.textContent = '⏳';
-    el.appendChild(b);
-  }
+  if (p.badges.includes('cooldown')) el.classList.add('reloading');
   return el;
 }
 

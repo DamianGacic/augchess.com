@@ -725,12 +725,11 @@ function renderBoard() {
           pieceEl.appendChild(teleportBadge);
         }
 
+        // An Archer that just shot is drawn with an empty quiver until it
+        // can shoot again (it can still move meanwhile).
         if (piece.type === 'p' && figurePawnType(state, piece.color) === 'archer' && isArcherOnCooldown(state, piece.color, sq)) {
-          const cooldownBadge = document.createElement('div');
-          cooldownBadge.className = 'archer-cooldown-badge';
-          cooldownBadge.textContent = '⏳';
-          cooldownBadge.title = 'Still nocking an arrow — can\'t shoot this turn (can still move)';
-          pieceEl.appendChild(cooldownBadge);
+          pieceEl.classList.add('reloading');
+          pieceEl.title = 'Out of arrows — can\'t shoot this turn (can still move)';
         }
 
         sqEl.appendChild(pieceEl);
@@ -741,6 +740,7 @@ function renderBoard() {
     }
   }
 
+  BoardAnim.afterRender();
   renderAbilityBar();
 }
 
@@ -1035,7 +1035,8 @@ function startDrag(sq, x, y, dragInfo) {
     }
   }
 
-  dragGhost.className = (color === 'w' ? 'white' : 'black') + (figureKey ? ' figure-' + figureKey : '');
+  dragGhost.className = (color === 'w' ? 'white' : 'black') + (figureKey ? ' figure-' + figureKey : '') +
+    (figureKey === 'archer' && isArcherOnCooldown(state, color, sq) ? ' reloading' : '');
   dragGhost.innerHTML = '';
   dragGhost.textContent = figureKey ? '' : glyph;
   dragGhost.style.backgroundImage = figureKey === 'ghoul' ? `url("${ghoulSkinFile(state, sq, color)}")` : '';
@@ -1095,6 +1096,7 @@ function endDrag(x, y) {
   const toSq = sqEl ? sqEl.dataset.square : null;
 
   if (toSq && toSq !== fromSq && legalMoves.find(m => m.to === toSq)) {
+    BoardAnim.noteDrop(toSq);
     attemptMove(fromSq, toSq);
     return;
   }

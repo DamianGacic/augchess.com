@@ -112,7 +112,7 @@
       steps: [
         { move: 'd4-d6', caption: 'Archers step forward or diagonally forward onto empty squares and never capture by moving. Instead they shoot…', after: '…killing an enemy on any of the three squares two rows ahead (×) without leaving their square.', expect: { d6: null, d4: 'wP' } },
         { move: 'a7-a6', quick: true },
-        { select: 'd4', caption: 'Then it has to nock a fresh arrow (⏳): no shot on its next turn, though it can still move.' },
+        { select: 'd4', caption: 'Its quiver is now empty: no shot on its next turn, though it can still move. The arrows are back once it is ready again.' },
       ],
     },
 
@@ -844,7 +844,11 @@
     return cache[key];
   }
 
-  const exportsObj = { AUGMENT_DEMOS: DEMOS, buildAugmentDemo, getAugmentDemo, demoIdFor, positionToFen };
+  // snapshotPieces/trackPieces are also used by board-anim.js to animate real turns.
+  const exportsObj = {
+    AUGMENT_DEMOS: DEMOS, buildAugmentDemo, getAugmentDemo, demoIdFor, positionToFen,
+    snapshotBoardPieces: snapshotPieces, trackBoardPieces: trackPieces,
+  };
   if (isNode) module.exports = exportsObj;
   else Object.assign(root, exportsObj);
 })(typeof window !== 'undefined' ? window : globalThis);
