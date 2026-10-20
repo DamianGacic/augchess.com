@@ -32,7 +32,8 @@
   //  DEMO SCRIPTS
   // ═══════════════════════════════════════════════════════════════════════
   // position: space-separated <color><PIECE><square> tokens (wKg1 = white
-  //   King on g1). turn: who moves first (default White).
+  //   King on g1); omit it to use the real opening setup. turn: who moves
+  //   first (default White).
   // Steps (each may carry `caption`, plus `after`, appended once the action plays):
   //   select: 'd4'                 highlight a unit and its legal moves
   //   move: 'd4-d6' [exit: true]   a move (exit = leave a tower / dismount)
@@ -94,6 +95,17 @@
         { move: 'a2-a3', quick: true },
         { move: 'g8-f6', quick: true },
         { move: 'e5-f6', caption: 'From your second turn on, they fight like any other unit.', expect: { f6: 'wP' } },
+      ],
+    },
+
+    legion: {
+      augments: { w: ['legion'] },
+      // No position: starts from the real opening setup newGame builds.
+      steps: [
+        { select: 'e3', caption: 'With Legion, a second row of pawns stands directly in front of your normal pawn row: sixteen pawns instead of eight.' },
+        { move: 'e3-e4', caption: 'The front row moves like any pawn. It is already off the starting row, so it steps one square at a time.', expect: { e4: 'wP', e3: null, e2: 'wP' } },
+        { move: 'e7-e5', quick: true },
+        { move: 'e2-e3', caption: 'The row behind it backs it up. If you exchange your pawns for another unit, both rows become that unit.', expect: { e3: 'wP', e4: 'wP' } },
       ],
     },
 
@@ -508,19 +520,22 @@
     state.augments = { w: [...(demo.augments.w || [])], b: [...(demo.augments.b || [])] };
     state.phase = 'playing';
     withRandom(null, rand, () => E.newGame(state));
-    const fen = positionToFen(demo.position, demo.turn);
-    if (state.game.load(fen) === false) throw new Error(`chess.js rejected position ${fen}`);
+    // Without a position the demo keeps newGame's own opening setup.
+    if (demo.position) {
+      const fen = positionToFen(demo.position, demo.turn);
+      if (state.game.load(fen) === false) throw new Error(`chess.js rejected position ${fen}`);
 
-    // newGame seeds Stunlock charges and ghoul artwork for the standard
-    // opening squares — redo both for this custom position.
-    state.stunlockCharges = { w: {}, b: {} };
-    state.ghoulSkin = { w: {}, b: {} };
-    forEachPiece(state, (sq, p) => {
-      if (p.type === 'b' && E.has(state, p.color, 'stunlock')) state.stunlockCharges[p.color][sq] = true;
-      if (p.type === 'p' && E.figurePawnType(state, p.color) === 'ghoul') {
-        state.ghoulSkin[p.color][sq] = (FILES.indexOf(sq[0]) * 3 + +sq[1]) % 5;
-      }
-    });
+      // newGame seeds Stunlock charges and ghoul artwork for the standard
+      // opening squares — redo both for this custom position.
+      state.stunlockCharges = { w: {}, b: {} };
+      state.ghoulSkin = { w: {}, b: {} };
+      forEachPiece(state, (sq, p) => {
+        if (p.type === 'b' && E.has(state, p.color, 'stunlock')) state.stunlockCharges[p.color][sq] = true;
+        if (p.type === 'p' && E.figurePawnType(state, p.color) === 'ghoul') {
+          state.ghoulSkin[p.color][sq] = (FILES.indexOf(sq[0]) * 3 + +sq[1]) % 5;
+        }
+      });
+    }
     for (const [key, value] of Object.entries(demo.setup || {})) state[key] = JSON.parse(JSON.stringify(value));
     return state;
   }

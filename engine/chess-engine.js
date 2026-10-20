@@ -22,6 +22,15 @@
   // play. Safe to call again for "New Game" within an existing room.
   function newGame(state) {
     state.game = new Chess();
+    // Legion: a second row of pawn-type units directly in front of the
+    // normal pawn row. put() bypasses chess.js's history, so reload to keep
+    // its repetition check consistent (same reason as in afterTurnSettles).
+    ['w', 'b'].forEach(color => {
+      startingPawnRanks(state, color).slice(1).forEach(rank => {
+        FILES.forEach(file => state.game.put({ type: 'p', color }, file + rank));
+      });
+    });
+    state.game.load(state.game.fen());
     state.mannedTowers = {};
     // Which piece type garrisoned each manned tower — 'b' for a Longbowman
     // (grants shooting from the tower), absent/undefined for everything else
@@ -43,13 +52,14 @@
     state.ghoulSkin = { w: {}, b: {} };
     ['w', 'b'].forEach(color => {
       if (figurePawnType(state, color) !== 'ghoul') return;
-      const rank = color === 'w' ? '2' : '7';
-      const skins = FILES.map((_, i) => i % GHOUL_SKIN_COUNT);
-      for (let i = skins.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [skins[i], skins[j]] = [skins[j], skins[i]];
-      }
-      FILES.forEach((file, i) => { state.ghoulSkin[color][file + rank] = skins[i]; });
+      startingPawnRanks(state, color).forEach(rank => {
+        const skins = FILES.map((_, i) => i % GHOUL_SKIN_COUNT);
+        for (let i = skins.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [skins[i], skins[j]] = [skins[j], skins[i]];
+        }
+        FILES.forEach((file, i) => { state.ghoulSkin[color][file + rank] = skins[i]; });
+      });
     });
 
     state.stunlockCharges = { w: {}, b: {} };
@@ -148,6 +158,14 @@
     // Units deployed by Vanguard that haven't moved yet: { w: [{ sq, type }], b: … }.
     state.vanguardFresh = { w: [], b: [] };
     ['w', 'b'].forEach(c => { if (has(state, c, 'vanguard')) state.vanguard = { color: c, ms: VANGUARD_MS }; });
+  }
+
+  // Ranks a side's pawn-type units start on: the normal pawn row, plus the
+  // row in front of it with Legion.
+  function startingPawnRanks(state, color) {
+    const ranks = color === 'w' ? ['2'] : ['7'];
+    if (has(state, color, 'legion')) ranks.push(color === 'w' ? '3' : '6');
+    return ranks;
   }
 
   function has(state, color, augId) {
@@ -1831,7 +1849,7 @@
   }
 
   const exportsObj = {
-    newGame, has, figurePawnType, anyFigurePawnsInPlay, ghoulCount, figureRookType, anyFigureRooksInPlay,
+    newGame, has, startingPawnRanks, figurePawnType, anyFigurePawnsInPlay, ghoulCount, figureRookType, anyFigureRooksInPlay,
     VANGUARD_ZONES, VANGUARD_MS, isVanguardFresh,
     unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry,
     figureBishopType, anyFigureBishopsInPlay,

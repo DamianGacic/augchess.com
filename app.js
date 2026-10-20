@@ -1249,8 +1249,11 @@ function updateCaptured() {
   const capturedByW = [];
   const capturedByB = [];
   for (const t of ['q', 'r', 'b', 'n', 'p']) {
-    const missingB = Math.max(0, start[t] - counts.b[t]);
-    const missingW = Math.max(0, start[t] - counts.w[t]);
+    // Legion starts a side with a second row of pawns.
+    const startB = t === 'p' ? 8 * startingPawnRanks(state, 'b').length : start[t];
+    const startW = t === 'p' ? 8 * startingPawnRanks(state, 'w').length : start[t];
+    const missingB = Math.max(0, startB - counts.b[t]);
+    const missingW = Math.max(0, startW - counts.w[t]);
     for (let i = 0; i < missingB; i++) capturedByW.push(PIECES['b' + t.toUpperCase()]);
     for (let i = 0; i < missingW; i++) capturedByB.push(PIECES['w' + t.toUpperCase()]);
   }
