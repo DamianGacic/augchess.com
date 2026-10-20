@@ -70,6 +70,9 @@ function currentActor() {
   // state.game.turn() to the opponent — the caster is whoever armed it, not
   // whoever is "to move" right now.
   if (state.pendingStunlock) return state.pendingStunlock.color;
+  // A Vanguard deployment happens before White's first turn, so it belongs
+  // to its owner even when that's Black and White is "to move".
+  if (state.phase === 'playing' && state.vanguard) return state.vanguard.color;
   if (state.phase === 'draft' && state.draftState) return state.draftState.current;
   if (state.phase === 'playing' && state.game) return state.game.turn();
   return 'w';
