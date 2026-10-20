@@ -1,0 +1,1 @@
+Your army marches out with a second row of pawns, placed directly in front of your normal pawn row — sixteen pawns instead of eight. The extra row moves, captures and promotes like any other pawn (it is already off the starting row, so it cannot double-step). If you exchange your pawns for another unit, such as Ghouls or Archers, both rows become that unit.

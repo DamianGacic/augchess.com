@@ -46,6 +46,7 @@ const AUGMENTS = [
   { id: 'leaping',     name: 'Leaping Pawns', cost: 1, desc: 'Loading description...' },
   { id: 'watchtowers', name: 'Watchtowers',  cost: 1, desc: 'Loading description...' },
   { id: 'mounting',    name: 'Mounting',     cost: 2, desc: 'Loading description...', image: 'mounting.jpg' },
+  { id: 'legion',      name: 'Legion',       cost: 8, desc: 'Loading description...' },
   { id: 'stunlock',    name: 'Stunlock',     cost: 5, desc: 'Loading description...', category: 'ability' },
   { id: 'apprentices', name: 'Apprentices', cost: 1, desc: 'Loading description...', exchanges: 'apprentice' },
   { id: 'archers',     name: 'Archers',     cost: 4, desc: 'Loading description...', exchanges: 'archer' },

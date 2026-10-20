@@ -29,6 +29,7 @@ const GLYPHS = {
   leaping: 'jump-across',
   watchtowers: 'watchtower',
   mounting: 'cloaked-figure-on-horseback',
+  legion: 'guards',
   stunlock: 'crossed-chains',
   apprentices: 'wizard-face',
   archers: 'bowman',
