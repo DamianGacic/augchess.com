@@ -92,9 +92,35 @@ class GameRoom {
       return;
     }
     if (error) this.sendRejection(ws, error);
-    else this.broadcast();
+    else {
+      this.broadcast();
+      this.watchVanguard();
+    }
+  }
+
+  // The Vanguard owner's client deploys when its 30s run out; this is the
+  // backstop if it never does (disconnected, tab closed) — after the time
+  // plus a grace period the deployment resolves with nothing moved, so the
+  // game can't hang waiting for it.
+  watchVanguard() {
+    const pending = this.state.vanguard;
+    if (!pending) { clearTimeout(this.vanguardTimer); this.vanguardTimer = null; return; }
+    if (this.vanguardTimer) return;
+    this.vanguardTimer = setTimeout(() => {
+      this.vanguardTimer = null;
+      if (this.state.vanguard !== pending) return;
+      try {
+        if (!engine.applyAction(this.state, pending.color, { type: 'vanguardDeploy', placements: [] })) this.broadcast();
+      } catch (err) {
+        console.error(`[room ${this.id}] vanguard timeout failed`, err);
+      }
+    }, pending.ms + VANGUARD_GRACE_MS);
   }
 }
+
+// Extra time the server waits past the Vanguard limit for the owner's own
+// (client-timed) deployment to arrive before resolving it itself.
+const VANGUARD_GRACE_MS = 5000;
 
 class RoomStore {
   constructor() {

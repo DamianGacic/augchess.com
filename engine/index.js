@@ -38,8 +38,35 @@
     return err;
   }
 
+  // Game actions that are blocked while a Vanguard deployment is pending, and
+  // the unit square each one acts with (for White's first-turn lock on
+  // freshly deployed Vanguard units).
+  const PLAY_ACTIONS = ['move', 'armAbility', 'castAbility', 'endRaiseTheDead', 'cancelAbility'];
+  function actingSquare(state, color, action) {
+    if (action.type === 'move') return action.from;
+    if (action.type === 'armAbility') return action.unitSq;
+    if (action.type === 'castAbility') {
+      if (action.unitSq) return action.unitSq;
+      if (action.id === 'raiseTheDead') return state.mounted[color] || chessEngine.findKingSquare(state, color);
+    }
+    return null;
+  }
+
   function dispatchAction(state, color, action) {
+    if (state.vanguard && PLAY_ACTIONS.includes(action.type)) return 'Waiting for the Vanguard to deploy';
+    if (state.vanguardLocked && color === 'w' && state.vanguardLocked.includes(actingSquare(state, color, action))) {
+      return 'Vanguard units sit out White\'s first turn';
+    }
     switch (action.type) {
+      case 'vanguardDeploy': {
+        if (state.phase !== 'playing') return 'Not currently playing';
+        const err = augmentsEngine.deployVanguard(state, color, action.placements);
+        // The deployment happens before White's first turn — that turn's
+        // start-of-turn check (Breaking Rank) runs now, against the new board.
+        if (!err) chessEngine.checkBreakingRank(state, state.game.turn());
+        return err;
+      }
+
       case 'settingsUpdate':
         return draftEngine.updateSettings(state, action.minutes, action.points);
 
@@ -144,7 +171,8 @@
       // Breaking Rank fires at the beginning of *either* player's turn, so
       // White's very first turn needs its own check here — every other turn
       // gets one via afterTurnSettles below, right after the prior move.
-      chessEngine.checkBreakingRank(state, state.game.turn());
+      // A pending Vanguard deployment runs that check itself once it resolves.
+      if (!state.vanguard) chessEngine.checkBreakingRank(state, state.game.turn());
     }
   }
 
@@ -158,11 +186,17 @@
     // Dead's one-turn cooldown (chess.js's own move counter doesn't work
     // here since Figure-type moves bypass it entirely).
     state.turnNumber = (state.turnNumber || 0) + 1;
+    // The Vanguard owner's opponent just finished their first turn — Breaking
+    // Rank and Warm Welcome are back from here on (the check just below too).
+    const justMoved = state.game.turn() === 'w' ? 'b' : 'w';
+    if (state.vanguardGrace === justMoved) state.vanguardGrace = null;
     const fenBefore = state.game.fen();
     chessEngine.checkBreakingRank(state, state.game.turn());
     chessEngine.checkKingsLightning(state);
     chessEngine.checkRingOfFire(state);
-    chessEngine.checkRelentlessAdvance(state);
+    chessEngine.checkRelentlessAdvance(state); // still skips units sitting out White's first turn
+    // White's first turn is over — its Vanguard units are free to act again.
+    state.vanguardLocked = null;
     // These edit the board via put()/remove() behind chess.js's back, leaving
     // its move history out of sync with the board — in_draw()'s repetition
     // check then replays that history and throws (taking serializeState and

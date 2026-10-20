@@ -142,6 +142,10 @@ const BoardAnim = (() => {
       else if (san.startsWith('💀')) events.push({ kind: 'raise' });
       else if (san.startsWith('⇒')) events.push({ kind: 'arrow', to: sqs[0] });
       else if (san.includes('↓') || san.includes('↑')) events.push({ kind: 'exit' });
+      else if (san.startsWith('⚔')) {
+        const pairs = san.slice(1).split(',').filter(Boolean).map(s => ({ from: s.slice(0, 2), to: s.slice(2, 4) }));
+        events.push({ kind: 'vanguard', color, pairs });
+      }
     }
     return events;
   }
@@ -164,7 +168,8 @@ const BoardAnim = (() => {
 
     const events = readEvents(state.moveLog.slice(prev.logLen));
     const has = kind => events.find(e => e.kind === kind);
-    const hint = has('teleport') ? { blink: true }
+    const hint = has('vanguard') ? { pairs: has('vanguard').pairs }
+      : has('teleport') ? { blink: true }
       : has('raise') ? { raise: true }
       : (lastMove && lastMove !== prev.lastMove)
         ? { from: state.lastMove.from, to: state.lastMove.to, exit: !!has('exit') }
@@ -180,8 +185,10 @@ const BoardAnim = (() => {
 
   function play(pieces, removed, events, hint, before) {
     const moving = pieces.filter(p => p.from);
-    const march = events.some(e => e.kind === 'march') || moving.length > 2;
-    const slideMs = march ? 300 : 180;
+    const vanguard = events.find(e => e.kind === 'vanguard');
+    const march = !vanguard && (events.some(e => e.kind === 'march') || moving.length > 2);
+    // A Vanguard deployment: every unit marches out together, a bit slower.
+    const slideMs = vanguard ? 650 : march ? 300 : 180;
 
     // Slides (FLIP: the piece is already on its new square — start it at
     // the old one and let it glide home).
@@ -195,8 +202,9 @@ const BoardAnim = (() => {
       el.style.zIndex = '7';
       void el.offsetWidth;
       el.style.transition = `transform ${slideMs}ms cubic-bezier(0.25, 0.8, 0.3, 1) ${march ? (i % 8) * 25 : 0}ms`;
+      if (vanguard) el.classList.add('ba-vanguard');
       el.style.transform = '';
-      setTimeout(() => { el.style.transition = ''; el.style.zIndex = ''; }, slideMs + 250);
+      setTimeout(() => { el.style.transition = ''; el.style.zIndex = ''; el.classList.remove('ba-vanguard'); }, slideMs + 250);
     });
 
     // Arrivals that aren't slides.
@@ -229,6 +237,12 @@ const BoardAnim = (() => {
         if (shooter) streak(shooter, e.to, 'arrow');
       } else if (e.kind === 'shot') {
         streak(e.from, e.to, e.style);
+      } else if (e.kind === 'vanguard') {
+        ripple(VANGUARD_ZONES[e.color], null, 'rgba(242, 195, 91, 0.7)', { dur: 750 });
+        const banner = document.createElement('div');
+        banner.className = 'ba-banner';
+        banner.textContent = e.pairs.length ? 'Vanguard' : 'Vanguard holds';
+        addFx(banner, 1500);
       } else if (e.kind === 'lightning' || e.kind === 'fire') {
         const king = state.mounted[e.color] || findKingSquare(state, e.color);
         if (!king) continue;

@@ -135,6 +135,19 @@
     // one-turn visual marker, same ticking pattern as fireDeathMarked.
     state.warmWelcomeCooldown = { w: 0, b: 0 };
     state.warmWelcomeMarked = {};
+
+    // Vanguard: before White's first turn, the owner gets a free deployment
+    // (see deployVanguard in augments-engine.js); nothing else can happen
+    // until it resolves. vanguardLocked holds the squares White's deployed
+    // units landed on — they sit out White's first turn.
+    state.vanguard = null;
+    state.vanguardLocked = null;
+    // After a Vanguard deployment, Breaking Rank and Warm Welcome stay quiet
+    // until the Vanguard owner's opponent (stored here) has had a first turn.
+    state.vanguardGrace = null;
+    // Units deployed by Vanguard that haven't moved yet: { w: [{ sq, type }], b: … }.
+    state.vanguardFresh = { w: [], b: [] };
+    ['w', 'b'].forEach(c => { if (has(state, c, 'vanguard')) state.vanguard = { color: c, ms: VANGUARD_MS }; });
   }
 
   function has(state, color, augId) {
@@ -191,6 +204,14 @@
   // "a, b and c" for a list of victims.
   function listUnits(names) {
     return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+
+  // Whether the unit on `sq` was deployed by Vanguard and hasn't moved since
+  // (type-checked, so a stale entry never sticks to a different unit).
+  function isVanguardFresh(state, color, sq) {
+    const p = pieceAt(state, sq);
+    const fresh = state.vanguardFresh && state.vanguardFresh[color];
+    return !!(p && p.color === color && fresh && fresh.some(u => u.sq === sq && u.type === p.type));
   }
 
   function logEntry(state, color, san, text, kind) {
@@ -256,6 +277,14 @@
   //  SQUARE / COORDINATE HELPERS
   // ═══════════════════════════════════════════════════════════════════════
   const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+  // Vanguard: the squares each side may deploy onto before the first turn,
+  // and how long the owner gets to plan it (not taken from the game clock).
+  const VANGUARD_ZONES = {
+    w: ['d3', 'e3', 'c4', 'd4', 'e4', 'f4', 'd5', 'e5'],
+    b: ['d6', 'e6', 'c5', 'd5', 'e5', 'f5', 'd4', 'e4'],
+  };
+  const VANGUARD_MS = 30000;
   const GHOUL_SKIN_COUNT = 5; // ghoul0.png .. ghoul4.png in figures/images/
 
   function sqToFR(sq) {
@@ -298,6 +327,7 @@
     if (!piece || piece.color !== turn) return [];
     if (state.stunnedSquares[sq] > 0) return [];
     if (state.ghoulBrokeRank[turn].includes(sq)) return [];
+    if (state.vanguardLocked && state.vanguardLocked.includes(sq)) return [];
 
     let moves = [];
 
@@ -612,6 +642,7 @@
   function checkBreakingRank(state, color) {
     state.ghoulBrokeRank[color] = [];
     if (state.gameOver || !has(state, color, 'breakingRank')) return;
+    if (state.vanguardGrace) return; // a fresh Vanguard deployment holds the passives back
 
     const board = state.game.board();
     const charges = []; // { from, to }
@@ -804,7 +835,9 @@
 
       const marches = []; // "b3 Pawn moved to b4" / "e4 Pawn killed e5 Pawn"
       const marcher = unitName(state, color, 'p');
-      pawnSquares.slice(0, 2).forEach(sq => {
+      // Units sitting out White's first turn (Vanguard) don't march either.
+      const marchers = pawnSquares.filter(sq => !(state.vanguardLocked && state.vanguardLocked.includes(sq)));
+      marchers.slice(0, 2).forEach(sq => {
         const { f, r } = sqToFR(sq);
         const forwardSq = frToSq(f, r + dir);
         if (!forwardSq) return;
@@ -1618,6 +1651,15 @@
     state.armedAbility = null;
     state.solarStrikeCastThisTurn = false;
 
+    // A Vanguard-deployed unit that relocates is no longer fresh (a shot
+    // fired from its square doesn't count), and whatever stood on m.to is gone.
+    const relocated = m.special !== 'archerShoot' && m.special !== 'longbowmanShoot';
+    if (state.vanguardFresh) {
+      ['w', 'b'].forEach(c => {
+        state.vanguardFresh[c] = state.vanguardFresh[c].filter(u => u.sq !== m.to && !(relocated && u.sq === m.from));
+      });
+    }
+
     logEntry(state, color, describeMove(m, fromPiece) + (impaled ? '💀' : ''),
       continuesTurn ? `Then: ${moveText}` : moveText, continuesTurn ? 'event' : 'turn');
     followUps.forEach(e => logEntry(state, e.color, e.san, e.text, 'event'));
@@ -1683,7 +1725,7 @@
   // shoot cooldown — Warm Welcome has its own dedicated resource.
   // Returns the history event to log (after the move itself), or null.
   function checkWarmWelcomeForLanding(state, landedSq, moverColor) {
-    if (!landedSq) return null;
+    if (!landedSq || state.vanguardGrace) return null; // held back after a fresh Vanguard deployment
     for (const color of ['w', 'b']) {
       if (color === moverColor) continue;
       if (!has(state, color, 'warmWelcome')) continue;
@@ -1790,6 +1832,7 @@
 
   const exportsObj = {
     newGame, has, figurePawnType, anyFigurePawnsInPlay, ghoulCount, figureRookType, anyFigureRooksInPlay,
+    VANGUARD_ZONES, VANGUARD_MS, isVanguardFresh,
     unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry,
     figureBishopType, anyFigureBishopsInPlay,
     sqToFR, frToSq, isEmpty, pieceAt, findKingSquare, isPromoRank,

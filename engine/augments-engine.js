@@ -118,6 +118,7 @@
     const { f, r } = sqToFR(centerSq);
     const valid = getSolarStrikeCenters(queenSq).some(c => c.f === f && c.r === r);
     if (!valid) return 'That center is out of range';
+    if (chessEngine.isVanguardFresh(state, color, queenSq)) return 'A Queen deployed by Vanguard has to move before she can cast Solar Strike';
 
     state.solarMarkedBy = state.solarMarkedBy || {};
     solarStrikeSquares(f, r).forEach(sq => { state.solarMarked[sq] = 2; state.solarMarkedBy[sq] = color; });
@@ -149,6 +150,8 @@
         const cell = board[br][bf];
         if (!cell || cell.color !== color || cell.type !== 'p') continue;
         const from = frToSq(bf, 7 - br);
+        // Units sitting out White's first turn (Vanguard) stay put.
+        if (state.vanguardLocked && state.vanguardLocked.includes(from)) continue;
         const to = frToSq(bf, 7 - br + dir);
         if (to && isEmpty(state, to)) steps.push({ from, to });
       }
@@ -618,6 +621,57 @@
     return null;
   }
 
+  // ── Vanguard ────────────────────────────────────────────────────────────
+  // Before White's first turn, the Vanguard owner moves any of their units
+  // onto free squares of their Vanguard zone — all at once, in one action
+  // (the plan is built client-side and stays hidden until it's sent).
+  // `placements` may be empty (time ran out with nothing planned, or the
+  // player chose not to deploy).
+  function deployVanguard(state, color, placements) {
+    if (!state.vanguard) return 'No Vanguard deployment is pending';
+    if (state.vanguard.color !== color) return 'Not your Vanguard';
+    if (!Array.isArray(placements)) return 'Placements must be a list';
+    const zone = chessEngine.VANGUARD_ZONES[color];
+    const froms = new Set(), tos = new Set();
+    for (const p of placements) {
+      if (!p || typeof p.from !== 'string' || typeof p.to !== 'string') return 'Malformed placement';
+      const piece = pieceAt(state, p.from);
+      if (!piece || piece.color !== color) return `No unit of yours on ${p.from}`;
+      if (!zone.includes(p.to)) return `${p.to} is not one of your Vanguard squares`;
+      if (!isEmpty(state, p.to)) return `${p.to} is not free`;
+      if (froms.has(p.from) || tos.has(p.to)) return 'Each unit and each square can only be used once';
+      froms.add(p.from); tos.add(p.to);
+    }
+
+    const moving = placements.map(p => ({ ...p, piece: pieceAt(state, p.from), name: actor(state, color, p.from, pieceAt(state, p.from).type) }));
+    moving.forEach(p => state.game.remove(p.from));
+    moving.forEach(p => {
+      state.game.put({ type: p.piece.type, color }, p.to);
+      // Per-square bookkeeping travels with the unit.
+      for (const map of [state.stunlockCharges, state.ghoulSkin, state.apprenticeTeleportUsed]) {
+        if (map && map[color] && p.from in map[color]) { map[color][p.to] = map[color][p.from]; delete map[color][p.from]; }
+      }
+    });
+
+    // A King or Rook that left its home square can no longer castle.
+    const parts = state.game.fen().split(' ');
+    const at = (sq, type) => { const q = pieceAt(state, sq); return q && q.type === type && q.color === (sq[1] === '1' ? 'w' : 'b'); };
+    const keep = { K: at('e1', 'k') && at('h1', 'r'), Q: at('e1', 'k') && at('a1', 'r'), k: at('e8', 'k') && at('h8', 'r'), q: at('e8', 'k') && at('a8', 'r') };
+    parts[2] = parts[2].split('').filter(c => keep[c]).join('') || '-';
+    state.game.load(parts.join(' '));
+
+    logEntry(state, color, '⚔' + moving.map(p => p.from + p.to).join(','), moving.length
+      ? `Vanguard: ${moving.map(p => `${p.name} moved to ${p.to}`).join(', ')}.`
+      : 'Vanguard: nobody stepped forward.', 'event');
+    // White's deployed units sit out White's first turn.
+    state.vanguardLocked = color === 'w' && moving.length ? moving.map(p => p.to) : null;
+    state.vanguardGrace = moving.length ? (color === 'w' ? 'b' : 'w') : null;
+    state.vanguardFresh = state.vanguardFresh || { w: [], b: [] };
+    state.vanguardFresh[color] = moving.map(p => ({ sq: p.to, type: p.piece.type }));
+    state.vanguard = null;
+    return null;
+  }
+
   // ── Generic ability listing/dispatch ───────────────────────────────────
   // Up to 4 unit abilities available for the piece on `sq` right now, in the
   // order they'd occupy Q/W/E/R. Only Apprentices with both Unstable
@@ -631,7 +685,8 @@
     if (piece.type === 'b' && has(state, piece.color, 'stunlock') && state.stunlockCharges[piece.color][sq]) {
       list.push({ id: 'stunlock', key: 'Q' });
     }
-    if (piece.type === 'q' && has(state, piece.color, 'solarStrike') && !state.solarStrikeCastThisTurn) {
+    if (piece.type === 'q' && has(state, piece.color, 'solarStrike') && !state.solarStrikeCastThisTurn &&
+        !chessEngine.isVanguardFresh(state, piece.color, sq)) {
       list.push({ id: 'solarStrike', key: 'Q' });
     }
     if (piece.type === 'k' && has(state, piece.color, 'silverBullet') && !state.silverBulletUsed[piece.color]) {
@@ -756,7 +811,7 @@
     getClubbingQuadrants, castClubbing,
     getFireballTargets, castUnstableFireball,
     getTeleportTargets, castUnstableTeleport,
-    getRaiseTheDeadTargets, castRaiseTheDead, endRaiseTheDead,
+    getRaiseTheDeadTargets, castRaiseTheDead, endRaiseTheDead, deployVanguard,
     unitAbilitiesFor, globalAbilitiesFor, armAbility, castAbility, cancelAbility,
   };
 

@@ -42,6 +42,7 @@
   //   target: { kind, unit, preview }  show an ability's valid targets
   //   cast: { id, ...params }      castAbility, same params as the client
   //   rng: [..]                    Math.random values for this step's action
+  //   vanguard: ['d2-d5', …]       a Vanguard deployment (from-to per unit)
   //   expect: { sq: 'wP' | null } or (state) => bool
   const DEMOS = {
     leaping: {
@@ -75,6 +76,24 @@
         { move: 'd2-e4', caption: 'Mounted, the King moves like a knight. It is still your King: if it is captured, you lose.', expect: s => s.mounted.w === 'e4' },
         { move: 'h6-h5', quick: true },
         { move: 'e4-e5', exit: true, caption: 'Double-click to dismount: the King steps off onto a free neighbouring square and the knight stays behind.', expect: { e4: 'wN', e5: 'wK' } },
+      ],
+    },
+
+    vanguard: {
+      augments: { w: ['vanguard'] },
+      position: 'wRa1 wNb1 wBc1 wQd1 wKe1 wBf1 wNg1 wRh1 wPa2 wPb2 wPc2 wPd2 wPe2 wPf2 wPg2 wPh2 '
+        + 'bRa8 bNb8 bBc8 bQd8 bKe8 bBf8 bNg8 bRh8 bPa7 bPb7 bPc7 bPd7 bPe7 bPf7 bPg7 bPh7',
+      steps: [
+        {
+          vanguard: ['d2-d5', 'e2-e5', 'b1-c4', 'g1-f4', 'c1-d3', 'f1-e3'],
+          caption: 'Before the first turn, Vanguard gives you 30 free seconds to move any of your units onto your Vanguard squares (gold)…',
+          after: '…then they all march out at once. Your opponent only sees the result.',
+          expect: { d5: 'wP', e5: 'wP', c4: 'wN', f4: 'wN', d3: 'wB', e3: 'wB', d2: null, g1: null },
+        },
+        { select: 'd5', caption: 'Playing White, your Vanguard units sit out your first turn.' },
+        { move: 'a2-a3', quick: true },
+        { move: 'g8-f6', quick: true },
+        { move: 'e5-f6', caption: 'From your second turn on, they fight like any other unit.', expect: { f6: 'wP' } },
       ],
     },
 
@@ -540,6 +559,7 @@
       if (type === 'p' && E.figurePawnType(state, color) === 'apprentice' &&
           E.has(state, color, 'unstableTeleport') && !state.apprenticeTeleportUsed[color][sq]) p.badges.push('teleport');
       if (type === 'p' && E.figurePawnType(state, color) === 'archer' && E.isArcherOnCooldown(state, color, sq)) p.badges.push('cooldown');
+      if (state.vanguardLocked && state.vanguardLocked.includes(sq)) p.badges.push('vanguard');
       pieces.push(p);
     });
     return pieces;
@@ -609,6 +629,7 @@
     (ann.shootRange || []).forEach(sq => { if (!taken.has(sq)) add(sq, 'shoot-range-preview'); });
     (ann.clawRange || []).forEach(sq => { if (!taken.has(sq)) add(sq, 'claw-range-preview'); });
     if (ann.aim) add(ann.aim, 'demo-aim');
+    (ann.zone || []).forEach(sq => add(sq, 'vanguard-zone'));
 
     if (ann.target) {
       const base = TARGET_CLASSES[ann.target.kind];
@@ -688,6 +709,11 @@
     for (const n of next) {
       const o = prev.find(o => oldLeft.has(o) && o.sq === n.sq && o.color === n.color && o.match === n.match);
       if (o) pair(o, n, false);
+    }
+    for (const { from, to } of hint.pairs || []) {
+      const o = [...oldLeft].find(o => o.sq === from);
+      const n = o && [...newLeft].find(n => n.sq === to && n.color === o.color);
+      if (o && n) pair(o, n, true);
     }
     if (hint.from && hint.to && !hint.blink) {
       const o = [...oldLeft].find(o => o.sq === hint.from);
@@ -777,7 +803,7 @@
 
     demo.steps.forEach((step, i) => {
       const label = `${demoId} step ${i + 1}`;
-      const actor = state.pendingStunlock ? state.pendingStunlock.color : state.game.turn();
+      const actor = state.vanguard ? state.vanguard.color : state.pendingStunlock ? state.pendingStunlock.color : state.game.turn();
       const quickCaption = `${SIDE_NAMES[actor]} moves.`;
 
       if (step.select && !step.move) {
@@ -803,6 +829,11 @@
         action = { type: 'move', from, to, exit: !!step.exit, promotion: move.needsPromo ? 'q' : undefined };
         hint = { from, to, exit: !!step.exit };
         if (move.special === 'archerShoot' || move.special === 'longbowmanShoot') fx.push({ kind: 'shot', from, to });
+      } else if (step.vanguard) {
+        const placements = step.vanguard.map(s => { const [from, to] = s.split('-'); return { from, to }; });
+        emit('pre', step.caption, actor, { zone: E.VANGUARD_ZONES[actor] });
+        action = { type: 'vanguardDeploy', placements };
+        hint = { pairs: placements };
       } else if (step.arm) {
         action = { type: 'armAbility', key: step.arm.key, unitSq: step.arm.unit };
       } else if (step.cast) {

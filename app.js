@@ -325,7 +325,10 @@ function renderAll() {
     selectedSquare = state.pendingSwiftMove.archerSq;
   }
   if (selectedSquare) legalMoves = computeLegalMovesFor(selectedSquare);
-  if (!clockStarted && state.moveLog.length >= 2) { clockStarted = true; startClock(); }
+  Vanguard.sync();
+  // The clock starts after both players' first turns (not counting events
+  // like a Vanguard deployment, which happens on free time).
+  if (!clockStarted && state.moveLog.filter(e => e.kind !== 'event').length >= 2) { clockStarted = true; startClock(); }
   switchClock();
 
   renderBoard();
@@ -717,6 +720,12 @@ function renderBoard() {
           pieceEl.appendChild(charge);
         }
 
+        // White's freshly deployed Vanguard units sit out White's first turn.
+        if (state.vanguardLocked && state.vanguardLocked.includes(sq)) {
+          pieceEl.classList.add('vanguard-locked');
+          pieceEl.title = 'Vanguard unit: can act from White\'s second turn';
+        }
+
         if (piece.type === 'p' && figurePawnType(state, piece.color) === 'apprentice' &&
             has(state, piece.color, 'unstableTeleport') && !state.apprenticeTeleportUsed[piece.color][sq]) {
           const teleportBadge = document.createElement('div');
@@ -740,6 +749,7 @@ function renderBoard() {
     }
   }
 
+  Vanguard.decorate();
   BoardAnim.afterRender();
   renderAbilityBar();
 }
@@ -754,6 +764,7 @@ function attachPieceHandlers(pieceEl, sq) {
 //  DOUBLE-CLICK (tower leave / dismount activation)
 // ═══════════════════════════════════════════════════════════════════════════════
 function onPieceDblClick(e) {
+  if (Vanguard.active()) return;
   if (state.gameOver || !isMyTurn()) return;
   const sq = e.currentTarget.dataset.square;
   const turn = state.game.turn();
@@ -778,6 +789,7 @@ function onPieceDblClick(e) {
 //  CLICK-TO-MOVE
 // ═══════════════════════════════════════════════════════════════════════════════
 function onSquareClick(e) {
+  if (Vanguard.onSquareClick(e.currentTarget.dataset.square)) return;
   if (state.gameOver) return;
   if (dragState) return;
   if (!isMyTurn()) return;
@@ -967,6 +979,7 @@ function pingLockedGhoul(sq) {
 //  DRAG-TO-MOVE
 // ═══════════════════════════════════════════════════════════════════════════════
 function onPieceMouseDown(e) {
+  if (Vanguard.onPiecePress(e.currentTarget.dataset.square)) { e.preventDefault(); return; }
   if (state.gameOver) return;
   if (state.pendingStunlock) return;
   if (!isMyTurn()) return;
@@ -984,6 +997,7 @@ function onPieceMouseDown(e) {
 }
 
 function onPieceTouchStart(e) {
+  if (Vanguard.onPiecePress(e.currentTarget.dataset.square)) return; // the tap's click places it
   if (state.gameOver) return;
   if (state.pendingStunlock) return;
   if (!isMyTurn()) return;
@@ -1116,6 +1130,10 @@ function updateStatus() {
     return;
   }
 
+  if (state.vanguard) {
+    statusText.textContent = `${state.vanguard.color === 'w' ? 'White' : 'Black'} is deploying their Vanguard`;
+    return;
+  }
   if (stunlockTargeting && state.pendingStunlock) {
     statusText.textContent = '⚡ Choose a quadrant to stun (Esc to cancel)';
     return;
