@@ -15,7 +15,23 @@
 (function (root) {
   const isNode = typeof module !== 'undefined' && module.exports;
   const chessEngine = isNode ? require('./chess-engine.js') : root;
-  const { sqToFR, frToSq, pieceAt, has, isEmpty, isPromoRank, flipTurnFen, clearMountedIfCaptured, figurePawnType, kingAuraSquares, findKingSquare } = chessEngine;
+  const { sqToFR, frToSq, pieceAt, has, isEmpty, isPromoRank, flipTurnFen, clearMountedIfCaptured, figurePawnType, kingAuraSquares, findKingSquare,
+    unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry } = chessEngine;
+
+  // "e1 King" — the acting unit on its own square, as the history names it
+  // (see the history scheme in chess-engine.js).
+  function actor(state, color, sq, type) {
+    return `${sq} ${unitName(state, color, type)}`;
+  }
+
+  function kingSquare(state, color) {
+    return state.mounted[color] || findKingSquare(state, color);
+  }
+
+  // "d5–e6" for a block of squares (its two opposite corners).
+  function areaLabel(squares) {
+    return squares[0] + '–' + squares[squares.length - 1];
+  }
 
   // ── Stunlock ──────────────────────────────────────────────────────────
   function getStunlockQuadrants(bishopSq) {
@@ -46,8 +62,12 @@
 
     const { bishopSq } = state.pendingStunlock;
     delete state.stunlockCharges[color][bishopSq];
-    quadrantSquares(f, r).forEach(sq => { state.stunnedSquares[sq] = 2; });
-    state.moveLog.push({ san: '⚡' + cornerSq, color });
+    const squares = quadrantSquares(f, r);
+    squares.forEach(sq => { state.stunnedSquares[sq] = 2; });
+    const frozen = unitsIn(state, squares, color);
+    logEntry(state, color, '⚡' + cornerSq, frozen.length
+      ? `${actor(state, color, bishopSq, 'b')} froze ${listUnits(frozen)} (Stunlock on ${areaLabel(squares)}).`
+      : `${actor(state, color, bishopSq, 'b')} cast Stunlock on ${areaLabel(squares)}, but froze nobody.`, 'event');
     state.pendingStunlock = null;
     return null;
   }
@@ -99,8 +119,9 @@
     const valid = getSolarStrikeCenters(queenSq).some(c => c.f === f && c.r === r);
     if (!valid) return 'That center is out of range';
 
-    solarStrikeSquares(f, r).forEach(sq => { state.solarMarked[sq] = 2; });
-    state.moveLog.push({ san: '☀' + centerSq, color });
+    state.solarMarkedBy = state.solarMarkedBy || {};
+    solarStrikeSquares(f, r).forEach(sq => { state.solarMarked[sq] = 2; state.solarMarkedBy[sq] = color; });
+    logEntry(state, color, '☀' + centerSq, `${actor(state, color, queenSq, 'q')} marked ${areaLabel(solarStrikeSquares(f, r))} for a Solar Strike.`);
     state.solarStrikeCastThisTurn = true;
     state.armedAbility = null;
     return null;
@@ -138,7 +159,10 @@
     });
 
     state.advanceUsed[color] = true;
-    state.moveLog.push({ san: '⏫ Advance', color });
+    const unit = unitName(state, color, 'p');
+    logEntry(state, color, '⏫ Advance', steps.length
+      ? `Advance: ${steps.length} ${steps.length === 1 ? unit : pluralUnit(unit)} moved forward.`
+      : 'Advance: nobody had room to move.');
     state.game.load(flipTurnFen(state));
     return null;
   }
@@ -181,13 +205,14 @@
     const valid = getSilverBulletTargets(state, kingSq, color).includes(targetSq);
     if (!valid) return 'That target is out of range or not a valid line of sight';
 
+    const victim = unitAt(state, targetSq, color);
     if (state.mannedTowers[targetSq]) delete state.mannedTowers[targetSq];
     delete state.mannedTowerOrigin[targetSq];
     clearMountedIfCaptured(state, targetSq);
     state.game.remove(targetSq);
 
     state.silverBulletUsed[color] = true;
-    state.moveLog.push({ san: '🎯' + kingSq + targetSq, color });
+    logEntry(state, color, '🎯' + kingSq + targetSq, `${actor(state, color, kingSq, 'k')} killed ${victim} (Silver Bullet).`);
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
@@ -208,7 +233,7 @@
     if (state.lightningActive[color]) return 'Lightning Aura is already active';
 
     state.lightningActive[color] = true;
-    state.moveLog.push({ san: '🌩 Lightning Aura', color });
+    logEntry(state, color, '🌩 Lightning Aura', `${actor(state, color, kingSquare(state, color), 'k')} cast Lightning Aura. Personal space enforced.`);
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
@@ -227,7 +252,7 @@
     if (state.fireActive[color]) return 'Ring of Fire is already active';
 
     state.fireActive[color] = true;
-    state.moveLog.push({ san: '🔥 Ring of Fire', color });
+    logEntry(state, color, '🔥 Ring of Fire', `${actor(state, color, kingSquare(state, color), 'k')} cast ${has(state, color, 'inferno') ? 'Inferno' : 'Ring of Fire'}.`);
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
@@ -247,7 +272,7 @@
     if (state.relentlessAdvanceActive[color]) return 'Relentless Advance is already active';
 
     state.relentlessAdvanceActive[color] = true;
-    state.moveLog.push({ san: '⏩ Relentless Advance', color });
+    logEntry(state, color, '⏩ Relentless Advance', `Relentless Advance began: 2 ${pluralUnit(unitName(state, color, 'p'))} march every turn. No step back.`);
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
@@ -299,10 +324,13 @@
     const validTargets = getRaiseTheDeadTargets(state, color);
     if (!validTargets.includes(targetSq)) return 'That is not a valid square to raise a Ghoul';
 
+    // The first raise is the turn; more raises in the same session follow it.
+    const continuing = !!state.pendingRaiseTheDead;
     state.game.put({ type: 'p', color }, targetSq);
     state.ghoulGraveyard[color]--;
     state.pendingRaiseTheDead = { color };
-    state.moveLog.push({ san: '💀' + targetSq, color });
+    logEntry(state, color, '💀' + targetSq, `${actor(state, color, kingSquare(state, color), 'k')} raised a Ghoul on ${targetSq}.`,
+      continuing ? 'event' : 'turn');
     state.armedAbility = null;
 
     if (state.ghoulGraveyard[color] <= 0 || getRaiseTheDeadTargets(state, color).length === 0) {
@@ -373,14 +401,18 @@
     const valid = getClubbingQuadrants(trollSq).some(q => q.f === f && q.r === r);
     if (!valid) return 'That is not a valid quadrant for this Troll';
 
-    quadrantSquares(f, r).forEach(sq => {
+    const area = quadrantSquares(f, r);
+    const smashed = unitsIn(state, area, color);
+    area.forEach(sq => {
       if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
       delete state.mannedTowerOrigin[sq];
       clearMountedIfCaptured(state, sq);
       if (pieceAt(state, sq)) state.game.remove(sq);
     });
 
-    state.moveLog.push({ san: '🔨' + cornerSq, color });
+    logEntry(state, color, '🔨' + cornerSq, smashed.length
+      ? `${actor(state, color, trollSq, 'r')} killed ${listUnits(smashed)} (club).`
+      : `${actor(state, color, trollSq, 'r')} clubbed ${areaLabel(area)}. Only air was harmed.`);
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
@@ -423,6 +455,7 @@
     const roll = Math.random();
     const killCaster = roll < 2 / 6; // covers both the 1/6 "both die" and 1/6 "caster only" bands
     const killTarget = roll < 1 / 6 || roll >= 2 / 6; // everything except the 1/6 "caster only" band
+    const victim = unitAt(state, targetSq, color);
 
     if (killTarget) {
       if (state.mannedTowers[targetSq]) delete state.mannedTowers[targetSq];
@@ -448,7 +481,11 @@
     let san = '🔥' + apprenticeSq + (killTarget ? 'x' : '-') + targetSq;
     if (killTarget && killCaster) san += ' (backfired!)';
     else if (!killTarget) san += ' (fizzled)';
-    state.moveLog.push({ san, color });
+    const caster = actor(state, color, apprenticeSq, 'p');
+    const text = !killCaster ? `${caster} killed ${victim} (fireball).`
+      : killTarget ? `${caster} killed ${victim} and itself (fireball backfired).`
+      : `${caster} killed only itself (fireball fizzled).`;
+    logEntry(state, color, san, text);
     state.lastMove = { from: apprenticeSq, to: targetSq };
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
@@ -569,7 +606,12 @@
     if (outcome === 'vanished') san += ' (vanished!)';
     else if (landingSq !== targetSq && outcome === 'drifted') san += ' (drifted)';
     else if (landingSq !== targetSq && outcome === 'scattered') san += ' (scattered)';
-    state.moveLog.push({ san, color });
+    const caster = actor(state, color, apprenticeSq, 'p');
+    const text = !landingSq ? `${caster} teleported to nowhere (aimed at ${targetSq}).`
+      : landingSq === targetSq ? `${caster} teleported to ${landingSq}.`
+      : outcome === 'drifted' ? `${caster} mis-teleported to ${landingSq} (aimed at ${targetSq}).`
+      : `${caster} mis-teleported far away to ${landingSq} (aimed at ${targetSq}).`;
+    logEntry(state, color, san, text);
     state.lastMove = { from: apprenticeSq, to: landingSq || apprenticeSq };
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));

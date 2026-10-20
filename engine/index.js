@@ -171,7 +171,29 @@
     chessEngine.tickTeleportMarks(state);
     chessEngine.tickFireDeathMarks(state);
     chessEngine.tickWarmWelcomeMarks(state);
+    const wasOver = state.gameOver;
     gameOverEngine.evaluateGameOver(state);
+    noteOutcome(state, wasOver);
+  }
+
+  // Move history: close the game with how it ended, or tag the turn that
+  // just gave check.
+  function noteOutcome(state, wasOver) {
+    if (state.gameOver) {
+      if (!wasOver) {
+        const text = state.gameOverText.replace(/^[^A-Za-z]+/, '');
+        chessEngine.logEntry(state, null, '#', text.endsWith('!') || text.endsWith('.') ? text : text + '.', 'event');
+      }
+      return;
+    }
+    const toMove = state.game.turn();
+    if (!chessEngine.isKingAttacked(state, toMove)) return;
+    for (let i = state.moveLog.length - 1; i >= 0; i--) {
+      const entry = state.moveLog[i];
+      if (entry.kind !== 'turn') continue;
+      if (entry.text && !entry.text.endsWith('Check!')) entry.text += ' Check!';
+      break;
+    }
   }
 
   // "New Game" from the playing/gameover phase — back to settings so either

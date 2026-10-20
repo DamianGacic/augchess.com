@@ -1168,30 +1168,46 @@ function updateStatus() {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  MOVE LIST
 // ═══════════════════════════════════════════════════════════════════════════════
+// One row per turn (the engine's `kind: 'turn'` entries), with everything
+// that turn set off (`kind: 'event'`: aura kills, a Stunlock landing, …)
+// nested underneath it. Entries from before the readable history existed
+// have no `text`/`kind` and fall back to their compact notation as turns.
 function renderMoveList() {
   moveListEl.innerHTML = '';
-  const moveLog = state.moveLog;
-  for (let i = 0; i < moveLog.length; i += 2) {
-    const row = document.createElement('div');
-    row.className = 'move-row';
-
-    const numEl = document.createElement('span');
-    numEl.className = 'move-num';
-    numEl.textContent = (i / 2 + 1) + '.';
-    row.appendChild(numEl);
-
-    const whiteEl = document.createElement('span');
-    whiteEl.className = 'move-san' + (i === moveLog.length - 1 ? ' current' : '');
-    whiteEl.textContent = moveLog[i] ? moveLog[i].san : '';
-    row.appendChild(whiteEl);
-
-    const blackEl = document.createElement('span');
-    blackEl.className = 'move-san' + (i + 1 === moveLog.length - 1 ? ' current' : '');
-    if (moveLog[i + 1]) blackEl.textContent = moveLog[i + 1].san;
-    row.appendChild(blackEl);
-
-    moveListEl.appendChild(row);
+  const groups = [];
+  for (const entry of state.moveLog) {
+    const isEvent = entry.kind === 'event';
+    if (!isEvent || !groups.length) groups.push({ turn: isEvent ? null : entry, events: [] });
+    if (isEvent) groups[groups.length - 1].events.push(entry);
   }
+
+  let plies = 0;
+  groups.forEach((g, i) => {
+    const row = document.createElement('div');
+    row.className = 'move-turn' + (i === groups.length - 1 ? ' current' : '');
+    if (g.turn) {
+      const head = document.createElement('div');
+      head.className = 'move-line';
+      const num = document.createElement('span');
+      num.className = 'move-num';
+      num.textContent = g.turn.color === 'w' ? `${Math.floor(plies / 2) + 1}.` : '';
+      const side = document.createElement('span');
+      side.className = 'move-side ' + (g.turn.color === 'w' ? 'white' : 'black');
+      const text = document.createElement('span');
+      text.className = 'move-text';
+      text.textContent = g.turn.text || g.turn.san;
+      head.append(num, side, text);
+      row.appendChild(head);
+      plies++;
+    }
+    for (const e of g.events) {
+      const ev = document.createElement('div');
+      ev.className = 'move-event' + (e.san === '#' ? ' move-result' : '');
+      ev.textContent = e.text || e.san;
+      row.appendChild(ev);
+    }
+    moveListEl.appendChild(row);
+  });
   moveListEl.scrollTop = moveListEl.scrollHeight;
 }
 

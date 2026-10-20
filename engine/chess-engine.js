@@ -141,6 +141,62 @@
     return state.augments[color] && state.augments[color].includes(augId);
   }
 
+  // ── Move history ────────────────────────────────────────────────────────
+  // Every moveLog entry keeps its compact `san` (the board animations parse
+  // it) plus a short readable `text` and a `kind`: 'turn' for the action a
+  // player's turn consists of, 'event' for everything it set off (aura
+  // kills, a Stunlock landing, a Solar Strike going off, …) — the move list
+  // nests events under the turn before them.
+  //
+  // One scheme for every line, so it reads the same everywhere:
+  //   - a unit is always "<square> <Unit>" ("a5 Pawn"), "own …" when it
+  //     belongs to whoever caused its death (friendly fire);
+  //   - a player's action: "<square> <Unit> <verb> <target>." — verbs are
+  //     "moved to", "killed", or the ability's own verb (froze, cast, …);
+  //   - every death is "killed"; how it happened is a tag at the end:
+  //     (arrow), (charge), (leap), (en passant), (club), (fireball), …;
+  //   - effects with no acting unit (auras, Solar Strike, Warm Welcome) are
+  //     the subject themselves: "Lightning Aura killed own d3 Pawn.";
+  //   - several victims of one action share one line, comma-separated.
+  const PIECE_NAMES = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: 'Queen', k: 'King' };
+  const FIGURE_NAMES = { archer: 'Archer', apprentice: 'Apprentice', ghoul: 'Ghoul', guardsman: 'Guardsman', spearman: 'Spearman' };
+
+  function unitName(state, color, type) {
+    if (type === 'p') { const fig = figurePawnType(state, color); if (fig) return FIGURE_NAMES[fig]; }
+    if (type === 'b' && figureBishopType(state, color)) return 'Longbowman';
+    if (type === 'r' && figureRookType(state, color)) return 'Troll';
+    return PIECE_NAMES[type];
+  }
+
+  function pluralUnit(name) {
+    return name.endsWith('man') ? name.slice(0, -3) + 'men' : name + 's';
+  }
+
+  // The unit on `sq` right now (call before removing it) as "<square>
+  // <Unit>": "a5 Pawn", "e4 mounted King", "h1 manned Rook", or "own a5 Pawn"
+  // when it belongs to `actor` (friendly fire).
+  function unitAt(state, sq, actor) {
+    const p = pieceAt(state, sq);
+    if (!p) return null;
+    let name = unitName(state, p.color, p.type);
+    if (p.type === 'k' && state.mounted[p.color] === sq) name = 'mounted King';
+    else if (state.mannedTowers[sq]) name = 'manned ' + name;
+    return (actor && p.color === actor ? 'own ' : '') + sq + ' ' + name;
+  }
+
+  function unitsIn(state, squares, actor) {
+    return squares.map(sq => unitAt(state, sq, actor)).filter(Boolean);
+  }
+
+  // "a, b and c" for a list of victims.
+  function listUnits(names) {
+    return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+
+  function logEntry(state, color, san, text, kind) {
+    state.moveLog.push({ san, color, text, kind: kind || 'turn' });
+  }
+
   function figurePawnType(state, color) {
     if (has(state, color, 'apprentices')) return 'apprentice';
     if (has(state, color, 'archers')) return 'archer';
@@ -587,6 +643,7 @@
 
   function applyBreakingRankCaptures(state, charges, color) {
     for (const { from, to } of charges) {
+      const victim = unitAt(state, to, color);
       if (state.mannedTowers[to]) delete state.mannedTowers[to];
       delete state.mannedTowerOrigin[to];
       clearMountedIfCaptured(state, to);
@@ -595,7 +652,7 @@
       const promo = isPromoRank(color, sqToFR(to).r);
       state.game.put({ type: promo ? 'q' : 'p', color }, to);
       state.ghoulBrokeRank[color].push(to);
-      state.moveLog.push({ san: '💥' + from + to, color });
+      logEntry(state, color, '💥' + from + to, `${from} Ghoul killed ${victim} (Breaking Rank).`, 'event');
     }
   }
 
@@ -643,13 +700,18 @@
       if (!state.lightningActive[color]) continue;
       const kingSq = findKingSquare(state, color);
       if (!kingSq) continue;
+      const killed = [];
       for (const sq of kingAuraSquares(kingSq)) {
         if (!pieceAt(state, sq)) continue;
+        const victim = unitAt(state, sq, color);
         if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
         delete state.mannedTowerOrigin[sq];
         clearMountedIfCaptured(state, sq);
         state.game.remove(sq);
-        state.moveLog.push({ san: '🌩' + sq, color });
+        killed.push({ sq, victim });
+      }
+      if (killed.length) {
+        logEntry(state, color, '🌩' + killed.map(k => k.sq).join(''), `Lightning Aura killed ${listUnits(killed.map(k => k.victim))}.`, 'event');
       }
     }
   }
@@ -678,6 +740,7 @@
         if (entry.color === color && !auraSet.has(sq)) delete state.fireAura[sq];
       }
 
+      const burned = [];
       for (const sq of auraSquares) {
         const piece = pieceAt(state, sq);
         const entry = state.fireAura[sq];
@@ -689,17 +752,23 @@
         if (entry && entry.color === color && entry.sig === sig) {
           entry.turns++;
           if (entry.turns >= 2) {
+            const victim = unitAt(state, sq, color);
             if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
             delete state.mannedTowerOrigin[sq];
             clearMountedIfCaptured(state, sq);
             state.game.remove(sq);
             state.fireDeathMarked[sq] = 2;
-            state.moveLog.push({ san: '🔥' + sq, color });
+            burned.push({ sq, victim });
             delete state.fireAura[sq];
           }
         } else {
           state.fireAura[sq] = { turns: 1, sig, color };
         }
+      }
+      if (burned.length) {
+        // '♨', not '🔥…': board-anim.js reads a 🔥 entry with two squares as a fireball.
+        logEntry(state, color, '♨' + burned.map(b => b.sq).join(''),
+          `${has(state, color, 'inferno') ? 'Inferno' : 'Ring of Fire'} killed ${listUnits(burned.map(b => b.victim))}.`, 'event');
       }
     }
   }
@@ -733,6 +802,8 @@
         [pawnSquares[i], pawnSquares[j]] = [pawnSquares[j], pawnSquares[i]];
       }
 
+      const marches = []; // "b3 Pawn moved to b4" / "e4 Pawn killed e5 Pawn"
+      const marcher = unitName(state, color, 'p');
       pawnSquares.slice(0, 2).forEach(sq => {
         const { f, r } = sqToFR(sq);
         const forwardSq = frToSq(f, r + dir);
@@ -741,7 +812,7 @@
         if (isEmpty(state, forwardSq)) {
           state.game.remove(sq);
           state.game.put({ type: isPromoRank(color, r + dir) ? 'q' : 'p', color }, forwardSq);
-          state.moveLog.push({ san: '⏩' + sq + '-' + forwardSq, color });
+          marches.push({ san: sq + '-' + forwardSq, text: `${sq} ${marcher} moved to ${forwardSq}` });
           return;
         }
 
@@ -752,14 +823,19 @@
         });
         if (!target) return;
 
+        const victim = unitAt(state, target, color);
         if (state.mannedTowers[target]) delete state.mannedTowers[target];
         delete state.mannedTowerOrigin[target];
         clearMountedIfCaptured(state, target);
         state.game.remove(target);
         state.game.remove(sq);
         state.game.put({ type: isPromoRank(color, r + dir) ? 'q' : 'p', color }, target);
-        state.moveLog.push({ san: '⏩' + sq + 'x' + target, color });
+        marches.push({ san: sq + 'x' + target, text: `${sq} ${marcher} killed ${victim}` });
       });
+      if (marches.length) {
+        logEntry(state, color, '⏩' + marches.map(x => x.san).join(' '),
+          `Relentless Advance: ${marches.map(x => x.text).join(', ')}.`, 'event');
+      }
     }
   }
 
@@ -1408,6 +1484,44 @@
   // if this move armed-and-triggered a stunlock cast, else null — the caller
   // (engine/index.js) decides what happens next (enter targeting vs. proceed
   // straight to Breaking Rank + game-over evaluation).
+  // History sentence for a move about to be applied — reads the board before
+  // the move, so it can still name what gets killed. Follows the scheme
+  // above: "e2 Pawn moved to e4." / "a3 Archer killed a5 Pawn (arrow)."
+  function describeMoveText(state, m, piece, color) {
+    const from = m.from, to = m.to;
+    const type = piece ? piece.type : 'p';
+    const towerColor = state.mannedTowers[from];
+    let moverName = unitName(state, color, type);
+    if (type === 'k' && state.mounted[color] === from) moverName = 'mounted King';
+    else if (towerColor === color) moverName = 'manned ' + moverName;
+    const mover = `${from} ${moverName}`;
+    // The garrison acting on its own: shooting from, or stepping out of, its tower.
+    const garrison = towerColor && `${from} ${state.mannedTowerOrigin[from] === 'b' ? 'Longbowman' : unitName(state, towerColor, 'p')}`;
+    const epSq = (m.special === 'epCapture' || (m.standard && m.captured && !pieceAt(state, to)))
+      ? frToSq(sqToFR(to).f, sqToFR(from).r) : null;
+    const victim = (m.special === 'towerEnter' || m.special === 'mount') ? null : unitAt(state, epSq || to, color);
+    const castle = m.special === 'castleK' || m.special === 'castleQ'
+      ? m.special
+      : (m.standard && type === 'k' && Math.abs(sqToFR(from).f - sqToFR(to).f) === 2 ? (sqToFR(to).f > 4 ? 'castleK' : 'castleQ') : null);
+
+    let text;
+    if (castle) {
+      const [rookFrom, rookTo] = castle === 'castleK' ? ['h', 'f'] : ['a', 'd'];
+      text = `${mover} castled ${castle === 'castleK' ? 'kingside' : 'queenside'} to ${to} (${rookFrom}${from[1]} Rook moved to ${rookTo}${from[1]}).`;
+    } else if (m.special === 'archerShoot' || m.special === 'longbowmanShoot') {
+      text = `${towerColor === color ? garrison + ' (in tower)' : mover} killed ${victim} (arrow).`;
+    } else if (m.special === 'towerEnter') text = `${mover} entered the ${to} tower.`;
+    else if (m.special === 'towerLeave') text = `${garrison} left the tower, moved to ${to}.`;
+    else if (m.special === 'mount') text = `${mover} mounted the ${to} Knight.`;
+    else if (m.special === 'dismount') text = `${mover} dismounted, moved to ${to}.`;
+    else if (m.special === 'ghoulCharge' || m.special === 'ghoulDiagCharge') text = `${mover} killed ${victim} (charge).`;
+    else if (epSq) text = `${mover} killed ${victim} (en passant), moved to ${to}.`;
+    else if (m.special === 'leap' || m.special === 'ghoulDiagLeap') text = `${mover} moved to ${to} (leap).`;
+    else text = victim ? `${mover} killed ${victim}.` : `${mover} moved to ${to}.`;
+    if (m.promotion && type === 'p') text = text.replace(/\.$/, `, promoted to ${PIECE_NAMES[m.promotion]}.`);
+    return { text, mover };
+  }
+
   function executeMove(state, color, move, promotionChoice) {
     const fromPiece = pieceAt(state, move.from);
     const m = { ...move };
@@ -1418,6 +1532,11 @@
     // for itself inside this very call (see below), which must not be
     // confused with resolving an already-pending one.
     const resolvesSwiftMove = !!(state.pendingSwiftMove && state.pendingSwiftMove.color === color && state.pendingSwiftMove.archerSq === m.from);
+    // A Swift follow-up step, or the move after casting Solar Strike, is the
+    // second half of a turn already in the log — logged as its follow-up.
+    const continuesTurn = resolvesSwiftMove || !!state.solarStrikeCastThisTurn;
+    const { text: moveText, mover } = describeMoveText(state, m, fromPiece, color);
+    const followUps = []; // events this move set off, logged right after it
 
     applyMoveToState(state, m, color, false);
 
@@ -1428,6 +1547,7 @@
       delete state.mannedTowerOrigin[m.to];
       clearMountedIfCaptured(state, m.to);
       if (pieceAt(state, m.to)) state.game.remove(m.to);
+      followUps.push({ color: color === 'w' ? 'b' : 'w', san: '💀' + m.to, text: `${m.to} Spearman killed ${mover} (impaled).` });
     }
 
     if (m.special && m.special.indexOf('ghoul') === 0) {
@@ -1441,7 +1561,7 @@
     // archer cooldown) decrements twice for a single turn.
     if (!resolvesSwiftMove) {
       tickStunCounters(state);
-      tickSolarMarks(state);
+      followUps.push(...tickSolarMarks(state));
     }
 
     // Archer shoot cooldown — tick existing cooldowns (from earlier moves)
@@ -1470,7 +1590,8 @@
     if (m.special === 'archerShoot' && has(state, color, 'warmWelcome')) {
       state.warmWelcomeCooldown[color] = WARM_WELCOME_COOLDOWN;
     }
-    checkWarmWelcomeForLanding(state, m.to, color);
+    const welcome = checkWarmWelcomeForLanding(state, m.to, color);
+    if (welcome) followUps.push(welcome);
 
     // A Longbowman's shot doesn't relocate it — its charge (if any) stays put
     // rather than transferring to the (now-emptied) target square.
@@ -1497,7 +1618,9 @@
     state.armedAbility = null;
     state.solarStrikeCastThisTurn = false;
 
-    state.moveLog.push({ san: describeMove(m, fromPiece) + (impaled ? '💀' : ''), color });
+    logEntry(state, color, describeMove(m, fromPiece) + (impaled ? '💀' : ''),
+      continuesTurn ? `Then: ${moveText}` : moveText, continuesTurn ? 'event' : 'turn');
+    followUps.forEach(e => logEntry(state, e.color, e.san, e.text, 'event'));
     state.lastMove = { from: m.from, to: m.to };
     state.specialSelect = null;
 
@@ -1558,8 +1681,9 @@
   // and that color's trap is off cooldown, it fires for free (no turn spent)
   // and goes back on cooldown. Independent of any individual Archer's own
   // shoot cooldown — Warm Welcome has its own dedicated resource.
+  // Returns the history event to log (after the move itself), or null.
   function checkWarmWelcomeForLanding(state, landedSq, moverColor) {
-    if (!landedSq) return;
+    if (!landedSq) return null;
     for (const color of ['w', 'b']) {
       if (color === moverColor) continue;
       if (!has(state, color, 'warmWelcome')) continue;
@@ -1568,14 +1692,16 @@
       if (!piece || piece.color !== moverColor) continue;
       if (!archerThreatSquares(state, color).has(landedSq)) continue;
 
+      const victim = unitAt(state, landedSq, color);
       if (state.mannedTowers[landedSq]) delete state.mannedTowers[landedSq];
       delete state.mannedTowerOrigin[landedSq];
       clearMountedIfCaptured(state, landedSq);
       state.game.remove(landedSq);
       state.warmWelcomeMarked[landedSq] = 2;
-      state.moveLog.push({ san: '🏹' + landedSq, color });
       state.warmWelcomeCooldown[color] = WARM_WELCOME_COOLDOWN;
+      return { color, san: '🏹' + landedSq, text: `Warm Welcome killed ${victim} (arrow).` };
     }
+    return null;
   }
 
   // Same ticking pattern/duration as tickTeleportMarks/tickFireDeathMarks.
@@ -1586,20 +1712,33 @@
     }
   }
 
+  // Returns one history event per Solar Strike that went off this tick.
   function tickSolarMarks(state) {
+    const owners = state.solarMarkedBy || {};
+    const strikes = {}; // caster color → names of what burned
     for (const sq of Object.keys(state.solarMarked)) {
       state.solarMarked[sq]--;
       if (state.solarMarked[sq] <= 0) {
+        const by = owners[sq] || null;
         delete state.solarMarked[sq];
+        delete owners[sq];
+        const burned = (strikes[by] = strikes[by] || []);
+        const victim = unitAt(state, sq, by);
         if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
         delete state.mannedTowerOrigin[sq];
         clearMountedIfCaptured(state, sq);
         if (pieceAt(state, sq)) {
           state.game.remove(sq);
           state.fireDeathMarked[sq] = 2;
+          burned.push(victim);
         }
       }
     }
+    return Object.entries(strikes).map(([by, burned]) => ({
+      color: by === 'null' ? null : by,
+      san: '✹', // not '☀…' — board-anim.js reads that as a fresh cast
+      text: burned.length ? `Solar Strike killed ${listUnits(burned)}.` : 'Solar Strike went off and scorched only the floor.',
+    }));
   }
 
   // Ticked once per completed turn (see engine/index.js's afterTurnSettles,
@@ -1651,6 +1790,7 @@
 
   const exportsObj = {
     newGame, has, figurePawnType, anyFigurePawnsInPlay, ghoulCount, figureRookType, anyFigureRooksInPlay,
+    unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry,
     figureBishopType, anyFigureBishopsInPlay,
     sqToFR, frToSq, isEmpty, pieceAt, findKingSquare, isPromoRank,
     generateMoves, dedupeMoves, generateExitMoves,
