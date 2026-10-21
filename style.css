@@ -32,7 +32,9 @@
   --kind-wincondition: #f472b6;
   --kind-utility: #4cc2f0;
   --kind-unit: #f4ad44;
-  --kind-ability: #b592ff;
+  --kind-unitability: #b592ff;
+  --kind-globalability: #6d8bff;
+  --kind-ability: var(--kind-unitability); /* ability slots on the board */
   --kind-upgrade: #4fdba4;
 
   /* Legacy names still read by the board/overlay rules below. */
@@ -1155,7 +1157,8 @@ main {
 .kind-wincondition { --kind-color: var(--kind-wincondition); }
 .kind-utility { --kind-color: var(--kind-utility); }
 .kind-unit     { --kind-color: var(--kind-unit); }
-.kind-ability  { --kind-color: var(--kind-ability); }
+.kind-unitability { --kind-color: var(--kind-unitability); }
+.kind-globalability { --kind-color: var(--kind-globalability); }
 .kind-upgrade  { --kind-color: var(--kind-upgrade); }
 
 .requires-tag {
@@ -1232,8 +1235,8 @@ main {
 }
 
 /* 4 columns: pre-game setup and win-condition augments (stacked — both are
-   short), utility augments, unit-exchange Corps, activatable abilities —
-   see draft.js augmentColumn(). */
+   short), utility augments, unit-exchange Corps, and unit/global abilities
+   (stacked) — see draft.js augmentColumn(). */
 .augment-list {
   flex: 1 1 auto;
   min-width: 0;
@@ -1264,7 +1267,8 @@ main {
 #augment-col-wincondition .augment-col-label { color: var(--kind-wincondition); border-color: rgba(244, 114, 182, 0.35); }
 #augment-col-other .augment-col-label    { color: var(--kind-utility); border-color: rgba(76, 194, 240, 0.35); }
 #augment-col-exchange .augment-col-label { color: var(--kind-unit); border-color: rgba(244, 173, 68, 0.35); }
-#augment-col-ability .augment-col-label  { color: var(--kind-ability); border-color: rgba(181, 146, 255, 0.35); }
+#augment-col-ability .augment-col-label  { color: var(--kind-unitability); border-color: rgba(181, 146, 255, 0.35); }
+#augment-col-global .augment-col-label   { color: var(--kind-globalability); border-color: rgba(109, 139, 255, 0.35); }
 
 .augment-side-panel {
   flex: 0 0 150px;

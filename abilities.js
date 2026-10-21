@@ -21,8 +21,8 @@ const ABILITY_META = {
   breakingRank: { label: 'Breaking Rank (passive)' },
   coronation: { label: 'Coronation (passive)' },
   advance: { label: 'Advance' },
-  kingsLightning: { label: 'Lightning Aura' },
-  ringOfFire: { label: 'Ring of Fire' },
+  kingsLightning: { label: 'Lightning Aura', passiveLabel: 'Lightning Aura (active)' },
+  ringOfFire: { label: 'Ring of Fire', passiveLabel: 'Ring of Fire (active)' },
   relentlessAdvance: { label: 'Relentless Advance' },
   clubbing: { label: 'Clubbing' },
   silverBullet: { label: 'Silver Bullet' },
@@ -85,7 +85,7 @@ function renderAbilitySlot(color, key, ability) {
     icon.alt = meta.label;
     icon.draggable = false;
     el.appendChild(icon);
-    let label = meta.label + ' (' + key + ')';
+    let label = ((ability.passive && meta.passiveLabel) || meta.label) + ' (' + key + ')';
     if (ability.id === 'raiseTheDead') {
       const available = state.ghoulGraveyard[color] || 0;
       label += ' — ' + available + (available === 1 ? ' Ghoul available' : ' Ghouls available');
@@ -120,7 +120,14 @@ function toggleUnitAbility(key, color) {
   const idx = ABILITY_UNIT_KEYS.indexOf(key);
   if (idx === -1) return;
   const ability = unitAbilitiesFor(state, selectedSquare)[idx];
-  if (!ability) return;
+  if (!ability || ability.passive) return;
+
+  // The King's auras cast straight away — no target to pick.
+  if (ability.id === 'kingsLightning' || ability.id === 'ringOfFire') {
+    if (color !== state.game.turn()) return;
+    dispatch({ type: 'castAbility', id: ability.id, unitSq: selectedSquare });
+    return;
+  }
 
   if (ability.id === 'solarStrike') {
     if (solarStrikeTargeting && pendingSolarStrike && pendingSolarStrike.queenSq === selectedSquare) {

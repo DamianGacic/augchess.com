@@ -48,7 +48,7 @@ const AUGMENTS = [
   { id: 'mounting',    name: 'Mounting',     cost: 2, desc: 'Loading description...', image: 'mounting.jpg' },
   { id: 'vanguard',    name: 'Vanguard',     cost: 3, desc: 'Loading description...', category: 'pregame' },
   { id: 'legion',      name: 'Legion',       cost: 8, desc: 'Loading description...', category: 'pregame' },
-  { id: 'stunlock',    name: 'Stunlock',     cost: 5, desc: 'Loading description...', category: 'ability' },
+  { id: 'stunlock',    name: 'Stunlock',     cost: 5, desc: 'Loading description...', category: 'unitability' },
   { id: 'apprentices', name: 'Apprentices', cost: 1, desc: 'Loading description...', exchanges: 'apprentice' },
   { id: 'archers',     name: 'Archers',     cost: 4, desc: 'Loading description...', exchanges: 'archer' },
   { id: 'ghouls',      name: 'Ghouls',      cost: 2, desc: 'Loading description...', exchanges: 'ghoul' },
@@ -58,27 +58,27 @@ const AUGMENTS = [
   { id: 'longbowmen',  name: 'Longbowmen', cost: 3, desc: 'Loading description...', exchanges: 'longbowman' },
   // Ghoul follow-ups — only offered to a player once they own Ghouls.
   { id: 'deviant',      name: 'Deviant',      cost: 2, desc: 'Loading description...', requires: 'ghouls' },
-  { id: 'breakingRank', name: 'Breaking Rank', cost: 3, desc: 'Loading description...', requires: 'ghouls', category: 'ability' },
-  { id: 'raiseTheDead', name: 'Raise the Dead', cost: 7, desc: 'Loading description...', requires: 'ghouls', category: 'ability' },
-  { id: 'solarStrike',  name: 'Solar Strike',  cost: 12, desc: 'Loading description...', category: 'ability' },
-  { id: 'advance',      name: 'Advance',       cost: 3, desc: 'Loading description...', category: 'ability' },
-  { id: 'silverBullet', name: 'Silver Bullet', cost: 3, desc: 'Loading description...', category: 'ability' },
-  { id: 'kingsLightning', name: 'Lightning Aura', cost: 5, desc: 'Loading description...', category: 'ability' },
-  { id: 'ringOfFire', name: 'Ring of Fire', cost: 3, desc: 'Loading description...', category: 'ability' },
-  { id: 'relentlessAdvance', name: 'Relentless Advance', cost: 3, desc: 'Loading description...', category: 'ability' },
+  { id: 'breakingRank', name: 'Breaking Rank', cost: 3, desc: 'Loading description...', requires: 'ghouls', category: 'globalability' },
+  { id: 'raiseTheDead', name: 'Raise the Dead', cost: 7, desc: 'Loading description...', requires: 'ghouls', category: 'unitability' },
+  { id: 'solarStrike',  name: 'Solar Strike',  cost: 12, desc: 'Loading description...', category: 'unitability' },
+  { id: 'advance',      name: 'Advance',       cost: 3, desc: 'Loading description...', category: 'globalability' },
+  { id: 'silverBullet', name: 'Silver Bullet', cost: 3, desc: 'Loading description...', category: 'unitability' },
+  { id: 'kingsLightning', name: 'Lightning Aura', cost: 5, desc: 'Loading description...', category: 'unitability' },
+  { id: 'ringOfFire', name: 'Ring of Fire', cost: 3, desc: 'Loading description...', category: 'unitability' },
+  { id: 'relentlessAdvance', name: 'Relentless Advance', cost: 3, desc: 'Loading description...', category: 'globalability' },
   { id: 'coronation', name: 'Coronation', cost: 4, desc: 'Loading description...', category: 'wincondition' },
   // Ring of Fire follow-up — only offered to a player once they own Ring of Fire.
   { id: 'inferno', name: 'Inferno', cost: 5, desc: 'Loading description...', requires: 'ringOfFire' },
   // Apprentice follow-ups — only offered to a player once they own Apprentices.
-  { id: 'unstableFireball', name: 'Unstable Fireball', cost: 3, desc: 'Loading description...', requires: 'apprentices', category: 'ability' },
-  { id: 'unstableTeleport', name: 'Unstable Teleport', cost: 2, desc: 'Loading description...', requires: 'apprentices', category: 'ability' },
+  { id: 'unstableFireball', name: 'Unstable Fireball', cost: 3, desc: 'Loading description...', requires: 'apprentices', category: 'unitability' },
+  { id: 'unstableTeleport', name: 'Unstable Teleport', cost: 2, desc: 'Loading description...', requires: 'apprentices', category: 'unitability' },
   // Guardsmen follow-ups — only offered to a player once they own Guardsmen.
   { id: 'kingsguard', name: 'Kingsguard', cost: 3, desc: 'Loading description...', requires: 'guardsmen' },
   // Archer follow-ups — only offered to a player once they own Archers.
   { id: 'quickdraw',   name: 'Quickdraw',    cost: 2, desc: 'Loading description...', requires: 'archers' },
   { id: 'swift',       name: 'Swift',        cost: 2, desc: 'Loading description...', requires: 'archers' },
   { id: 'nimble',      name: 'Nimble',       cost: 2, desc: 'Loading description...', requires: 'archers' },
-  { id: 'warmWelcome', name: 'Warm Welcome', cost: 2, desc: 'Loading description...', requires: 'archers', category: 'ability' },
+  { id: 'warmWelcome', name: 'Warm Welcome', cost: 2, desc: 'Loading description...', requires: 'archers', category: 'globalability' },
 ];
 
 const TOWER_SQUARES = { w: ['a1', 'h1'], b: ['a8', 'h8'] };
@@ -88,14 +88,20 @@ const ALL_TOWERS = ['a1', 'h1', 'a8', 'h8'];
 // Visual kind of an augment — drives its emblem frame color (see
 // tools/build-icons.js and the --kind-* colors in style.css) and how the
 // Augments page groups it.
-const AUGMENT_KIND_ORDER = ['pregame', 'wincondition', 'utility', 'unit', 'ability', 'upgrade'];
-const AUGMENT_KIND_NAMES = { pregame: 'Pre-game', wincondition: 'Win Condition', utility: 'Utility', unit: 'Unit Exchange', ability: 'Ability', upgrade: 'Upgrade' };
+const AUGMENT_KIND_ORDER = ['pregame', 'wincondition', 'utility', 'unit', 'unitability', 'globalability', 'upgrade'];
+const AUGMENT_KIND_NAMES = {
+  pregame: 'Pre-game', wincondition: 'Win Condition', utility: 'Utility', unit: 'Unit Exchange',
+  unitability: 'Unit Ability', globalability: 'Global Ability', upgrade: 'Upgrade',
+};
 
+// Unit abilities are cast from a selected unit's Q/W/E/R slots; global
+// abilities sit on the A/S/D/F row (or work passively) for the whole army.
 function augmentKind(aug) {
   if (aug.category === 'pregame') return 'pregame';
   if (aug.category === 'wincondition') return 'wincondition';
   if (aug.exchanges) return 'unit';
-  if (aug.category === 'ability') return 'ability';
+  if (aug.category === 'unitability') return 'unitability';
+  if (aug.category === 'globalability') return 'globalability';
   if (aug.requires) return 'upgrade';
   return 'utility';
 }

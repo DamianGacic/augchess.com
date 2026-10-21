@@ -12,6 +12,7 @@ const augmentColWin       = document.getElementById('augment-col-wincondition');
 const augmentColOther     = document.getElementById('augment-col-other');
 const augmentColExchange  = document.getElementById('augment-col-exchange');
 const augmentColAbility   = document.getElementById('augment-col-ability');
+const augmentColGlobal    = document.getElementById('augment-col-global');
 const augmentSlotsWhite   = document.getElementById('augment-slots-white');
 const augmentSlotsBlack   = document.getElementById('augment-slots-black');
 const augmentTurnText  = document.getElementById('augment-turn-text');
@@ -83,7 +84,8 @@ function augmentColumn(aug) {
   if (aug.category === 'pregame') return augmentColPregame;
   if (aug.category === 'wincondition') return augmentColWin;
   if (aug.exchanges) return augmentColExchange;
-  if (aug.category === 'ability') return augmentColAbility;
+  if (aug.category === 'unitability') return augmentColAbility;
+  if (aug.category === 'globalability') return augmentColGlobal;
   return augmentColOther;
 }
 
@@ -176,7 +178,7 @@ function renderDraft() {
   const canInteract = !netMode || myColor === ds.current;
   btnAugmentPass.disabled = !canInteract;
 
-  [augmentColPregame, augmentColWin, augmentColOther, augmentColExchange, augmentColAbility].forEach(col => {
+  [augmentColPregame, augmentColWin, augmentColOther, augmentColExchange, augmentColAbility, augmentColGlobal].forEach(col => {
     col.querySelectorAll('.augment-card').forEach(card => card.remove());
   });
 

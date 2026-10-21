@@ -60,7 +60,7 @@ const GLYPHS = {
   // Unit abilities granted by an exchange rather than drafted directly.
   clubbing: 'wood-club',
 };
-const EXTRA_ICONS = [{ id: 'clubbing', kind: 'ability' }];
+const EXTRA_ICONS = [{ id: 'clubbing', kind: 'unitability' }];
 
 // Figure id → glyph name (shared with the matching exchange augment).
 const FIGURE_GLYPHS = {
@@ -82,7 +82,8 @@ const PALETTES = {
   wincondition: { top: '#f472b6', bottom: '#5a1238' },
   utility:  { top: '#4cc2f0', bottom: '#0c3354' },
   unit:     { top: '#f4ad44', bottom: '#5e2a06' },
-  ability:  { top: '#b592ff', bottom: '#30176a' },
+  unitability:   { top: '#b592ff', bottom: '#30176a' },
+  globalability: { top: '#6d8bff', bottom: '#16205e' },
   upgrade:  { top: '#4fdba4', bottom: '#0a4234' },
   figure:   { top: '#a3aecb', bottom: '#232b42' },
   logo:     { top: '#f8d778', bottom: '#8d5a10' },

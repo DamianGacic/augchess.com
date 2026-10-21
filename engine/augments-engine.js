@@ -229,10 +229,11 @@
   // flipTurnFen approach as Advance/Silver Bullet, since no chess.js move()
   // is made here to do that flip for us. See castAbility dispatch in
   // engine/index.js for the afterTurnSettles() call this then needs.
-  function castKingsLightning(state, color) {
+  function castKingsLightning(state, color, kingSq) {
     if (state.gameOver) return 'Game is over';
     if (color !== state.game.turn()) return 'Not your turn';
     if (!has(state, color, 'kingsLightning')) return 'You do not have Lightning Aura';
+    if (!kingSq || kingSq !== kingSquare(state, color)) return 'Lightning Aura is cast from your King';
     if (state.lightningActive[color]) return 'Lightning Aura is already active';
 
     state.lightningActive[color] = true;
@@ -248,10 +249,11 @@
   // (chess-engine.js) then enforces the slower burn at the end of every turn
   // for the rest of the game. See castAbility dispatch in engine/index.js for
   // the afterTurnSettles() call this then needs.
-  function castRingOfFire(state, color) {
+  function castRingOfFire(state, color, kingSq) {
     if (state.gameOver) return 'Game is over';
     if (color !== state.game.turn()) return 'Not your turn';
     if (!has(state, color, 'ringOfFire')) return 'You do not have Ring of Fire';
+    if (!kingSq || kingSq !== kingSquare(state, color)) return 'Ring of Fire is cast from your King';
     if (state.fireActive[color]) return 'Ring of Fire is already active';
 
     state.fireActive[color] = true;
@@ -689,19 +691,27 @@
         !chessEngine.isVanguardFresh(state, piece.color, sq)) {
       list.push({ id: 'solarStrike', key: 'Q' });
     }
-    if (piece.type === 'k' && has(state, piece.color, 'silverBullet') && !state.silverBulletUsed[piece.color]) {
-      list.push({ id: 'silverBullet', key: 'Q' });
-    }
-    if (piece.type === 'k' && has(state, piece.color, 'raiseTheDead') &&
-        (state.ghoulGraveyard[piece.color] || 0) > 0 &&
-        state.turnNumber >= state.raiseTheDeadCooldownUntil[piece.color]) {
-      // Slot assignment elsewhere (abilities.js) is purely positional —
-      // whatever's at list[3] renders under, and answers to, the King's R
-      // slot — so pad past Silver Bullet's Q (if present) to land there,
-      // matching the user-facing "press R" requirement regardless of what
-      // else is in the list.
-      while (list.length < 3) list.push(null);
-      list.push({ id: 'raiseTheDead', key: 'R' });
+    if (piece.type === 'k') {
+      // The King's slots are fixed — Q Silver Bullet, W Lightning Aura,
+      // E Ring of Fire, R Raise the Dead — so each key always means the same
+      // thing. Slot assignment elsewhere (abilities.js) is purely positional,
+      // hence the null padding; trailing nulls are trimmed below. An aura
+      // that's already burning stays in its slot as a passive reminder.
+      const c = piece.color;
+      const king = [null, null, null, null];
+      if (has(state, c, 'silverBullet') && !state.silverBulletUsed[c]) king[0] = { id: 'silverBullet', key: 'Q' };
+      if (has(state, c, 'kingsLightning')) {
+        king[1] = state.lightningActive[c] ? { id: 'kingsLightning', key: 'W', passive: true } : { id: 'kingsLightning', key: 'W' };
+      }
+      if (has(state, c, 'ringOfFire')) {
+        king[2] = state.fireActive[c] ? { id: 'ringOfFire', key: 'E', passive: true } : { id: 'ringOfFire', key: 'E' };
+      }
+      if (has(state, c, 'raiseTheDead') && (state.ghoulGraveyard[c] || 0) > 0 &&
+          state.turnNumber >= state.raiseTheDeadCooldownUntil[c]) {
+        king[3] = { id: 'raiseTheDead', key: 'R' };
+      }
+      while (king.length && !king[king.length - 1]) king.pop();
+      list.push(...king);
     }
     if (piece.type === 'r' && has(state, piece.color, 'trolls')) {
       list.push({ id: 'clubbing', key: 'Q' });
@@ -723,12 +733,6 @@
     if (has(state, color, 'breakingRank')) list.push({ id: 'breakingRank', passive: true });
     if (has(state, color, 'coronation')) list.push({ id: 'coronation', passive: true });
     if (has(state, color, 'advance') && !state.advanceUsed[color]) list.push({ id: 'advance' });
-    if (has(state, color, 'kingsLightning')) {
-      list.push(state.lightningActive[color] ? { id: 'kingsLightning', passive: true } : { id: 'kingsLightning' });
-    }
-    if (has(state, color, 'ringOfFire')) {
-      list.push(state.fireActive[color] ? { id: 'ringOfFire', passive: true } : { id: 'ringOfFire' });
-    }
     if (has(state, color, 'relentlessAdvance')) {
       list.push(state.relentlessAdvanceActive[color] ? { id: 'relentlessAdvance', passive: true } : { id: 'relentlessAdvance' });
     }
@@ -771,8 +775,8 @@
     if (id === 'stunlock') return castStunlock(state, color, params.center);
     if (id === 'solarStrike') return castSolarStrike(state, color, params.unitSq, params.center);
     if (id === 'advance') return castAdvance(state, color);
-    if (id === 'kingsLightning') return castKingsLightning(state, color);
-    if (id === 'ringOfFire') return castRingOfFire(state, color);
+    if (id === 'kingsLightning') return castKingsLightning(state, color, params.unitSq);
+    if (id === 'ringOfFire') return castRingOfFire(state, color, params.unitSq);
     if (id === 'relentlessAdvance') return castRelentlessAdvance(state, color);
     if (id === 'silverBullet') return castSilverBullet(state, color, params.unitSq, params.center);
     if (id === 'clubbing') return castClubbing(state, color, params.unitSq, params.quadrant);
@@ -798,7 +802,8 @@
       const piece = pieceAt(state, sq);
       if (!piece || piece.color !== color) continue;
       for (const a of unitAbilitiesFor(state, sq)) {
-        if (!a) continue;
+        if (!a || a.passive) continue;
+        if (a.id === 'kingsLightning' || a.id === 'ringOfFire') actions.push({ id: a.id, unitSq: sq });
         if (a.id === 'silverBullet') getSilverBulletTargets(state, sq, color).forEach(t => actions.push({ id: a.id, unitSq: sq, center: t }));
         if (a.id === 'clubbing') getClubbingQuadrants(sq).forEach(q => actions.push({ id: a.id, unitSq: sq, quadrant: frToSq(q.f, q.r) }));
         if (a.id === 'unstableFireball') getFireballTargets(state, sq, color).forEach(t => actions.push({ id: a.id, unitSq: sq, center: t }));

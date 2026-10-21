@@ -288,8 +288,8 @@
       position: 'wKe4 wPd3 wPa2 bKh8 bNf5 bRd6 bPa7',
       steps: [
         {
-          cast: { id: 'kingsLightning' },
-          caption: 'Press Lightning Aura (A/S/D/F): lightning surrounds your King for the rest of the game.',
+          cast: { id: 'kingsLightning', unitSq: 'e4' },
+          caption: 'Select your King and press W (Lightning Aura): lightning surrounds him for the rest of the game.',
           after: 'Any unit standing next to your King when a turn ends is executed, friend or foe. The knight and your own pawn are both gone.',
           expect: { f5: null, d3: null },
         },
@@ -303,8 +303,8 @@
       position: 'wKe4 wPe3 wPa2 bKh8 bNf5 bNd5 bPa7',
       steps: [
         {
-          cast: { id: 'ringOfFire' },
-          caption: 'Press Ring of Fire (A/S/D/F): flames surround your King for the rest of the game.',
+          cast: { id: 'ringOfFire', unitSq: 'e4' },
+          caption: 'Select your King and press E (Ring of Fire): flames surround him for the rest of the game.',
           after: 'Units inside start to smoulder (🔥), friend or foe.',
           expect: s => s.fireAura.f5 && s.fireAura.f5.turns === 1,
         },
@@ -322,7 +322,7 @@
       position: 'wKe4 wPa2 bKh8 bNg6 bRc6 bPa7',
       steps: [
         {
-          cast: { id: 'ringOfFire' },
+          cast: { id: 'ringOfFire', unitSq: 'e4' },
           caption: 'With Inferno your Ring of Fire reaches two squares out: 24 squares instead of 8.',
           after: 'The rook and knight two squares away are now smouldering too.',
           expect: s => s.fireAura.g6 && s.fireAura.c6,
@@ -852,7 +852,9 @@
       } else if (step.arm) {
         action = { type: 'armAbility', key: step.arm.key, unitSq: step.arm.unit };
       } else if (step.cast) {
-        const ann = step.target ? { target: targetSquares(state, step.target), selected: step.target.unit } : {};
+        // A cast from a unit (e.g. the King's auras) shows that unit selected.
+        const ann = step.target ? { target: targetSquares(state, step.target), selected: step.target.unit }
+          : step.cast.unitSq ? { selected: step.cast.unitSq } : {};
         emit('pre', step.caption, actor, ann, ann.target
           ? { targetCycle: { cls: TARGET_CLASSES[ann.target.kind] + '-preview', sets: ann.target.cycle } }
           : null);
