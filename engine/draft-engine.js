@@ -26,7 +26,7 @@
   function createRoomState() {
     return {
       phase: 'settings', // 'settings' | 'draft' | 'playing' | 'gameover'
-      settings: { minutes: 3, points: 4, locked: false },
+      settings: { minutes: 3, points: 3, locked: false },
       draftState: null, // { points:{w,b}, current:'w'|'b', owned:{w:[],b:[]}, passed:{w,b} }
       augments: { w: [], b: [] },
     };
