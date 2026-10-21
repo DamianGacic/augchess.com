@@ -1,75 +1,60 @@
 /**
- * clock.js — Client-local chess clock. Purely cosmetic: each browser ticks
- * its own display down independently between server state updates, the same
- * way the plan's server-side clock enforcement was scoped out of this pass
- * (see the plan's "Explicitly deferred" section) — a flag-fall shown here is
- * a local-only guess, not authoritative, until the server tracks time itself.
- * Depends on: `state` (app.js), DOM refs (clockWhiteEl, clockBlackEl,
- * statusText, statusBox — app.js).
+ * clock.js — Chess clock display. The clock itself lives in room state
+ * (`state.clock`, see engine/clock-engine.js): the server enforces it for
+ * networked games and the engine's applyAction does for hotseat. This file
+ * only draws it, computing the running side's time from timestamps so a
+ * throttled background tab or a page reload never shows the wrong time.
+ * Depends on: `state`, `netMode`, `renderAll` (app.js), DOM refs
+ * (clockWhiteEl, clockBlackEl — app.js), clockRemaining/tickClock
+ * (engine/clock-engine.js).
  */
 
 // ─── Clock State ──────────────────────────────────────────────────────────────
-let timeWhite = 0;
-let timeBlack = 0;
-let clockInterval = null;
-let clockStarted = false;
+// Server time minus local time, from the last networked state message —
+// state.clock's timestamps are the server's. Always 0 in hotseat.
+let clockOffset = 0;
+let clockDisplayTimer = null;
+const LOW_TIME_MS = 30 * 1000;
 
 // ─── Clock Functions ──────────────────────────────────────────────────────────
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+function noteServerTime(serverNow) {
+  clockOffset = typeof serverNow === 'number' ? serverNow - Date.now() : 0;
+}
+
+function formatTime(ms) {
+  const total = Math.ceil(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function renderClocks() {
-  clockWhiteEl.textContent = formatTime(timeWhite);
-  clockBlackEl.textContent = formatTime(timeBlack);
+  const clock = state.phase === 'playing' ? state.clock : null;
+  const now = Date.now() + (netMode ? clockOffset : 0);
+
+  // Hotseat: this browser is the authority, so it calls the flag itself.
+  // (Networked: the server does, and its state message ends the game here.)
+  if (!netMode && clock && clock.running && !state.gameOver &&
+      clockRemaining(state, clock.running, now) <= 0 && tickClock(state, now)) {
+    renderAll();
+    return;
+  }
+
+  ['w', 'b'].forEach(color => {
+    const el = color === 'w' ? clockWhiteEl : clockBlackEl;
+    const ms = clock ? clockRemaining(state, color, now) : state.settings.minutes * 60 * 1000;
+    el.textContent = formatTime(ms);
+    el.classList.toggle('active', !!clock && clock.running === color && !state.gameOver);
+    el.classList.toggle('low-time', !!clock && ms <= LOW_TIME_MS && ms > 0);
+  });
 }
 
-function resetClockForNewGame() {
-  stopClock();
-  clockStarted = false;
-  timeWhite = state.settings.minutes * 60;
-  timeBlack = state.settings.minutes * 60;
+// Called on every render: redraw now, and keep redrawing only while some
+// side's time is actually running.
+function syncClock() {
   renderClocks();
-  clockWhiteEl.classList.remove('active', 'low-time');
-  clockBlackEl.classList.remove('active', 'low-time');
-}
-
-function startClock() {
-  stopClock();
-  clockInterval = setInterval(() => {
-    const turn = state.game.turn();
-    if (turn === 'w') timeWhite = Math.max(0, timeWhite - 1);
-    else timeBlack = Math.max(0, timeBlack - 1);
-
-    renderClocks();
-    updateClockStyles();
-
-    if (timeWhite === 0 || timeBlack === 0) {
-      stopClock();
-      const winner = timeWhite === 0 ? 'Black' : 'White';
-      // Local-only flag-fall guess (see file header) — not written to `state`,
-      // since only the server (networked) / engine.applyAction (hotseat) may
-      // ever mutate real game state.
-      statusText.textContent = `⏱ ${winner} wins on time!`;
-      statusBox.className = 'status-box checkmate';
-    }
-  }, 1000);
-}
-
-function stopClock() {
-  if (clockInterval) { clearInterval(clockInterval); clockInterval = null; }
-}
-
-function switchClock() { updateClockStyles(); }
-
-function updateClockStyles() {
-  if (!state.game) return;
-  const turn = state.game.turn();
-  const LOW_TIME = 30;
-  clockWhiteEl.classList.toggle('active', turn === 'w' && clockStarted && !state.gameOver);
-  clockBlackEl.classList.toggle('active', turn === 'b' && clockStarted && !state.gameOver);
-  clockWhiteEl.classList.toggle('low-time', timeWhite <= LOW_TIME && timeWhite > 0);
-  clockBlackEl.classList.toggle('low-time', timeBlack <= LOW_TIME && timeBlack > 0);
+  const clock = state.phase === 'playing' ? state.clock : null;
+  const running = !!(clock && clock.running && !state.gameOver);
+  if (running && !clockDisplayTimer) clockDisplayTimer = setInterval(renderClocks, 200);
+  if (!running && clockDisplayTimer) { clearInterval(clockDisplayTimer); clockDisplayTimer = null; }
 }

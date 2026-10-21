@@ -14,6 +14,9 @@
     generateMoves, generateExitMoves, needsManualCheck, kingThreatenedAfterPly } = chessEngine;
 
   function evaluateGameOver(state) {
+    // A game lost on time (clock-engine.js) is over for good — every branch
+    // below would otherwise reset gameOver from the board alone.
+    if (state.timeForfeit) return;
     const wK = state.mounted.w || findKingSquare(state, 'w');
     const bK = state.mounted.b || findKingSquare(state, 'b');
 

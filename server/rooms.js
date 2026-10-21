@@ -19,8 +19,14 @@ class GameRoom {
     this.spectators = new Set();
   }
 
+  // Every state message carries the server's time so clients can show the
+  // running clock against it rather than their own (possibly skewed) clock.
+  statePayload() {
+    return JSON.stringify({ type: 'state', state: engine.serializeState(this.state), now: Date.now() });
+  }
+
   broadcast() {
-    const payload = JSON.stringify({ type: 'state', state: engine.serializeState(this.state) });
+    const payload = this.statePayload();
     for (const color of ['w', 'b']) {
       const seat = this.seats[color];
       if (seat && seat.socket && seat.socket.readyState === seat.socket.OPEN) {
@@ -33,7 +39,7 @@ class GameRoom {
   }
 
   sendState(ws) {
-    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'state', state: engine.serializeState(this.state) }));
+    if (ws.readyState === ws.OPEN) ws.send(this.statePayload());
   }
 
   sendRejection(ws, reason) {
@@ -83,6 +89,7 @@ class GameRoom {
 
     // A bug in one room's action handling must never take the whole process
     // (and every other room's players) down with it.
+    const wasOver = this.state.gameOver;
     let error;
     try {
       error = engine.applyAction(this.state, meta.color, action);
@@ -91,11 +98,36 @@ class GameRoom {
       this.sendRejection(ws, 'Server error processing that action');
       return;
     }
-    if (error) this.sendRejection(ws, error);
-    else {
+    if (error) {
+      this.sendRejection(ws, error);
+      // A rejected action can still have changed what everyone sees: it
+      // arrived after the sender's flag fell, which ended the game.
+      if (this.state.gameOver !== wasOver) this.broadcast();
+    } else {
       this.broadcast();
       this.watchVanguard();
     }
+    this.watchClock();
+  }
+
+  // Ends the game on time the moment the running side's clock runs out,
+  // whether or not that player ever sends anything again (closed tab,
+  // dropped connection, just sitting there).
+  watchClock() {
+    clearTimeout(this.clockTimer);
+    this.clockTimer = null;
+    const clock = this.state.clock;
+    if (!clock || !clock.running || this.state.gameOver) return;
+    const left = engine.clockRemaining(this.state, clock.running, Date.now());
+    this.clockTimer = setTimeout(() => {
+      this.clockTimer = null;
+      try {
+        if (engine.tickClock(this.state, Date.now())) this.broadcast();
+        else this.watchClock(); // fired a hair early — wait out the rest
+      } catch (err) {
+        console.error(`[room ${this.id}] clock timeout failed`, err);
+      }
+    }, left + CLOCK_GRACE_MS);
   }
 
   // The Vanguard owner's client deploys when its 30s run out; this is the
@@ -111,6 +143,7 @@ class GameRoom {
       if (this.state.vanguard !== pending) return;
       try {
         if (!engine.applyAction(this.state, pending.color, { type: 'vanguardDeploy', placements: [] })) this.broadcast();
+        this.watchClock();
       } catch (err) {
         console.error(`[room ${this.id}] vanguard timeout failed`, err);
       }
@@ -121,6 +154,10 @@ class GameRoom {
 // Extra time the server waits past the Vanguard limit for the owner's own
 // (client-timed) deployment to arrive before resolving it itself.
 const VANGUARD_GRACE_MS = 5000;
+
+// setTimeout can fire a few ms before its deadline; this keeps the clock
+// watcher from waking just short of the flag and having to re-arm.
+const CLOCK_GRACE_MS = 20;
 
 class RoomStore {
   constructor() {

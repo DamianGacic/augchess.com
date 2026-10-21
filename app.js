@@ -84,8 +84,15 @@ function dispatch(action) {
     return;
   }
   pushUndoSnapshot();
+  const wasOver = state.gameOver;
   const err = applyAction(state, currentActor(), action);
-  if (err) { undoStack.pop(); console.warn('Action rejected:', err); return; }
+  if (err) {
+    undoStack.pop();
+    console.warn('Action rejected:', err);
+    // Rejected because the mover's flag had already fallen — show that.
+    if (state.gameOver !== wasOver) renderAll();
+    return;
+  }
   renderAll();
 }
 
@@ -98,7 +105,8 @@ function isMyTurn() {
 //  NETWORKING — wire NetClient callbacks to state replacement + rendering
 // ═══════════════════════════════════════════════════════════════════════════════
 let netStateUpdateCount = 0;
-NetClient.onState((incoming) => {
+NetClient.onState((incoming, serverNow) => {
+  noteServerTime(serverNow);
   state = incoming;
   if (state.game) {
     const liveGame = new Chess();
@@ -286,6 +294,9 @@ function undoMove() {
   delete snap.gameFen;
   state = snap;
   if (fen) { state.game = new Chess(); state.game.load(fen); }
+  // The snapshot's times are restored as they were; time spent since then
+  // isn't charged to anyone.
+  if (state.clock && state.clock.running) state.clock.since = Date.now();
   selectedSquare = null;
   legalMoves = [];
   stopStunlockTargeting();
@@ -297,12 +308,8 @@ function undoMove() {
 //  RENDER DISPATCH — derives modal/view visibility from state.phase, then
 //  renders whatever's relevant for the current phase.
 // ═══════════════════════════════════════════════════════════════════════════════
-let lastRenderedPhase = null;
-
 function renderAll() {
-  const enteringPlaying = state.phase === 'playing' && lastRenderedPhase !== 'playing';
-  lastRenderedPhase = state.phase;
-  if (enteringPlaying) resetClockForNewGame();
+  syncClock();
 
   if (state.phase === 'settings') {
     settingsModal.classList.remove('hidden');
@@ -329,17 +336,12 @@ function renderAll() {
   }
   if (selectedSquare) legalMoves = computeLegalMovesFor(selectedSquare);
   Vanguard.sync();
-  // The clock starts after both players' first turns (not counting events
-  // like a Vanguard deployment, which happens on free time).
-  if (!clockStarted && state.moveLog.filter(e => e.kind !== 'event').length >= 2) { clockStarted = true; startClock(); }
-  switchClock();
 
   renderBoard();
   renderMoveList();
   updateStatus();
   updateCaptured();
   renderActiveAugments();
-  if (state.gameOver) stopClock();
 }
 
 function computeLegalMovesFor(sq) {
