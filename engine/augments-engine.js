@@ -725,6 +725,16 @@
     return list;
   }
 
+  // Unit abilities this unit can cast right now, for the board's "ready"
+  // markers. Clubbing and Unstable Fireball never run out, so marking them
+  // would just badge every Troll/Apprentice for the whole game.
+  const ALWAYS_READY_ABILITIES = ['clubbing', 'unstableFireball'];
+  function readyAbilityMarkers(state, sq) {
+    return unitAbilitiesFor(state, sq)
+      .filter(a => a && !a.passive && !ALWAYS_READY_ABILITIES.includes(a.id))
+      .map(a => a.id);
+  }
+
   // Global (non-unit) abilities standing for `color` right now: Breaking
   // Rank is a passive reminder (never armed/cast), Advance casts directly
   // (like Solar Strike) as long as it hasn't been used yet this game.
@@ -867,7 +877,7 @@
     getTeleportTargets, castUnstableTeleport,
     getRaiseTheDeadTargets, castRaiseTheDead, endRaiseTheDead, deployVanguard,
     TURN_CONSUMING_ABILITIES, turnEndingAbilityActions, abilityKingSafetyError,
-    unitAbilitiesFor, globalAbilitiesFor, armAbility, castAbility, cancelAbility,
+    unitAbilitiesFor, readyAbilityMarkers, globalAbilitiesFor, armAbility, castAbility, cancelAbility,
   };
 
   if (isNode) module.exports = exportsObj;

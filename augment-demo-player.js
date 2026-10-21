@@ -70,17 +70,7 @@ function buildDemoPiece(p) {
   el.className = `piece ${colorCls}` + (p.fig ? ` figure-${p.fig}` : '');
   if (!p.fig) el.textContent = PIECES[p.color + p.type.toUpperCase()];
   if (p.fig === 'ghoul') el.style.backgroundImage = `url("figures/images/ghoul${p.skin || 0}.png")`;
-  if (p.badges.includes('stun')) {
-    const b = document.createElement('div');
-    b.className = 'stunlock-charge-badge';
-    b.textContent = '⚡';
-    el.appendChild(b);
-  }
-  if (p.badges.includes('teleport')) {
-    const b = document.createElement('div');
-    b.className = 'teleport-ready-badge';
-    el.appendChild(b);
-  }
+  if (p.ready && p.ready.length) el.appendChild(abilityReadyBadges(p.ready));
   if (p.badges.includes('cooldown')) el.classList.add('reloading');
   return el;
 }

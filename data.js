@@ -66,7 +66,7 @@ const AUGMENTS = [
   { id: 'kingsLightning', name: 'Lightning Aura', cost: 5, desc: 'Loading description...', category: 'unitability' },
   { id: 'ringOfFire', name: 'Ring of Fire', cost: 3, desc: 'Loading description...', category: 'unitability' },
   { id: 'relentlessAdvance', name: 'Relentless Advance', cost: 3, desc: 'Loading description...', category: 'globalability' },
-  { id: 'coronation', name: 'Coronation', cost: 4, desc: 'Loading description...', category: 'wincondition' },
+  { id: 'coronation', name: 'Coronation', cost: 3, desc: 'Loading description...', category: 'wincondition' },
   // Ring of Fire follow-up — only offered to a player once they own Ring of Fire.
   { id: 'inferno', name: 'Inferno', cost: 5, desc: 'Loading description...', requires: 'ringOfFire' },
   // Apprentice follow-ups — only offered to a player once they own Apprentices.

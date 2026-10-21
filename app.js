@@ -732,26 +732,14 @@ function renderBoard() {
         if (piece.color !== state.game.turn() || state.gameOver || !isMyTurn()) pieceEl.style.cursor = 'default';
         attachPieceHandlers(pieceEl, sq);
 
-        if (piece.type === 'b' && has(state, piece.color, 'stunlock') && state.stunlockCharges[piece.color][sq]) {
-          const charge = document.createElement('div');
-          charge.className = 'stunlock-charge-badge';
-          charge.textContent = '⚡';
-          charge.title = 'Stunlock ready (select this bishop, then Q)';
-          pieceEl.appendChild(charge);
-        }
+        // One small emblem per unit ability this unit can cast right now.
+        const readyAbilities = readyAbilityMarkers(state, sq);
+        if (readyAbilities.length) pieceEl.appendChild(abilityReadyBadges(readyAbilities));
 
         // White's freshly deployed Vanguard units sit out White's first turn.
         if (state.vanguardLocked && state.vanguardLocked.includes(sq)) {
           pieceEl.classList.add('vanguard-locked');
           pieceEl.title = 'Vanguard unit: can act from White\'s second turn';
-        }
-
-        if (piece.type === 'p' && figurePawnType(state, piece.color) === 'apprentice' &&
-            has(state, piece.color, 'unstableTeleport') && !state.apprenticeTeleportUsed[piece.color][sq]) {
-          const teleportBadge = document.createElement('div');
-          teleportBadge.className = 'teleport-ready-badge';
-          teleportBadge.title = 'Unstable Teleport ready (select this Apprentice, then its ability slot)';
-          pieceEl.appendChild(teleportBadge);
         }
 
         // An Archer that just shot is drawn with an empty quiver until it
@@ -772,6 +760,23 @@ function renderBoard() {
   Vanguard.decorate();
   BoardAnim.afterRender();
   renderAbilityBar();
+}
+
+// Stack of ability emblems in a piece's top-right corner, marking each unit
+// ability it can still cast (see readyAbilityMarkers). Purely informational.
+// Also used by the augment demo player.
+function abilityReadyBadges(ids) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ability-ready-badges';
+  for (const id of ids) {
+    const icon = document.createElement('img');
+    icon.className = 'ability-ready-badge';
+    icon.src = augmentIconUrl(id);
+    icon.alt = '';
+    icon.draggable = false;
+    wrap.appendChild(icon);
+  }
+  return wrap;
 }
 
 function attachPieceHandlers(pieceEl, sq) {

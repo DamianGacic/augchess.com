@@ -743,38 +743,25 @@ main {
 .tower-pawn-badge.dragging,
 .mount-king-badge.dragging { opacity: 0.4; }
 
-/* Small badge marking a bishop that still has its Stunlock charge available —
-   purely informational (not a grab target, unlike the badges above). */
-.stunlock-charge-badge {
+/* Small emblems in a unit's top-right corner, one per unit ability it can
+   cast right now (a King can stack several) — purely informational, not a
+   grab target, unlike the badges above. */
+.ability-ready-badges {
   position: absolute;
   top: -6%;
   right: -6%;
-  width: 34%;
-  height: 34%;
+  width: 30%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(var(--board-size) / 8 * 0.3);
-  line-height: 1;
-  color: #8e24aa;
-  text-shadow: 0 0 2px rgba(255, 255, 255, 0.9), 0 0 2px rgba(255, 255, 255, 0.9);
+  flex-direction: column;
+  gap: 2%;
   pointer-events: none;
   z-index: 5;
 }
-
-/* Small dot marking an Apprentice that still has Unstable Teleport available —
-   purely informational, same corner as the Stunlock charge badge above. */
-.teleport-ready-badge {
-  position: absolute;
-  top: -4%;
-  right: -4%;
-  width: 20%;
-  height: 20%;
-  border-radius: 50%;
-  background: #2979ff;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 4px rgba(41, 121, 255, 0.8);
-  pointer-events: none;
-  z-index: 5;
+.ability-ready-badge {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9));
 }
 
 /* An Archer that just shot and can't shoot again this turn (it can still

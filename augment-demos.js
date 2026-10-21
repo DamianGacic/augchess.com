@@ -590,9 +590,7 @@
         badges: [],
       };
       if (fig === 'ghoul') p.skin = state.ghoulSkin[color][sq] || 0;
-      if (type === 'b' && E.has(state, color, 'stunlock') && state.stunlockCharges[color][sq]) p.badges.push('stun');
-      if (type === 'p' && E.figurePawnType(state, color) === 'apprentice' &&
-          E.has(state, color, 'unstableTeleport') && !state.apprenticeTeleportUsed[color][sq]) p.badges.push('teleport');
+      if (!mounted) p.ready = E.readyAbilityMarkers(state, sq);
       if (type === 'p' && E.figurePawnType(state, color) === 'archer' && E.isArcherOnCooldown(state, color, sq)) p.badges.push('cooldown');
       if (state.vanguardLocked && state.vanguardLocked.includes(sq)) p.badges.push('vanguard');
       pieces.push(p);
