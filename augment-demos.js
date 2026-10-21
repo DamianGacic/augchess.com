@@ -431,6 +431,26 @@
       ],
     },
 
+    accuracy: {
+      augments: { w: ['longbowmen', 'accuracy'] },
+      position: 'wKg1 wBd4 bKg8 bNe6 bBf3 bPe5 bPa7',
+      steps: [
+        { move: 'd4-e6', caption: 'With Accuracy, longbowmen also shoot like a knight jumps, on top of their usual straight and diagonal shots…', expect: { e6: null, d4: 'wB' } },
+        { move: 'a7-a6', quick: true },
+        { move: 'd4-f3', caption: '…so every square exactly two away is in range. The neighbouring squares never are.', expect: { f3: null, e5: 'bP' } },
+      ],
+    },
+
+    longshot: {
+      augments: { w: ['longbowmen', 'longshot'] },
+      position: 'wKg1 wBd4 bKg8 bRd7 bBg7 bPe5 bPa7',
+      steps: [
+        { move: 'd4-g7', caption: 'With Longshot, longbowmen also strike three squares away in a straight or diagonal line…', expect: { g7: null, d4: 'wB' } },
+        { move: 'a7-a6', quick: true },
+        { move: 'd4-d7', caption: '…on top of their usual two-square shots, still without ever leaving their square.', expect: { d7: null } },
+      ],
+    },
+
     warmWelcome: {
       augments: { w: ['archers', 'warmWelcome'] },
       position: 'wKg1 wPd4 bKe8 bNb8 bPa7',
@@ -689,14 +709,14 @@
     const ann = { selected: sq, legal };
     const tower = state.mannedTowers[sq];
     if (tower) {
-      if (state.mannedTowerOrigin[sq] === 'b') ann.shootRange = E.longbowShootRangeSquares(sq);
+      if (state.mannedTowerOrigin[sq] === 'b') ann.shootRange = E.longbowShootRangeSquares(sq, state, tower);
       else if (E.figurePawnType(state, tower) === 'archer') ann.shootRange = E.archerShootRangeSquares(sq, tower);
     } else if (piece && piece.type === 'p') {
       const fig = E.figurePawnType(state, piece.color);
       if (fig === 'archer') ann.shootRange = E.archerShootRangeSquares(sq, piece.color);
       else if (fig === 'ghoul') ann.clawRange = E.ghoulChargeSquares(state, sq, piece.color);
     } else if (piece && piece.type === 'b' && E.figureBishopType(state, piece.color) === 'longbowman') {
-      ann.shootRange = E.longbowShootRangeSquares(sq);
+      ann.shootRange = E.longbowShootRangeSquares(sq, state, piece.color);
     }
     return ann;
   }

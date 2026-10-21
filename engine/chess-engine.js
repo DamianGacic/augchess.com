@@ -612,18 +612,32 @@
   // A Longbowman steps to any free adjacent square like a king, but never
   // captures by moving there. Instead it strikes any unit exactly two
   // squares away in a straight or diagonal line, without leaving its square
-  // — same split as the Archer's step/shoot pattern.
-  function longbowShootRangeSquares(sq) {
+  // — same split as the Archer's step/shoot pattern. Upgrades widen the
+  // range for that color: Accuracy adds the knight-jump squares (so every
+  // square exactly two away), Longshot adds the squares three away in a
+  // straight or diagonal line. Adjacent squares are never in range.
+  function longbowShootRangeSquares(sq, state, color) {
     const { f, r } = sqToFR(sq);
+    const accuracy = !!state && has(state, color, 'accuracy');
+    const longshot = !!state && has(state, color, 'longshot');
     const res = [];
-    for (let df = -1; df <= 1; df++) {
-      for (let dr = -1; dr <= 1; dr++) {
-        if (df === 0 && dr === 0) continue;
-        const target = frToSq(f + 2 * df, r + 2 * dr);
+    for (let df = -3; df <= 3; df++) {
+      for (let dr = -3; dr <= 3; dr++) {
+        if (!longbowShootsOffset(df, dr, accuracy, longshot)) continue;
+        const target = frToSq(f + df, r + dr);
         if (target) res.push(target);
       }
     }
     return res;
+  }
+
+  function longbowShootsOffset(df, dr, accuracy, longshot) {
+    const adf = Math.abs(df), adr = Math.abs(dr);
+    const dist = Math.max(adf, adr);
+    const line = adf === 0 || adr === 0 || adf === adr;
+    if (dist === 2) return line || accuracy;
+    if (dist === 3) return line && longshot;
+    return false;
   }
 
   function generateLongbowmanMoves(state, sq, color) {
@@ -638,7 +652,7 @@
         }
       }
     }
-    for (const target of longbowShootRangeSquares(sq)) {
+    for (const target of longbowShootRangeSquares(sq, state, color)) {
       const tp = pieceAt(state, target);
       if (tp && tp.color !== color) {
         res.push({ from: sq, to: target, special: 'longbowmanShoot', captured: tp.type });
@@ -1023,7 +1037,7 @@
   function generateTowerShootMoves(state, sq, color) {
     const res = [];
     if (state.mannedTowerOrigin[sq] === 'b') {
-      for (const target of longbowShootRangeSquares(sq)) {
+      for (const target of longbowShootRangeSquares(sq, state, color)) {
         const tp = pieceAt(state, target);
         if (tp && tp.color !== color) res.push({ from: sq, to: target, special: 'longbowmanShoot', captured: tp.type });
       }
@@ -1284,7 +1298,7 @@
       case 'k': return adf <= 1 && adr <= 1 && (adf + adr > 0);
       case 'b': {
         if (figureBishopType(state, color) === 'longbowman') {
-          return (adf === 2 && adr === 0) || (adf === 0 && adr === 2) || (adf === 2 && adr === 2);
+          return longbowShootsOffset(df, dr, has(state, color, 'accuracy'), has(state, color, 'longshot'));
         }
         return adf === adr && adf > 0 && clearPath(state, pf, pr, tf, tr);
       }

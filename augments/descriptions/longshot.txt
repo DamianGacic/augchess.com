@@ -1,0 +1,1 @@
+Requires Longbowmen. Your Longbowmen can now also strike any unit exactly three squares away in a straight or diagonal line — rank, file, or diagonal — on top of their usual two-square shots, still without leaving their square.

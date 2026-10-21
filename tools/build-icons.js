@@ -57,6 +57,8 @@ const GLYPHS = {
   swift: 'sprint',
   nimble: 'acrobatic',
   warmWelcome: 'arrowed',
+  accuracy: 'bullseye',
+  longshot: 'supersonic-arrow',
   // Unit abilities granted by an exchange rather than drafted directly.
   clubbing: 'wood-club',
 };

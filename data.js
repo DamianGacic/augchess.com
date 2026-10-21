@@ -79,6 +79,9 @@ const AUGMENTS = [
   { id: 'swift',       name: 'Swift',        cost: 2, desc: 'Loading description...', requires: 'archers' },
   { id: 'nimble',      name: 'Nimble',       cost: 2, desc: 'Loading description...', requires: 'archers' },
   { id: 'warmWelcome', name: 'Warm Welcome', cost: 2, desc: 'Loading description...', requires: 'archers', category: 'globalability' },
+  // Longbowmen follow-ups — only offered to a player once they own Longbowmen.
+  { id: 'accuracy',    name: 'Accuracy',     cost: 3, desc: 'Loading description...', requires: 'longbowmen' },
+  { id: 'longshot',    name: 'Longshot',     cost: 3, desc: 'Loading description...', requires: 'longbowmen' },
 ];
 
 const TOWER_SQUARES = { w: ['a1', 'h1'], b: ['a8', 'h8'] };

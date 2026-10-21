@@ -10,7 +10,7 @@
   const chessEngine = isNode ? require('./chess-engine.js') : root;
   const { pieceAt, frToSq, sqToFR, findKingSquare, isKingAttacked, isCheckDoomedByFire, has,
     figurePawnType, anyFigurePawnsInPlay, figureRookType, anyFigureRooksInPlay,
-    figureBishopType, anyFigureBishopsInPlay, squareAttackedBy,
+    figureBishopType, anyFigureBishopsInPlay, squareAttackedBy, longbowShootRangeSquares,
     generateMoves, generateExitMoves, needsManualCheck, kingThreatenedAfterPly } = chessEngine;
 
   function evaluateGameOver(state) {
@@ -269,10 +269,9 @@
             const tf = f + df, tr = r + dr2;
             if (onBoard(tf, tr) && !occ(tf, tr)) moves.push({ to: frToSq(tf, tr), kind: 'plain' });
           }
-          for (let df = -1; df <= 1; df++) for (let dr2 = -1; dr2 <= 1; dr2++) {
-            if (!df && !dr2) continue;
-            const tf = f + 2 * df, tr = r + 2 * dr2;
-            if (onBoard(tf, tr) && occByEnemy(tf, tr)) moves.push({ to: frToSq(tf, tr), kind: 'shoot' });
+          for (const target of longbowShootRangeSquares(frToSq(f, r), state, color)) {
+            const { f: tf, r: tr } = sqToFR(target);
+            if (occByEnemy(tf, tr)) moves.push({ to: target, kind: 'shoot' });
           }
           break;
         }

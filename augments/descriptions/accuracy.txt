@@ -1,0 +1,1 @@
+Requires Longbowmen. Your Longbowmen can now also shoot like a Knight jumps — on top of their usual straight and diagonal shots, they strike any unit a Knight's move away. Together that covers every square exactly two away. They still can never shoot an adjacent square.

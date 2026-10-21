@@ -487,7 +487,7 @@ function renderBoard() {
       // garrison — its shoot range (if any) comes from what walked in, same
       // as generateTowerShootMoves.
       if (state.mannedTowerOrigin[selectedSquare] === 'b') {
-        longbowShootRange = longbowShootRangeSquares(selectedSquare);
+        longbowShootRange = longbowShootRangeSquares(selectedSquare, state, mannedColor);
       } else if (figurePawnType(state, mannedColor) === 'archer') {
         archerShootRange = archerShootRangeSquares(selectedSquare, mannedColor);
       }
@@ -496,7 +496,7 @@ function renderBoard() {
       if (selFigure === 'archer') archerShootRange = archerShootRangeSquares(selectedSquare, selPiece.color);
       else if (selFigure === 'ghoul') ghoulChargeRange = ghoulChargeSquares(state, selectedSquare, selPiece.color);
     } else if (selPiece && selPiece.type === 'b' && figureBishopType(state, selPiece.color) === 'longbowman') {
-      longbowShootRange = longbowShootRangeSquares(selectedSquare);
+      longbowShootRange = longbowShootRangeSquares(selectedSquare, state, selPiece.color);
     }
   }
 
