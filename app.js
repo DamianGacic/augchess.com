@@ -737,16 +737,7 @@ function renderBoard() {
         badge.className = 'tower-pawn-badge ' + (color === 'w' ? 'white' : 'black');
         badge.textContent = PIECES[color + (isBishopGarrison ? 'B' : 'P')];
         badge.title = isBishopGarrison ? 'Drag the Longbowman out of the tower' : 'Drag the pawn out of the tower';
-        badge.addEventListener('mousedown', (ev) => {
-          ev.stopPropagation(); ev.preventDefault();
-          beginBadgeDrag(sq, color, ev.clientX, ev.clientY, false);
-        });
-        badge.addEventListener('touchstart', (ev) => {
-          ev.stopPropagation(); ev.preventDefault();
-          const t = ev.touches[0];
-          beginBadgeDrag(sq, color, t.clientX, t.clientY, true);
-        }, { passive: false });
-        badge.addEventListener('click', (ev) => ev.stopPropagation());
+        attachBadgeHandlers(badge, sq, color);
         pieceEl.appendChild(badge);
 
         sqEl.appendChild(pieceEl);
@@ -765,16 +756,7 @@ function renderBoard() {
         if (hasWarlord(state, color)) kbadge.classList.add('figure-warlord');
         else kbadge.textContent = PIECES[color + 'K'];
         kbadge.title = 'Drag the king off the knight to dismount';
-        kbadge.addEventListener('mousedown', (ev) => {
-          ev.stopPropagation(); ev.preventDefault();
-          beginBadgeDrag(sq, color, ev.clientX, ev.clientY, false);
-        });
-        kbadge.addEventListener('touchstart', (ev) => {
-          ev.stopPropagation(); ev.preventDefault();
-          const t = ev.touches[0];
-          beginBadgeDrag(sq, color, t.clientX, t.clientY, true);
-        }, { passive: false });
-        kbadge.addEventListener('click', (ev) => ev.stopPropagation());
+        attachBadgeHandlers(kbadge, sq, color);
         pieceEl.appendChild(kbadge);
         if (isWarlordWounded(state, color)) pieceEl.appendChild(warlordHealthBar());
 
@@ -852,6 +834,27 @@ function attachPieceHandlers(pieceEl, sq) {
   pieceEl.addEventListener('dblclick', onPieceDblClick);
 }
 
+// The occupant badge of a manned tower or a mounted King: grabbing it drags
+// the occupant out (beginBadgeDrag). Only the player to move can do that —
+// for anyone else the press and click fall through to the piece and its
+// square, so an enemy tower or mounted King can still be captured by
+// clicking anywhere on it, badge included.
+function attachBadgeHandlers(badge, sq, color) {
+  const grabbable = () => !state.gameOver && color === state.game.turn() && isMyTurn();
+  badge.addEventListener('mousedown', (ev) => {
+    if (ev.button !== 0 || !grabbable()) return;
+    ev.stopPropagation(); ev.preventDefault();
+    beginBadgeDrag(sq, color, ev.clientX, ev.clientY, false);
+  });
+  badge.addEventListener('touchstart', (ev) => {
+    if (!grabbable()) return;
+    ev.stopPropagation(); ev.preventDefault();
+    const t = ev.touches[0];
+    beginBadgeDrag(sq, color, t.clientX, t.clientY, true);
+  }, { passive: false });
+  badge.addEventListener('click', (ev) => { if (grabbable()) ev.stopPropagation(); });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  DOUBLE-CLICK (tower leave / dismount activation)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -883,7 +886,9 @@ function onPieceDblClick(e) {
 function onSquareClick(e) {
   if (Vanguard.onSquareClick(e.currentTarget.dataset.square)) return;
   if (state.gameOver) return;
-  if (dragState) return;
+  // A real drag always ends (mouseup/touchend) before its click arrives, so
+  // one still open here never got its release — don't let it eat the click.
+  if (dragState) cancelStaleDrag();
   if (!isMyTurn()) return;
 
   const sq = e.currentTarget.dataset.square;
@@ -1072,7 +1077,18 @@ function pingLockedGhoul(sq) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  DRAG-TO-MOVE
 // ═══════════════════════════════════════════════════════════════════════════════
+// Whether `sq` is somewhere the selected unit can move to. Pressing such a
+// square is the second half of a click-to-move, not the start of a new
+// selection or drag — this is what lets a click reach a target that holds one
+// of your own units (mounting a knight, entering a watchtower).
+function isSelectedUnitTarget(sq) {
+  return !!selectedSquare && selectedSquare !== sq && legalMoves.some(m => m.to === sq);
+}
+
 function onPieceMouseDown(e) {
+  // Only the main button drags — a right-click's context menu swallows the
+  // release, which would leave a drag hanging (see cancelStaleDrag).
+  if (e.button !== 0) return;
   if (Vanguard.onPiecePress(e.currentTarget.dataset.square)) { e.preventDefault(); return; }
   if (state.gameOver) return;
   if (state.pendingStunlock || state.pendingShield) return;
@@ -1081,7 +1097,7 @@ function onPieceMouseDown(e) {
   const turn = state.game.turn();
   const piece = pieceAt(state, sq);
   const isOwn = (piece && piece.color === turn) || (state.mannedTowers[sq] === turn) || (state.mounted[turn] === sq);
-  if (!isOwn) return;
+  if (!isOwn || isSelectedUnitTarget(sq)) return; // a target press is a click-to-move
   if (isGhoulLocked(sq)) { pingLockedGhoul(sq); return; }
 
   e.preventDefault();
@@ -1099,7 +1115,7 @@ function onPieceTouchStart(e) {
   const turn = state.game.turn();
   const piece = pieceAt(state, sq);
   const isOwn = (piece && piece.color === turn) || (state.mannedTowers[sq] === turn) || (state.mounted[turn] === sq);
-  if (!isOwn) return;
+  if (!isOwn || isSelectedUnitTarget(sq)) return; // a target press is a click-to-move
   if (isGhoulLocked(sq)) { pingLockedGhoul(sq); return; }
   e.preventDefault();
   const touch = e.touches[0];
@@ -1193,6 +1209,21 @@ function onTouchEnd(e) {
   document.removeEventListener('touchend', onTouchEnd);
   endDrag(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
 }
+
+// Drops a drag whose release never arrived (the window lost focus mid-press,
+// a context menu took the mouseup, …). Left open it would block every later
+// click, since onSquareClick ignores clicks while a drag is in progress.
+function cancelStaleDrag() {
+  document.removeEventListener('mousemove', onMouseMove);
+  document.removeEventListener('mouseup', onMouseUp);
+  document.removeEventListener('touchmove', onTouchMove);
+  document.removeEventListener('touchend', onTouchEnd);
+  dragGhost.style.display = 'none';
+  if (!dragState) return;
+  dragState = null;
+  boardEl.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+}
+window.addEventListener('blur', cancelStaleDrag);
 
 function endDrag(x, y) {
   dragGhost.style.display = 'none';
