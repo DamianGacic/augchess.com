@@ -79,6 +79,7 @@ const FIGURE_GLYPHS = {
 // Frame palette per kind: gradient top → bottom. Mirrors --kind-* in style.css.
 const PALETTES = {
   pregame:  { top: '#ff7b72', bottom: '#5c1418' },
+  wincondition: { top: '#f472b6', bottom: '#5a1238' },
   utility:  { top: '#4cc2f0', bottom: '#0c3354' },
   unit:     { top: '#f4ad44', bottom: '#5e2a06' },
   ability:  { top: '#b592ff', bottom: '#30176a' },

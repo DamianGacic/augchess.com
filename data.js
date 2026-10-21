@@ -66,7 +66,7 @@ const AUGMENTS = [
   { id: 'kingsLightning', name: 'Lightning Aura', cost: 5, desc: 'Loading description...', category: 'ability' },
   { id: 'ringOfFire', name: 'Ring of Fire', cost: 3, desc: 'Loading description...', category: 'ability' },
   { id: 'relentlessAdvance', name: 'Relentless Advance', cost: 3, desc: 'Loading description...', category: 'ability' },
-  { id: 'coronation', name: 'Coronation', cost: 4, desc: 'Loading description...', category: 'ability' },
+  { id: 'coronation', name: 'Coronation', cost: 4, desc: 'Loading description...', category: 'wincondition' },
   // Ring of Fire follow-up — only offered to a player once they own Ring of Fire.
   { id: 'inferno', name: 'Inferno', cost: 5, desc: 'Loading description...', requires: 'ringOfFire' },
   // Apprentice follow-ups — only offered to a player once they own Apprentices.
@@ -88,11 +88,12 @@ const ALL_TOWERS = ['a1', 'h1', 'a8', 'h8'];
 // Visual kind of an augment — drives its emblem frame color (see
 // tools/build-icons.js and the --kind-* colors in style.css) and how the
 // Augments page groups it.
-const AUGMENT_KIND_ORDER = ['pregame', 'utility', 'unit', 'ability', 'upgrade'];
-const AUGMENT_KIND_NAMES = { pregame: 'Pre-game', utility: 'Utility', unit: 'Unit Exchange', ability: 'Ability', upgrade: 'Upgrade' };
+const AUGMENT_KIND_ORDER = ['pregame', 'wincondition', 'utility', 'unit', 'ability', 'upgrade'];
+const AUGMENT_KIND_NAMES = { pregame: 'Pre-game', wincondition: 'Win Condition', utility: 'Utility', unit: 'Unit Exchange', ability: 'Ability', upgrade: 'Upgrade' };
 
 function augmentKind(aug) {
   if (aug.category === 'pregame') return 'pregame';
+  if (aug.category === 'wincondition') return 'wincondition';
   if (aug.exchanges) return 'unit';
   if (aug.category === 'ability') return 'ability';
   if (aug.requires) return 'upgrade';
