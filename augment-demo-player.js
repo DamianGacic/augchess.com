@@ -64,7 +64,8 @@ function buildDemoPiece(p, { isFlipped = false } = {}) {
     el.textContent = PIECES[p.color + 'N'];
     const badge = document.createElement('div');
     badge.className = `mount-king-badge ${colorCls}`;
-    badge.textContent = PIECES[p.color + 'K'];
+    if (p.rider === 'warlord') badge.classList.add('figure-warlord');
+    else badge.textContent = PIECES[p.color + 'K'];
     el.appendChild(badge);
     if (p.badges.includes('wounded')) el.appendChild(warlordHealthBar());
     return el;

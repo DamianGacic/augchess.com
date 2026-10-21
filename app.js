@@ -761,7 +761,9 @@ function renderBoard() {
 
         const kbadge = document.createElement('div');
         kbadge.className = 'mount-king-badge ' + (color === 'w' ? 'white' : 'black');
-        kbadge.textContent = PIECES[color + 'K'];
+        // A Warlord rides as his helmet, not the King glyph.
+        if (hasWarlord(state, color)) kbadge.classList.add('figure-warlord');
+        else kbadge.textContent = PIECES[color + 'K'];
         kbadge.title = 'Drag the king off the knight to dismount';
         kbadge.addEventListener('mousedown', (ev) => {
           ev.stopPropagation(); ev.preventDefault();
@@ -1150,7 +1152,8 @@ function startDrag(sq, x, y, dragInfo) {
     dragGhost.classList.add('has-occupant');
     const ghostBadge = document.createElement('span');
     ghostBadge.className = 'ghost-badge ' + (color === 'w' ? 'white' : 'black');
-    ghostBadge.textContent = PIECES[badgeKey];
+    if (badgeKey[1] === 'K' && hasWarlord(state, color)) ghostBadge.classList.add('figure-warlord');
+    else ghostBadge.textContent = PIECES[badgeKey];
     dragGhost.appendChild(ghostBadge);
   }
   dragGhost.style.display = 'block';

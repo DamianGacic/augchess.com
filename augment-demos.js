@@ -621,6 +621,7 @@
         badges: [],
       };
       if (fig === 'ghoul') p.skin = state.ghoulSkin[color][sq] || 0;
+      if (mounted && E.hasWarlord(state, color)) p.rider = 'warlord';
       if (!mounted) p.ready = E.readyAbilityMarkers(state, sq);
       if (type === 'p' && E.figurePawnType(state, color) === 'archer' && E.isArcherOnCooldown(state, color, sq)) p.badges.push('cooldown');
       if (state.vanguardLocked && state.vanguardLocked.includes(sq)) p.badges.push('vanguard');

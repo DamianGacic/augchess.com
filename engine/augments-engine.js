@@ -17,7 +17,7 @@
   const chessEngine = isNode ? require('./chess-engine.js') : root;
   const { sqToFR, frToSq, pieceAt, has, isEmpty, isPromoRank, flipTurnFen, clearMountedIfCaptured, figurePawnType, kingAuraSquares, findKingSquare,
     unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry, shieldBlocks, SHIELD_DIRS, shieldDirLabel,
-    warlordSurvives, killWarlordStriker, hitList } = chessEngine;
+    warlordSurvives, warlordSurvivalText, killWarlordStriker, hitList } = chessEngine;
 
   // "e1 King" — the acting unit on its own square, as the history names it
   // (see the history scheme in chess-engine.js).
@@ -212,6 +212,7 @@
     const victim = unitAt(state, targetSq, color);
     // Fired into a shield's face, the bullet bounces off (and is still spent).
     const deflected = shieldBlocks(state, kingSq, targetSq);
+    const survival = warlordSurvivalText(state, targetSq);
     const survived = !deflected && warlordSurvives(state, targetSq);
     if (!deflected && !survived) {
       if (state.mannedTowers[targetSq]) delete state.mannedTowers[targetSq];
@@ -224,7 +225,7 @@
     logEntry(state, color, '🎯' + kingSq + targetSq, deflected
       ? `${actor(state, color, kingSq, 'k')} fired a Silver Bullet at ${victim}, but its shield deflected it.`
       : survived
-      ? `${actor(state, color, kingSq, 'k')} shot ${victim} (Silver Bullet), who survived wounded.`
+      ? `${actor(state, color, kingSq, 'k')} shot ${victim} (Silver Bullet), ${survival}.`
       : `${actor(state, color, kingSq, 'k')} killed ${victim} (Silver Bullet).`);
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));

@@ -718,6 +718,28 @@ main {
   text-shadow: 0 0 3px rgba(255, 255, 255, 0.85), 0 0 3px rgba(255, 255, 255, 0.85);
 }
 
+/* A mounted Warlord rides as his helmet artwork instead of the King glyph. */
+.mount-king-badge.figure-warlord,
+#drag-ghost .ghost-badge.figure-warlord {
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.mount-king-badge.white.figure-warlord,
+#drag-ghost .ghost-badge.white.figure-warlord {
+  background-image: url("figures/images/warlord-white.svg");
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.85));
+}
+.mount-king-badge.black.figure-warlord,
+#drag-ghost .ghost-badge.black.figure-warlord {
+  background-image: url("figures/images/warlord-black.svg");
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.85));
+}
+#drag-ghost .ghost-badge.figure-warlord {
+  width: calc(var(--board-size) / 8 * 0.4);
+  height: calc(var(--board-size) / 8 * 0.4);
+}
+
 /* Board visual markers for augments — subtle corner accent on tower squares */
 .square.tower::before {
   content: '';

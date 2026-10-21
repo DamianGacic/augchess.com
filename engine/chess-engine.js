@@ -340,12 +340,25 @@
 
   // Every kill site asks this right before removing the unit on `sq`: true
   // when it's a fresh Warlord, who then survives (now wounded) and must be
-  // left standing.
+  // left standing. Riding a knight (Mounting), his horse takes the blow and
+  // dies first, leaving him on foot on that square. A wounded Warlord gets
+  // none of this: mounted or not, he dies like a King.
   function warlordSurvives(state, sq) {
     if (!isFreshWarlordAt(state, sq)) return false;
+    const color = pieceAt(state, sq).color;
     state.warlordWounded = state.warlordWounded || { w: false, b: false };
-    state.warlordWounded[pieceAt(state, sq).color] = true;
+    state.warlordWounded[color] = true;
+    if (state.mounted[color] === sq) state.mounted[color] = null;
     return true;
+  }
+
+  // How a history line ends for a fresh Warlord on `sq` surviving a blow —
+  // call before warlordSurvives (it reads whether he's still mounted).
+  function warlordSurvivalText(state, sq) {
+    const p = pieceAt(state, sq);
+    return p && state.mounted[p.color] === sq
+      ? 'whose horse died under him, but he survived wounded'
+      : 'who survived wounded';
   }
 
   // The melee unit on `sq` that struck a fresh Warlord dies — unless it's a
@@ -580,7 +593,9 @@
     // file at its own top level, so a top-level require here would deadlock
     // on the circular dependency. By call time both modules are fully loaded.
     const pseudoMovesFor = isNode ? require('./gameover-engine.js').pseudoMovesFor : root.pseudoMovesFor;
-    const raw = pseudoMovesFor(state, color, { sq, type: piece.type, f, r });
+    // Mounting a knight comes from generateMountMoves instead — taken as a
+    // plain step here it would "capture" the King's own knight.
+    const raw = pseudoMovesFor(state, color, { sq, type: piece.type, f, r }).filter(pm => pm.kind !== 'mount');
     return raw.map(pm => {
       const m = { from: sq, to: pm.to };
       if (pm.kind === 'ep') {
@@ -862,9 +877,10 @@
   function applyBreakingRankCaptures(state, charges, color) {
     for (const { from, to } of charges) {
       const victim = unitAt(state, to, color);
+      const survival = warlordSurvivalText(state, to);
       if (warlordSurvives(state, to)) {
         killWarlordStriker(state, from);
-        logEntry(state, color, '💥' + from + to, `${from} Ghoul charged ${victim}, who survived wounded — the Ghoul died (Breaking Rank).`, 'event');
+        logEntry(state, color, '💥' + from + to, `${from} Ghoul charged ${victim}, ${survival} — the Ghoul died (Breaking Rank).`, 'event');
         continue;
       }
       if (state.mannedTowers[to]) delete state.mannedTowers[to];
@@ -1057,9 +1073,10 @@
         if (!target) return;
 
         const victim = unitAt(state, target, color);
+        const survival = warlordSurvivalText(state, target);
         if (warlordSurvives(state, target)) {
           killWarlordStriker(state, sq);
-          marches.push({ san: sq + 'x' + target, text: `${sq} ${marcher} struck ${victim}, who survived wounded — the ${marcher} died` });
+          marches.push({ san: sq + 'x' + target, text: `${sq} ${marcher} struck ${victim}, ${survival} — the ${marcher} died` });
           return;
         }
         if (state.mannedTowers[target]) delete state.mannedTowers[target];
@@ -1875,9 +1892,9 @@
     // striker doesn't, unless it's a fresh Warlord too.
     if (m.captured && isFreshWarlordAt(state, to)) {
       if (m.special === 'archerShoot' || m.special === 'longbowmanShoot') {
-        text = `${towerColor === color ? garrison + ' (in tower)' : mover} shot ${victim}, who survived wounded.`;
+        text = `${towerColor === color ? garrison + ' (in tower)' : mover} shot ${victim}, ${warlordSurvivalText(state, to)}.`;
       } else {
-        text = `${mover} struck ${victim}, who survived wounded — ` +
+        text = `${mover} struck ${victim}, ${warlordSurvivalText(state, to)} — ` +
           (type === 'k' && isWarlordFresh(state, color) ? `and so did the ${moverName}.` : `the ${moverName} died.`);
       }
     }
@@ -2204,7 +2221,7 @@
     VANGUARD_ZONES, VANGUARD_MS, isVanguardFresh,
     unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry,
     figureBishopType, anyFigureBishopsInPlay,
-    hasWarlord, anyWarlordInPlay, isWarlordFresh, isFreshWarlordAt, warlordSurvives, killWarlordStriker, hitList,
+    hasWarlord, anyWarlordInPlay, isWarlordFresh, isFreshWarlordAt, warlordSurvives, warlordSurvivalText, killWarlordStriker, hitList,
     SHIELD_DIRS, hasShields, anyShieldsInPlay, shieldDirAt, strikeDirection, shieldBlocks, isShieldBlockedMove,
     shieldChoiceSquares, shieldDirLabel, pruneBishopShields,
     sqToFR, frToSq, isEmpty, pieceAt, findKingSquare, isPromoRank,
