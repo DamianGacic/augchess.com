@@ -7,6 +7,7 @@
 
 // ─── Augment Draft DOM Refs ───────────────────────────────────────────────────
 const augmentModal        = document.getElementById('augment-modal');
+const augmentColPregame   = document.getElementById('augment-col-pregame');
 const augmentColOther     = document.getElementById('augment-col-other');
 const augmentColExchange  = document.getElementById('augment-col-exchange');
 const augmentColAbility   = document.getElementById('augment-col-ability');
@@ -78,6 +79,7 @@ btnSettingsStart.addEventListener('click', () => {
 
 // Which draft column an augment belongs in.
 function augmentColumn(aug) {
+  if (aug.category === 'pregame') return augmentColPregame;
   if (aug.exchanges) return augmentColExchange;
   if (aug.category === 'ability') return augmentColAbility;
   return augmentColOther;
@@ -172,7 +174,7 @@ function renderDraft() {
   const canInteract = !netMode || myColor === ds.current;
   btnAugmentPass.disabled = !canInteract;
 
-  [augmentColOther, augmentColExchange, augmentColAbility].forEach(col => {
+  [augmentColPregame, augmentColOther, augmentColExchange, augmentColAbility].forEach(col => {
     col.querySelectorAll('.augment-card').forEach(card => card.remove());
   });
 
