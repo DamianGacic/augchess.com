@@ -110,6 +110,13 @@
         if (state.phase !== 'playing') return 'Not currently playing';
         const wasPending = !!state.pendingStunlock;
         const turnBeforeCast = state.game.turn();
+        const turnConsuming = augmentsEngine.TURN_CONSUMING_ABILITIES.includes(action.id);
+        // Same rule as moves: a turn spent on an ability may not leave your
+        // King open to capture.
+        if (turnConsuming) {
+          const unsafe = augmentsEngine.abilityKingSafetyError(state, color, action);
+          if (unsafe) return unsafe;
+        }
         const err = augmentsEngine.castAbility(state, color, action.id, action);
         // A Stunlock cast resolving is what finally lets the turn pass (the
         // move that armed it already happened) — settle now. Solar Strike
@@ -122,24 +129,30 @@
         // castKingsLightning/castRingOfFire/castRelentlessAdvance) since they
         // consume the turn on their own, with no chess.js move() to do it —
         // settle right after, same as any other turn-ending action.
-        const turnConsumingIds = ['advance', 'silverBullet', 'clubbing', 'unstableFireball', 'unstableTeleport', 'kingsLightning', 'ringOfFire', 'relentlessAdvance'];
         // Raise the Dead is turn-consuming too, but not on every cast — it
         // can stay armed across several raises (see castRaiseTheDead), only
         // actually flipping state.game's turn once the session is
         // exhausted. Comparing turn() before/after this cast is how we
         // detect that a turn-ending flip just happened, since a fixed id
-        // check (like turnConsumingIds above) can't distinguish "raised one,
-        // staying armed" from "raised the last one, session over".
+        // check (like TURN_CONSUMING_ABILITIES) can't distinguish "raised
+        // one, staying armed" from "raised the last one, session over".
         const raiseTheDeadResolved = action.id === 'raiseTheDead' && state.game.turn() !== turnBeforeCast;
-        if (!err && (stunlockResolved || raiseTheDeadResolved || turnConsumingIds.includes(action.id))) afterTurnSettles(state);
-        return err;
+        if (err) return err;
+        // A turn spent on an ability counts down stuns, Solar Strikes and
+        // cooldowns just like a move does. (A resolving Stunlock already had
+        // its bishop's move do that.)
+        if (raiseTheDeadResolved || turnConsuming) chessEngine.tickTurnWithoutMove(state);
+        if (stunlockResolved || raiseTheDeadResolved || turnConsuming) afterTurnSettles(state);
+        return null;
       }
 
       case 'endRaiseTheDead': {
         if (state.phase !== 'playing') return 'Not currently playing';
         const err = augmentsEngine.endRaiseTheDead(state, color);
-        if (!err) afterTurnSettles(state);
-        return err;
+        if (err) return err;
+        chessEngine.tickTurnWithoutMove(state);
+        afterTurnSettles(state);
+        return null;
       }
 
       case 'cancelAbility': {

@@ -40,6 +40,12 @@
     // burn away in Ring of Fire, or a Solar Strike about to open a line onto
     // the King, which its in_checkmate() has no notion of.
     if (!hasActiveStun && !needsManualCheck(state, state.game.turn())) {
+      // chess.js knows only moves — a safe ability (e.g. Advance pushing a
+      // pawn in front of the King) still gets the player out.
+      const noMoves = state.game.in_checkmate() || state.game.in_stalemate();
+      if (noMoves && sideToMoveHasSafeAbility(state, state.game.turn())) {
+        state.gameOver = false; state.gameOverText = ''; return;
+      }
       if (state.game.in_checkmate()) {
         const winner = state.game.turn() === 'w' ? 'Black' : 'White';
         state.gameOver = true; state.gameOverText = `♛ ${winner} wins by checkmate!`;
@@ -76,10 +82,29 @@
     state.gameOver = false; state.gameOverText = '';
   }
 
-  // Uses the exact generator the server validates moves with (incl. tower
-  // exits and dismounts), so "no legal move" here can never disagree with
-  // what a player is actually allowed to play.
+  // A legal move, or failing that a turn-ending ability that leaves the King
+  // safe (Advance, Silver Bullet, a Troll's club, …) — the same rules the
+  // server accepts actions by, so game-over can never disagree with what a
+  // player is actually allowed to do.
   function sideToMoveHasSafeMove(state, color) {
+    return sideToMoveHasLegalMove(state, color) || sideToMoveHasSafeAbility(state, color);
+  }
+
+  function sideToMoveHasSafeAbility(state, color) {
+    const augmentsEngine = isNode ? require('./augments-engine.js') : root;
+    const wasOver = state.gameOver;
+    state.gameOver = false; // casts are refused once the game is over
+    try {
+      return augmentsEngine.turnEndingAbilityActions(state, color)
+        .some(action => !augmentsEngine.abilityKingSafetyError(state, color, action));
+    } finally {
+      state.gameOver = wasOver;
+    }
+  }
+
+  // Uses the exact generator the server validates moves with (incl. tower
+  // exits and dismounts).
+  function sideToMoveHasLegalMove(state, color) {
     const board = state.game.board();
     const wasOver = state.gameOver;
     state.gameOver = false; // generateMoves returns nothing once the game is over

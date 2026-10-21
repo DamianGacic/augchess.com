@@ -1112,8 +1112,9 @@
   // into a King capture (a blocker burning away, the King stepping into a
   // trap), or a check whose attacker is about to burn demands a response.
 
-  // Squares whose Solar Strike goes off at the end of the next move. A Swift
-  // follow-up step is still part of the shot's turn and doesn't tick.
+  // Squares whose Solar Strike goes off at the end of the next turn (a move
+  // or a turn-ending ability). A Swift follow-up step is still part of the
+  // shot's turn and doesn't tick.
   function solarBurnsThisPly(state) {
     if (state.pendingSwiftMove || !state.solarMarked) return [];
     return Object.keys(state.solarMarked).filter(sq => state.solarMarked[sq] === 1);
@@ -1215,9 +1216,16 @@
     if (!state.fireActive || !state.fireActive[color]) return false;
     const checkers = kingCheckers(state, color);
     if (!checkers.length) return false;
+    // Same test checkRingOfFire burns by: the entry only counts while the
+    // checker is still inside the King's current aura (a King stepping away
+    // leaves it unburned) and is still the unit that earned it.
+    const kingSq = state.mounted[color] || findKingSquare(state, color);
+    const aura = new Set(kingAuraSquares(kingSq, ringOfFireRadius(state, color)));
     const allDoomed = checkers.every(sq => {
       const entry = state.fireAura[sq];
-      return entry && entry.color === color && entry.turns >= 1;
+      const piece = pieceAt(state, sq);
+      return entry && entry.color === color && entry.turns >= 1 && aura.has(sq) &&
+        piece && entry.sig === piece.color + piece.type;
     });
     if (!allDoomed) return false;
 
@@ -1753,6 +1761,18 @@
     return { pendingTargeting };
   }
 
+  // The per-turn countdowns executeMove runs (interleaved with its own
+  // bookkeeping) for a turn spent on an ability instead of a move — a stun,
+  // a Solar Strike, an archer's reload or Warm Welcome's cooldown counts
+  // turns, whatever the turn was spent on.
+  function tickTurnWithoutMove(state) {
+    tickStunCounters(state);
+    const strikes = tickSolarMarks(state);
+    tickArcherCooldown(state);
+    tickWarmWelcomeCooldown(state);
+    strikes.forEach(e => logEntry(state, e.color, e.san, e.text, 'event'));
+  }
+
   function tickStunCounters(state) {
     for (const sq of Object.keys(state.stunnedSquares)) {
       state.stunnedSquares[sq]--;
@@ -1928,6 +1948,7 @@
     generateLeapingMoves, generateKingsPawnMoves, generateTowerEntryMoves,
     generateMountMoves, generateMountedKingMoves,
     filterIntoCheck, needsManualCheck, solarBurnsThisPly, kingThreatenedAfterPly,
+    cloneForSimulation, kingSafeOn, tickTurnWithoutMove,
     isKingAttacked, kingCheckers, isCheckDoomedByFire, squareAttackedBy, attacksSquare, clearPath,
     applyMoveToState, executeMove, describeMove, findRequestedMove, flipTurnFen,
     checkBreakingRank, applyBreakingRankCaptures, clearMountedIfCaptured,

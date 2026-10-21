@@ -644,8 +644,8 @@ function renderBoard() {
         if (burnsNow) sqEl.classList.add('solar-imminent');
         const mover = toMove === 'w' ? 'White' : 'Black', other = toMove === 'w' ? 'Black' : 'White';
         sqEl.title = burnsNow
-          ? `Solar Strike: burns at the end of ${mover}'s move`
-          : `Solar Strike: burns at the end of ${other}'s next move`;
+          ? `Solar Strike: burns at the end of ${mover}'s turn`
+          : `Solar Strike: burns at the end of ${other}'s next turn`;
       }
       if (state.teleportMarked[sq] > 0) sqEl.classList.add('teleport-marked');
       if (state.fireDeathMarked[sq] > 0) sqEl.classList.add('fire-death-marked');
@@ -1199,7 +1199,7 @@ function updateStatus() {
     return;
   }
   if (attacked) {
-    statusText.textContent = `${sideName} to move — the checking unit burns at the end of this move`;
+    statusText.textContent = `${sideName} to move — the checking unit burns at the end of this turn`;
     return;
   }
 

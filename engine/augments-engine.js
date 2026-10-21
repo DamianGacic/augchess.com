@@ -782,6 +782,55 @@
     return 'Unknown ability: ' + id;
   }
 
+  // Abilities that spend the whole turn (no move follows) — engine/index.js
+  // settles the turn right after one of these is cast.
+  const TURN_CONSUMING_ABILITIES = ['advance', 'silverBullet', 'clubbing', 'unstableFireball', 'unstableTeleport', 'kingsLightning', 'ringOfFire', 'relentlessAdvance'];
+
+  // Every concrete turn-ending ability cast `color` could make right now
+  // (one action per valid target), in castAbility's params shape. Raise the
+  // Dead is included as a single raise that ends the session.
+  function turnEndingAbilityActions(state, color) {
+    const actions = [];
+    globalAbilitiesFor(state, color)
+      .filter(a => !a.passive && TURN_CONSUMING_ABILITIES.includes(a.id))
+      .forEach(a => actions.push({ id: a.id }));
+    for (const sq of state.game.SQUARES) {
+      const piece = pieceAt(state, sq);
+      if (!piece || piece.color !== color) continue;
+      for (const a of unitAbilitiesFor(state, sq)) {
+        if (!a) continue;
+        if (a.id === 'silverBullet') getSilverBulletTargets(state, sq, color).forEach(t => actions.push({ id: a.id, unitSq: sq, center: t }));
+        if (a.id === 'clubbing') getClubbingQuadrants(sq).forEach(q => actions.push({ id: a.id, unitSq: sq, quadrant: frToSq(q.f, q.r) }));
+        if (a.id === 'unstableFireball') getFireballTargets(state, sq, color).forEach(t => actions.push({ id: a.id, unitSq: sq, center: t }));
+        if (a.id === 'unstableTeleport') getTeleportTargets(state, color).forEach(t => actions.push({ id: a.id, unitSq: sq, center: t }));
+        if (a.id === 'raiseTheDead') getRaiseTheDeadTargets(state, color).forEach(t => actions.push({ id: a.id, target: t }));
+      }
+    }
+    return actions;
+  }
+
+  // Same rule as for moves (see kingSurvivesMove in chess-engine.js): plays
+  // the cast out on a copy, including the turn's countdowns and Lightning
+  // Aura, and returns null if `color`'s King survives it uncapturable — else
+  // the reason it can't be cast. Dice abilities (Unstable Fireball/Teleport)
+  // are judged by their intended outcome: luck can still spoil a cast, but a
+  // player may always try one that works as aimed.
+  function abilityKingSafetyError(state, color, action) {
+    const sim = chessEngine.cloneForSimulation(state);
+    const random = Math.random;
+    Math.random = () => 0.5; // the "works as intended" band of every roll
+    try {
+      const err = castAbility(sim, color, action.id, action);
+      if (err) return err;
+      if (sim.pendingRaiseTheDead) finishRaiseTheDeadTurn(sim, color);
+      chessEngine.tickTurnWithoutMove(sim);
+      chessEngine.checkKingsLightning(sim);
+      return chessEngine.kingSafeOn(sim, color) ? null : 'That would leave your King open to capture';
+    } finally {
+      Math.random = random;
+    }
+  }
+
   // Declines a pending Swift follow-up move — the shot itself already
   // happened and held the turn open (see applyMoveToState in
   // chess-engine.js); declining just closes it out with the one flip that
@@ -812,6 +861,7 @@
     getFireballTargets, castUnstableFireball,
     getTeleportTargets, castUnstableTeleport,
     getRaiseTheDeadTargets, castRaiseTheDead, endRaiseTheDead, deployVanguard,
+    TURN_CONSUMING_ABILITIES, turnEndingAbilityActions, abilityKingSafetyError,
     unitAbilitiesFor, globalAbilitiesFor, armAbility, castAbility, cancelAbility,
   };
 
