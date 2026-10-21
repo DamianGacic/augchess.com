@@ -14,7 +14,8 @@
  * Protocol (mirrors server/rooms.js + engine/index.js):
  *   Client -> server: any {type: 'move'|'draftPick'|'draftPass'|'settingsUpdate'|
  *     'settingsStart'|'armAbility'|'castAbility'|'cancelAbility'|'newGame', ...}
- *   Server -> client: {type:'joined', color, token}, {type:'state', state},
+ *   Server -> client: {type:'joined', color, token}, {type:'state', state, now}
+ *     (now = server epoch ms, for the clock display),
  *     {type:'actionRejected', reason}
  */
 const NetClient = (function () {
@@ -83,7 +84,7 @@ const NetClient = (function () {
         if (color && token) sessionStorage.setItem(storageKey(id), JSON.stringify({ color, token }));
         onJoinedCb(color, token);
       } else if (msg.type === 'state') {
-        onStateCb(msg.state);
+        onStateCb(msg.state, msg.now);
       } else if (msg.type === 'actionRejected') {
         onRejectedCb(msg.reason);
       }

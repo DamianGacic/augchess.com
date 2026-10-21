@@ -12,6 +12,7 @@
   const chessEngine = isNode ? require('./chess-engine.js') : root;
   const gameOverEngine = isNode ? require('./gameover-engine.js') : root;
   const augmentsEngine = isNode ? require('./augments-engine.js') : root;
+  const clockEngine = isNode ? require('./clock-engine.js') : root;
 
   function createRoomState() {
     return draftEngine.createRoomState();
@@ -25,10 +26,15 @@
   // rather than instrumenting every individual capture/kill call site. See
   // chessEngine.ghoulCount's own comment for the accepted promotion
   // imprecision.
-  function applyAction(state, color, action) {
+  //
+  // The clock is charged up to `now` first, so an action arriving after the
+  // acting player's flag has fallen finds the game already over (and gets
+  // refused) instead of being played.
+  function applyAction(state, color, action, now = Date.now()) {
+    if (state.phase === 'playing' && state.game) clockEngine.tickClock(state, now);
     const beforeW = state.game ? chessEngine.ghoulCount(state, 'w') : 0;
     const beforeB = state.game ? chessEngine.ghoulCount(state, 'b') : 0;
-    const err = dispatchAction(state, color, action);
+    const err = dispatchAction(state, color, action, now);
     if (state.game) {
       const deadW = Math.max(0, beforeW - chessEngine.ghoulCount(state, 'w'));
       const deadB = Math.max(0, beforeB - chessEngine.ghoulCount(state, 'b'));
@@ -52,7 +58,11 @@
     return null;
   }
 
-  function dispatchAction(state, color, action) {
+  function dispatchAction(state, color, action, now) {
+    // Not every play path checks gameOver itself (e.g. ending a Raise the
+    // Dead session) — and settling a turn after the game ended would let
+    // evaluateGameOver re-open it.
+    if (state.gameOver && PLAY_ACTIONS.includes(action.type)) return 'Game is over';
     if (state.vanguard && PLAY_ACTIONS.includes(action.type)) return 'Waiting for the Vanguard to deploy';
     if (state.vanguardLocked && color === 'w' && state.vanguardLocked.includes(actingSquare(state, color, action))) {
       return 'Vanguard units sit out White\'s first turn';
@@ -98,7 +108,7 @@
         // optional follow-up step — don't settle until that's resolved
         // (either this same move just resolved it, or it declines via
         // cancelAbility below).
-        if (!pendingTargeting && !state.pendingSwiftMove) afterTurnSettles(state);
+        if (!pendingTargeting && !state.pendingSwiftMove) afterTurnSettles(state, now);
         return null;
       }
 
@@ -142,7 +152,7 @@
         // cooldowns just like a move does. (A resolving Stunlock already had
         // its bishop's move do that.)
         if (raiseTheDeadResolved || turnConsuming) chessEngine.tickTurnWithoutMove(state);
-        if (stunlockResolved || raiseTheDeadResolved || turnConsuming) afterTurnSettles(state);
+        if (stunlockResolved || raiseTheDeadResolved || turnConsuming) afterTurnSettles(state, now);
         return null;
       }
 
@@ -151,7 +161,7 @@
         const err = augmentsEngine.endRaiseTheDead(state, color);
         if (err) return err;
         chessEngine.tickTurnWithoutMove(state);
-        afterTurnSettles(state);
+        afterTurnSettles(state, now);
         return null;
       }
 
@@ -162,7 +172,7 @@
         // left it open) — settle once it clears.
         const wasPendingSwift = !!state.pendingSwiftMove;
         const err = augmentsEngine.cancelAbility(state, color);
-        if (!err && wasPendingSwift && !state.pendingSwiftMove) afterTurnSettles(state);
+        if (!err && wasPendingSwift && !state.pendingSwiftMove) afterTurnSettles(state, now);
         return err;
       }
 
@@ -181,6 +191,7 @@
   function afterDraftPhaseChange(state) {
     if (state.phase === 'playing' && !state.game) {
       chessEngine.newGame(state);
+      clockEngine.initClock(state);
       // Breaking Rank fires at the beginning of *either* player's turn, so
       // White's very first turn needs its own check here — every other turn
       // gets one via afterTurnSettles below, right after the prior move.
@@ -193,7 +204,7 @@
   // or a pending Stunlock cast just got resolved/canceled) — the point where
   // Breaking Rank checks in and game-over gets (re-)evaluated, exactly
   // mirroring the old client's executeMove/applyStunlockToQuadrant tails.
-  function afterTurnSettles(state) {
+  function afterTurnSettles(state, now) {
     // Plain "how many turns have fully settled" counter — see the comment on
     // state.turnNumber in chess-engine.js's newGame. Used by Raise the
     // Dead's one-turn cooldown (chess.js's own move counter doesn't work
@@ -221,6 +232,7 @@
     const wasOver = state.gameOver;
     gameOverEngine.evaluateGameOver(state);
     noteOutcome(state, wasOver);
+    clockEngine.switchClockTurn(state, now);
   }
 
   // Move history: close the game with how it ended, or tag the turn that
@@ -253,13 +265,18 @@
     state.draftState = null;
     state.augments = { w: [], b: [] };
     delete state.game;
+    delete state.clock;
+    delete state.timeForfeit;
   }
 
   function serializeState(state) {
     return chessEngine.serializeState(state);
   }
 
-  const exportsObj = { createRoomState, applyAction, serializeState };
+  const exportsObj = {
+    createRoomState, applyAction, serializeState,
+    tickClock: clockEngine.tickClock, clockRemaining: clockEngine.clockRemaining,
+  };
 
   if (isNode) {
     module.exports = exportsObj;
