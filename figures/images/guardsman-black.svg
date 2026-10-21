@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <mask id="cut" maskUnits="userSpaceOnUse">
+      <rect width="100" height="100" fill="#fff"/>
+      <g fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M24,75 L76,75"/>
+        <path d="M16,89 L84,89"/>
+        <!-- clearance around the shield -->
+        <path d="M54,46 L86,46 L86,62 C86,74 78,82 70,86 C62,82 54,74 54,62 Z" stroke-width="4" fill="#000"/>
+      </g>
+    </mask>
+  </defs>
+  <g fill="#2e2e2e" stroke="none" stroke-width="0.9" stroke-linejoin="round">
+    <g mask="url(#cut)">
+      <!-- plain pawn: head, collar, body, skirt, base -->
+      <circle cx="50" cy="21" r="14"/>
+      <rect x="34" y="36" width="32" height="7" rx="3.5"/>
+      <path d="M41,43 C41,55 37,66 30,74 L70,74 C63,66 59,55 59,43 Z"/>
+      <path d="M28,76 L72,76 C76,79 80,83 80,88 L20,88 C20,83 24,79 28,76 Z"/>
+      <rect x="17" y="90" width="66" height="8" rx="3"/>
+    </g>
+    <!-- heater shield -->
+    <path d="M56,48 L84,48 L84,62 C84,72 77,79 70,83 C63,79 56,72 56,62 Z"/>
+  </g>
+</svg>

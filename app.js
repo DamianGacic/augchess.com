@@ -70,6 +70,8 @@ function currentActor() {
   // state.game.turn() to the opponent — the caster is whoever armed it, not
   // whoever is "to move" right now.
   if (state.pendingStunlock) return state.pendingStunlock.color;
+  // Same for turning a bishop's shield after its move (Bishops' Shields).
+  if (state.pendingShield) return state.pendingShield.color;
   // A Vanguard deployment happens before White's first turn, so it belongs
   // to its owner even when that's Black and White is "to move".
   if (state.phase === 'playing' && state.vanguard) return state.vanguard.color;
@@ -98,7 +100,11 @@ function dispatch(action) {
 
 function isMyTurn() {
   if (!netMode) return true;
-  return !!(state.game && myColor && state.game.turn() === myColor);
+  if (!state.game || !myColor) return false;
+  // A pending Stunlock cast or shield turn still belongs to the player whose
+  // move opened it, though state.game.turn() has already flipped.
+  const pending = state.pendingStunlock || state.pendingShield;
+  return (pending ? pending.color : state.game.turn()) === myColor;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -334,8 +340,11 @@ function renderAll() {
   if (state.pendingSwiftMove && state.pendingSwiftMove.color === currentActor()) {
     selectedSquare = state.pendingSwiftMove.archerSq;
   }
+  // Nothing else can be selected while a bishop's shield waits to be turned.
+  if (state.pendingShield) { selectedSquare = null; legalMoves = []; }
   if (selectedSquare) legalMoves = computeLegalMovesFor(selectedSquare);
   Vanguard.sync();
+  syncShieldPanel();
 
   renderBoard();
   renderMoveList();
@@ -428,15 +437,20 @@ function showPromotionModal(color) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  FIGURE IMAGES
 // ═══════════════════════════════════════════════════════════════════════════════
-// Figures (Troll, Spearman, Longbowman, Archer, Ghoul) render as a cut-out
-// image instead of the glyph font — see figures/images/ and the .figure-<id>
-// rules in style.css. Returns the CSS class to add (e.g. 'figure-troll') or
-// null if this piece type/color combo has no custom image and should use the
-// glyph.
+// Figures (Troll, Spearman, Longbowman, Archer, Ghoul, Apprentice, Guardsman /
+// Kingsguard) render as a cut-out image instead of the glyph font — see
+// figures/images/ and the .figure-<id> rules in style.css. Returns the CSS
+// class to add (e.g. 'figure-troll') or null if this piece type/color combo
+// has no custom image and should use the glyph.
 function figureImageKey(state, pieceType, color) {
   if (pieceType === 'p' && figurePawnType(state, color) === 'spearman') return 'spearman';
   if (pieceType === 'p' && figurePawnType(state, color) === 'archer') return 'archer';
   if (pieceType === 'p' && figurePawnType(state, color) === 'ghoul') return 'ghoul';
+  if (pieceType === 'p' && figurePawnType(state, color) === 'apprentice') return 'apprentice';
+  // Kingsguard upgrades the Guardsmen in place, so it swaps their artwork too.
+  if (pieceType === 'p' && figurePawnType(state, color) === 'guardsman') {
+    return state.augments[color] && state.augments[color].includes('kingsguard') ? 'kingsguard' : 'guardsman';
+  }
   if (pieceType === 'b' && figureBishopType(state, color) === 'longbowman') return 'longbowman';
   if (pieceType === 'r' && figureRookType(state, color) === 'troll') return 'troll';
   return null;
@@ -521,6 +535,16 @@ function renderBoard() {
     const kingSq = state.mounted[color] || findKingSquare(state, color);
     if (kingSq) fireZones[color] = { kingSq, zone: kingAuraSquares(kingSq, ringOfFireRadius(state, color)) };
   }
+
+  // Bishops' Shields: the squares around a bishop whose shield is being
+  // turned, and — for the selected unit — captures a shield blocks outright
+  // and shots/casts that will bounce off one.
+  const shieldChoices = isChoosingShield() ? shieldChoiceSquares(state.pendingShield.sq) : null;
+  const shieldBlockedTargets = selectedSquare && !state.specialSelect && anyShieldsInPlay(state)
+    ? generateMoves(state, selectedSquare, { shieldBlocked: true }).map(m => m.to) : [];
+  const deflectFrom = silverBulletTargeting && pendingSilverBullet ? pendingSilverBullet.kingSq
+    : unstableFireballTargeting && pendingUnstableFireball ? pendingUnstableFireball.apprenticeSq
+    : selectedSquare;
 
   for (let r = 0; r < 8; r++) {
     for (let f = 0; f < 8; f++) {
@@ -668,6 +692,21 @@ function renderBoard() {
       }
       if (state.fireAura[sq] && state.fireAura[sq].turns >= 1) sqEl.classList.add('fire-priming');
 
+      if (shieldChoices) {
+        const choice = shieldChoices.find(c => c.sq === sq);
+        if (choice) {
+          sqEl.classList.add('shield-choice', 'can-move');
+          sqEl.dataset.shieldDir = choice.dir;
+          sqEl.title = `Face the shield ${shieldDirLabel(state.pendingShield.color, choice.dir)}`;
+        }
+        if (sq === state.pendingShield.sq) sqEl.classList.add('shield-pending', 'can-move');
+      }
+      if (shieldBlockedTargets.includes(sq)) sqEl.appendChild(shieldHintEl('blocked'));
+      else if (deflectFrom && (sqEl.classList.contains('legal-shoot') || sqEl.classList.contains('silverbullet-target') ||
+          sqEl.classList.contains('fireball-target')) && shieldBlocks(state, deflectFrom, sq)) {
+        sqEl.appendChild(shieldHintEl('deflect'));
+      }
+
       const piece = pieceAt(state, sq);
       if (state.mannedTowers[sq]) {
         const color = state.mannedTowers[sq];
@@ -736,6 +775,14 @@ function renderBoard() {
         const readyAbilities = readyAbilityMarkers(state, sq);
         if (readyAbilities.length) pieceEl.appendChild(abilityReadyBadges(readyAbilities));
 
+        // Bishops' Shields: the grey barrier on the side the shield faces.
+        const shieldDir = shieldDirAt(state, sq);
+        if (shieldDir) {
+          const pending = !!(state.pendingShield && state.pendingShield.sq === sq);
+          pieceEl.appendChild(bishopShieldEl(shieldDir, { pending, isFlipped: flipped }));
+          pieceEl.title = pending ? 'Turn this bishop\'s shield' : shieldTitle(piece.color, shieldDir);
+        }
+
         // White's freshly deployed Vanguard units sit out White's first turn.
         if (state.vanguardLocked && state.vanguardLocked.includes(sq)) {
           pieceEl.classList.add('vanguard-locked');
@@ -790,7 +837,7 @@ function attachPieceHandlers(pieceEl, sq) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function onPieceDblClick(e) {
   if (Vanguard.active()) return;
-  if (state.gameOver || !isMyTurn()) return;
+  if (state.gameOver || !isMyTurn() || state.pendingShield) return;
   const sq = e.currentTarget.dataset.square;
   const turn = state.game.turn();
 
@@ -843,6 +890,8 @@ function onSquareClick(e) {
     }
     return;
   }
+
+  if (onShieldSquareClick(e.currentTarget)) return;
 
   if (solarStrikeTargeting && pendingSolarStrike) {
     if (solarStrikeHoverCenter) {
@@ -1006,7 +1055,7 @@ function pingLockedGhoul(sq) {
 function onPieceMouseDown(e) {
   if (Vanguard.onPiecePress(e.currentTarget.dataset.square)) { e.preventDefault(); return; }
   if (state.gameOver) return;
-  if (state.pendingStunlock) return;
+  if (state.pendingStunlock || state.pendingShield) return;
   if (!isMyTurn()) return;
   const sq = e.currentTarget.dataset.square;
   const turn = state.game.turn();
@@ -1024,7 +1073,7 @@ function onPieceMouseDown(e) {
 function onPieceTouchStart(e) {
   if (Vanguard.onPiecePress(e.currentTarget.dataset.square)) return; // the tap's click places it
   if (state.gameOver) return;
-  if (state.pendingStunlock) return;
+  if (state.pendingStunlock || state.pendingShield) return;
   if (!isMyTurn()) return;
   const sq = e.currentTarget.dataset.square;
   const turn = state.game.turn();
@@ -1161,6 +1210,13 @@ function updateStatus() {
   }
   if (stunlockTargeting && state.pendingStunlock) {
     statusText.textContent = '⚡ Choose a quadrant to stun (Esc to cancel)';
+    return;
+  }
+  if (state.pendingShield && !state.pendingStunlock) {
+    statusText.textContent = isChoosingShield()
+      ? '🛡 Turn your shield: click a square next to the bishop'
+      : `🛡 ${state.pendingShield.color === 'w' ? 'White' : 'Black'} is turning a bishop's shield`;
+    statusBox.classList.add('shield');
     return;
   }
   if (solarStrikeTargeting && pendingSolarStrike) {

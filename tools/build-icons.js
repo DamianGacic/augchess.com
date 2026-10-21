@@ -15,6 +15,9 @@
  *   node tools/build-icons.js [path/to/game-icons/icons.json]
  * Without a path it downloads the pinned icon set from jsDelivr. Browse glyph
  * names at https://game-icons.net.
+ *
+ * Before regenerating or replacing icons, save the current ones to
+ * old_design/icons/ (see project.md).
  */
 
 const fs = require('fs');
@@ -32,6 +35,7 @@ const GLYPHS = {
   vanguard: 'shield-bash',
   legion: 'guards',
   stunlock: 'crossed-chains',
+  bishopsShields: 'arrows-shield',
   apprentices: 'wizard-face',
   archers: 'bowman',
   ghouls: 'shambling-zombie',

@@ -84,15 +84,21 @@
     const other = color === 'w' ? 'b' : 'w';
     if (ds.owned[other].includes(aug.id)) return false; // claimed by opponent
     if (aug.requires && !ds.owned[color].includes(aug.requires)) return false;
-    const exType = exchangeType(aug);
-    if (exType) {
-      const conflict = ds.owned[color].some(id => {
-        const owned = AUGMENTS.find(a => a.id === id);
-        return owned && exchangeType(owned) === exType;
-      });
-      if (conflict) return false;
-    }
+    if (conflictsWithOwned(state, color, aug)) return false;
     return true;
+  }
+
+  // Whether `aug` can't be combined with something `color` already owns: a
+  // second exchange of the same piece type, or an augment that names the
+  // other in its `excludes` list (either way round).
+  function conflictsWithOwned(state, color, aug) {
+    const exType = exchangeType(aug);
+    return state.draftState.owned[color].some(id => {
+      const owned = AUGMENTS.find(a => a.id === id);
+      if (!owned) return false;
+      if (exType && exchangeType(owned) === exType) return true;
+      return (aug.excludes || []).includes(owned.id) || (owned.excludes || []).includes(aug.id);
+    });
   }
 
   function draftPick(state, color, augId) {
@@ -143,7 +149,7 @@
 
   const exportsObj = {
     createRoomState, updateSettings, startSettings, startAugmentDraft,
-    exchangeType, canAfford, draftPick, draftPass, advanceDraft, finishDraft,
+    exchangeType, canAfford, conflictsWithOwned, draftPick, draftPass, advanceDraft, finishDraft,
   };
 
   if (isNode) module.exports = exportsObj;

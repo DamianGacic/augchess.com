@@ -158,6 +158,16 @@
     // Units deployed by Vanguard that haven't moved yet: { w: [{ sq, type }], b: … }.
     state.vanguardFresh = { w: [], b: [] };
     ['w', 'b'].forEach(c => { if (has(state, c, 'vanguard')) state.vanguard = { color: c, ms: VANGUARD_MS }; });
+
+    // Bishops' Shields: which way each shielded bishop's shield faces, keyed
+    // by the bishop's square (one of SHIELD_DIRS — absolute board
+    // directions, 'n' = towards rank 8). A bishop with no entry faces
+    // forward. Carried along whenever the bishop moves (applyMoveToState);
+    // pendingShield ({ color, sq }) holds the turn open after a shielded
+    // bishop moved, until its owner turns the shield (orientShield in
+    // augments-engine.js).
+    state.bishopShields = { w: {}, b: {} };
+    state.pendingShield = null;
   }
 
   // Ranks a side's pawn-type units start on: the normal pawn row, plus the
@@ -291,6 +301,85 @@
     return figureBishopType(state, 'w') !== null || figureBishopType(state, 'b') !== null;
   }
 
+  // ── Bishops' Shields ────────────────────────────────────────────────────
+  // A shield covers one side of its (regular) bishop, straight or diagonal,
+  // and blocks every strike coming from exactly that side: a capture from
+  // there isn't a legal move at all, and a shot (arrow, fireball, Silver
+  // Bullet) from there is still fired but bounces off. Strikes with no clear
+  // direction — a knight's jump, auras, Solar Strike — ignore it.
+  const SHIELD_DIRS = { n: [0, 1], ne: [1, 1], e: [1, 0], se: [1, -1], s: [0, -1], sw: [-1, -1], w: [-1, 0], nw: [-1, 1] };
+
+  function hasShields(state, color) {
+    return has(state, color, 'bishopsShields') && !figureBishopType(state, color);
+  }
+
+  function anyShieldsInPlay(state) {
+    return hasShields(state, 'w') || hasShields(state, 'b');
+  }
+
+  function shieldForward(color) {
+    return color === 'w' ? 'n' : 's';
+  }
+
+  // Which way the shield on `sq` faces, or null if no shielded bishop stands there.
+  function shieldDirAt(state, sq) {
+    const p = sq && pieceAt(state, sq);
+    if (!p || p.type !== 'b' || !hasShields(state, p.color)) return null;
+    const dirs = state.bishopShields && state.bishopShields[p.color];
+    return (dirs && dirs[sq]) || shieldForward(p.color);
+  }
+
+  // The side of `targetSq` a strike from `fromSq` comes in on — one of
+  // SHIELD_DIRS when the two share a rank, file or diagonal, else null.
+  function strikeDirection(fromSq, targetSq) {
+    const a = sqToFR(fromSq), b = sqToFR(targetSq);
+    const df = a.f - b.f, dr = a.r - b.r;
+    if (!df && !dr) return null;
+    if (df && dr && Math.abs(df) !== Math.abs(dr)) return null;
+    return Object.keys(SHIELD_DIRS).find(k => SHIELD_DIRS[k][0] === Math.sign(df) && SHIELD_DIRS[k][1] === Math.sign(dr));
+  }
+
+  function shieldBlocks(state, fromSq, targetSq) {
+    const dir = shieldDirAt(state, targetSq);
+    return !!dir && strikeDirection(fromSq, targetSq) === dir;
+  }
+
+  const SHOT_SPECIALS = ['archerShoot', 'longbowmanShoot'];
+
+  // A capturing move a shield stops outright (shots are fired regardless).
+  function isShieldBlockedMove(state, m) {
+    return !!m.captured && !SHOT_SPECIALS.includes(m.special) && shieldBlocks(state, m.from, m.to);
+  }
+
+  // The squares around `sq`, each with the shield direction it stands for.
+  function shieldChoiceSquares(sq) {
+    const { f, r } = sqToFR(sq);
+    return Object.keys(SHIELD_DIRS)
+      .map(dir => ({ dir, sq: frToSq(f + SHIELD_DIRS[dir][0], r + SHIELD_DIRS[dir][1]) }))
+      .filter(c => c.sq);
+  }
+
+  // "forward-left" etc., seen from the owner's side of the board.
+  function shieldDirLabel(color, dir) {
+    const [df, dr] = SHIELD_DIRS[dir];
+    const fwd = color === 'w' ? dr : -dr;
+    const right = color === 'w' ? df : -df;
+    const v = fwd > 0 ? 'forward' : fwd < 0 ? 'back' : '';
+    const h = right > 0 ? 'right' : right < 0 ? 'left' : '';
+    return v && h ? `${v}-${h}` : v || h;
+  }
+
+  // Drops entries whose bishop is gone (killed, or its square taken over).
+  function pruneBishopShields(state) {
+    if (!state.bishopShields) return;
+    for (const color of ['w', 'b']) {
+      for (const sq of Object.keys(state.bishopShields[color])) {
+        const p = pieceAt(state, sq);
+        if (!p || p.color !== color || p.type !== 'b') delete state.bishopShields[color][sq];
+      }
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
   //  SQUARE / COORDINATE HELPERS
   // ═══════════════════════════════════════════════════════════════════════
@@ -333,7 +422,9 @@
   // ═══════════════════════════════════════════════════════════════════════
   //  MOVE GENERATION
   // ═══════════════════════════════════════════════════════════════════════
-  function generateMoves(state, sq) {
+  // `opts.shieldBlocked`: return only the captures an enemy shield stops
+  // instead (for the board's "blocked by a shield" hint).
+  function generateMoves(state, sq, opts) {
     const turn = state.game.turn();
     if (state.gameOver) return [];
 
@@ -351,7 +442,7 @@
 
     if (state.mounted[turn] === sq && piece.type === 'k') {
       moves = generateMountedKingMoves(state, sq, turn);
-      return filterIntoCheck(state, moves, turn);
+      return filterIntoCheck(state, applyShields(state, moves, opts), turn);
     }
 
     const figure = piece.type === 'p' ? figurePawnType(state, turn) : null;
@@ -401,7 +492,13 @@
     }
 
     moves = dedupeMoves(moves);
-    return filterIntoCheck(state, moves, turn);
+    return filterIntoCheck(state, applyShields(state, moves, opts), turn);
+  }
+
+  function applyShields(state, moves, opts) {
+    const wantBlocked = !!(opts && opts.shieldBlocked);
+    if (!anyShieldsInPlay(state)) return wantBlocked ? [] : moves;
+    return moves.filter(m => isShieldBlockedMove(state, m) === wantBlocked);
   }
 
   function dedupeMoves(moves) {
@@ -588,7 +685,7 @@
 
   function ghoulLegalChargeTargets(state, sq, color) {
     return generateGhoulMoves(state, sq, color)
-      .filter(m => m.special === 'ghoulCharge' || m.special === 'ghoulDiagCharge')
+      .filter(m => (m.special === 'ghoulCharge' || m.special === 'ghoulDiagCharge') && !isShieldBlockedMove(state, m))
       .map(m => m.to);
   }
 
@@ -884,7 +981,7 @@
         const strikeSquares = [forwardSq, frToSq(f - 1, r + dir), frToSq(f + 1, r + dir)].filter(Boolean);
         const target = strikeSquares.find(s => {
           const p = pieceAt(state, s);
-          return p && p.color !== color;
+          return p && p.color !== color && !shieldBlocks(state, sq, s);
         });
         if (!target) return;
 
@@ -1114,7 +1211,7 @@
   // move itself (see hasDelayedEffects).
   function needsManualCheck(state, color) {
     return !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) ||
-      anyFigureBishopsInPlay(state) || isCheckDoomedByFire(state, color) || hasDelayedEffects(state, color);
+      anyFigureBishopsInPlay(state) || anyShieldsInPlay(state) || isCheckDoomedByFire(state, color) || hasDelayedEffects(state, color);
   }
 
   // ── Delayed effects ─────────────────────────────────────────────────────
@@ -1345,6 +1442,9 @@
       ghoulSkin: state.ghoulSkin
         ? { w: { ...state.ghoulSkin.w }, b: { ...state.ghoulSkin.b } }
         : undefined,
+      bishopShields: state.bishopShields
+        ? { w: { ...state.bishopShields.w }, b: { ...state.bishopShields.b } }
+        : undefined,
     };
   }
 
@@ -1358,6 +1458,7 @@
     if (snap.ghoulSkin) state.ghoulSkin = snap.ghoulSkin;
     state.gameOverText = snap.gameOverText;
     if (snap.apprenticeTeleportUsed) state.apprenticeTeleportUsed = snap.apprenticeTeleportUsed;
+    if (snap.bishopShields) state.bishopShields = snap.bishopShields;
   }
 
   function flipTurnFen(state, stripCastleColor, epTargetSquare) {
@@ -1378,6 +1479,20 @@
   //  MOVE EXECUTION
   // ═══════════════════════════════════════════════════════════════════════
   function applyMoveToState(state, m, color, testOnly) {
+    // A shot into a shield's face is fired but bounces off (see SHIELD_DIRS).
+    const deflected = SHOT_SPECIALS.includes(m.special) && shieldBlocks(state, m.from, m.to);
+
+    // A shield travels with its bishop; whatever stood on m.to is gone.
+    if (state.bishopShields && !deflected) {
+      const dir = state.bishopShields[color][m.from];
+      delete state.bishopShields.w[m.to];
+      delete state.bishopShields.b[m.to];
+      if (!SHOT_SPECIALS.includes(m.special)) {
+        delete state.bishopShields[color][m.from];
+        if (dir && !m.promotion) state.bishopShields[color][m.to] = dir;
+      }
+    }
+
     // Whatever previously stood on m.to is being overwritten or captured —
     // any "already used Unstable Teleport" flag tied to that square is now
     // stale (the piece it belonged to is gone). A same-piece Apprentice step
@@ -1453,7 +1568,7 @@
       }
       case 'archerShoot':
       case 'longbowmanShoot': {
-        state.game.remove(m.to);
+        if (!deflected) state.game.remove(m.to);
         break;
       }
       case 'towerEnter': {
@@ -1648,7 +1763,10 @@
       const [rookFrom, rookTo] = castle === 'castleK' ? ['h', 'f'] : ['a', 'd'];
       text = `${mover} castled ${castle === 'castleK' ? 'kingside' : 'queenside'} to ${to} (${rookFrom}${from[1]} Rook moved to ${rookTo}${from[1]}).`;
     } else if (m.special === 'archerShoot' || m.special === 'longbowmanShoot') {
-      text = `${towerColor === color ? garrison + ' (in tower)' : mover} killed ${victim} (arrow).`;
+      const shooter = towerColor === color ? garrison + ' (in tower)' : mover;
+      text = shieldBlocks(state, from, to)
+        ? `${shooter} shot at ${victim}, but its shield deflected the arrow.`
+        : `${shooter} killed ${victim} (arrow).`;
     } else if (m.special === 'towerEnter') text = `${mover} entered the ${to} tower.`;
     else if (m.special === 'towerLeave') text = `${garrison} left the tower, moved to ${to}.`;
     else if (m.special === 'mount') text = `${mover} mounted the ${to} Knight.`;
@@ -1731,6 +1849,15 @@
     }
     const welcome = checkWarmWelcomeForLanding(state, m.to, color);
     if (welcome) followUps.push(welcome);
+
+    // Bishops' Shields: a shielded bishop that moved (and survived it) has
+    // its shield turned before the turn ends — engine/index.js holds the
+    // turn open until orientShield resolves this. Not when the move just
+    // took the enemy King: the game is over.
+    const enemy = color === 'w' ? 'b' : 'w';
+    if (fromPiece && fromPiece.type === 'b' && shieldDirAt(state, m.to) && findKingSquare(state, enemy)) {
+      state.pendingShield = { color, sq: m.to };
+    }
 
     // A Longbowman's shot doesn't relocate it — its charge (if any) stays put
     // rather than transferring to the (now-emptied) target square.
@@ -1815,22 +1942,23 @@
 
   // Every square one of `color`'s Archers currently threatens — free-standing
   // ones, and any garrisoned in a manned watchtower (a Longbowman garrison
-  // shoots a different pattern, so it's excluded here).
+  // shoots a different pattern, so it's excluded here). A square an Archer
+  // could only shoot into a shield's face doesn't count for that Archer.
   function archerThreatSquares(state, color) {
     const threatened = new Set();
+    const aim = sq => archerShootRangeSquares(sq, color).forEach(t => { if (!shieldBlocks(state, sq, t)) threatened.add(t); });
     if (figurePawnType(state, color) === 'archer') {
       const board = state.game.board();
       for (let br = 0; br < 8; br++) {
         for (let bf = 0; bf < 8; bf++) {
           const cell = board[br][bf];
           if (!cell || cell.color !== color || cell.type !== 'p') continue;
-          const sq = frToSq(bf, 7 - br);
-          archerShootRangeSquares(sq, color).forEach(t => threatened.add(t));
+          aim(frToSq(bf, 7 - br));
         }
       }
       for (const sq of Object.keys(state.mannedTowers)) {
         if (state.mannedTowers[sq] !== color || state.mannedTowerOrigin[sq] === 'b') continue;
-        archerShootRangeSquares(sq, color).forEach(t => threatened.add(t));
+        aim(sq);
       }
     }
     return threatened;
@@ -1953,6 +2081,8 @@
     VANGUARD_ZONES, VANGUARD_MS, isVanguardFresh,
     unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry,
     figureBishopType, anyFigureBishopsInPlay,
+    SHIELD_DIRS, hasShields, anyShieldsInPlay, shieldDirAt, strikeDirection, shieldBlocks, isShieldBlockedMove,
+    shieldChoiceSquares, shieldDirLabel, pruneBishopShields,
     sqToFR, frToSq, isEmpty, pieceAt, findKingSquare, isPromoRank,
     generateMoves, dedupeMoves, generateExitMoves,
     generateApprenticeMoves, generateArcherMoves, generateGhoulMoves, generateGuardsmenMoves,

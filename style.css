@@ -587,19 +587,25 @@ main {
 
 .piece.dragging { opacity: 0.4; }
 
-/* Figure pieces (Troll, Spearman, Longbowman, Archer) that use a cut-out
-   silhouette image instead of the glyph font. There's one baked PNG per side
-   rather than a single mask tinted via currentColor: the white one has
-   .piece.white's dark edge (-webkit-text-stroke, above) baked into its pixels,
-   since text-stroke only works on font glyphs and does nothing for an image.
+/* Figure pieces (Troll, Spearman, Longbowman, Archer, Apprentice, Guardsman,
+   Kingsguard) that use a cut-out silhouette image instead of the glyph font.
+   There's one baked PNG per side rather than a single mask tinted via
+   currentColor: the white one has .piece.white's dark edge (-webkit-text-stroke,
+   above) baked into its pixels, since text-stroke only works on font glyphs
+   and does nothing for an image.
    Baking it in also sidesteps -webkit-mask-image + filter:drop-shadow, which
    don't compose reliably together across browsers.
    Images live in figures/images/ under one naming scheme: <figureId>-white.png
-   / <figureId>-black.png, where <figureId> matches the FIGURES id in data.js. */
+   / <figureId>-black.png, where <figureId> matches the FIGURES id in data.js.
+   Before replacing any of these images, save the old one to
+   old_design/figures/ (see project.md). */
 .piece.figure-troll, #drag-ghost.figure-troll,
 .piece.figure-spearman, #drag-ghost.figure-spearman,
 .piece.figure-longbowman, #drag-ghost.figure-longbowman,
 .piece.figure-archer, #drag-ghost.figure-archer,
+.piece.figure-apprentice, #drag-ghost.figure-apprentice,
+.piece.figure-guardsman, #drag-ghost.figure-guardsman,
+.piece.figure-kingsguard, #drag-ghost.figure-kingsguard,
 .piece.figure-ghoul, #drag-ghost.figure-ghoul {
   background-size: contain;
   background-repeat: no-repeat;
@@ -613,6 +619,15 @@ main {
 .piece.black.figure-longbowman, #drag-ghost.black.figure-longbowman { background-image: url("figures/images/longbowman-black.png"); }
 .piece.white.figure-archer, #drag-ghost.white.figure-archer { background-image: url("figures/images/archer-white.png"); }
 .piece.black.figure-archer, #drag-ghost.black.figure-archer { background-image: url("figures/images/archer-black.png"); }
+/* Apprentice, Guardsman and Kingsguard are hand-written SVGs rather than PNGs
+   (same white/black split, the white edge drawn as a stroke). Kingsguard is
+   the Guardsman art swapped in once its owner has the Kingsguard augment. */
+.piece.white.figure-apprentice, #drag-ghost.white.figure-apprentice { background-image: url("figures/images/apprentice-white.svg"); }
+.piece.black.figure-apprentice, #drag-ghost.black.figure-apprentice { background-image: url("figures/images/apprentice-black.svg"); }
+.piece.white.figure-guardsman, #drag-ghost.white.figure-guardsman { background-image: url("figures/images/guardsman-white.svg"); }
+.piece.black.figure-guardsman, #drag-ghost.black.figure-guardsman { background-image: url("figures/images/guardsman-black.svg"); }
+.piece.white.figure-kingsguard, #drag-ghost.white.figure-kingsguard { background-image: url("figures/images/kingsguard-white.svg"); }
+.piece.black.figure-kingsguard, #drag-ghost.black.figure-kingsguard { background-image: url("figures/images/kingsguard-black.svg"); }
 /* Ghoul has no white/black variant — one shared, uncolored artwork set
    (figures/images/ghoul0.png .. ghoul4.png), so which file is used comes from
    an inline background-image style set in app.js (see ghoulSkinFile) rather
@@ -633,7 +648,10 @@ main {
 #drag-ghost.figure-troll,
 #drag-ghost.figure-spearman,
 #drag-ghost.figure-longbowman,
-#drag-ghost.figure-archer {
+#drag-ghost.figure-archer,
+#drag-ghost.figure-apprentice,
+#drag-ghost.figure-guardsman,
+#drag-ghost.figure-kingsguard {
   width: calc(var(--board-size) / 8 * 0.85);
   height: calc(var(--board-size) / 8 * 0.85);
 }
@@ -3550,4 +3568,100 @@ main {
   30%  { transform: scaleX(1); }
   75%  { opacity: 1; }
   100% { opacity: 0; transform: translateY(-14px); }
+}
+
+/* ===== Bishops' Shields ===== */
+/* The shield: a grey barrier on the side of the square it faces. The
+   wrapper spans the whole square (the piece is 85% of it) and is rotated by
+   --shield-angle; the bar sits at its top edge. Diagonal shields are shorter
+   and pulled in so they fit the square's corner. */
+.bishop-shield {
+  position: absolute;
+  inset: -8.8%;
+  pointer-events: none;
+  z-index: 2;
+  transform: rotate(var(--shield-angle, 0deg));
+  transition: transform 0.18s ease-out;
+}
+.bishop-shield-bar {
+  position: absolute;
+  left: 50%;
+  top: 3%;
+  width: 62%;
+  height: 10%;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 35% 35% / 100% 100% 45% 45%;
+  background: linear-gradient(180deg, #f1f3f6 0%, #b4bac3 40%, #7b828c 100%);
+  border: 1px solid #2c3036;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transition: top 0.18s ease-out, width 0.18s ease-out;
+}
+.bishop-shield.diagonal .bishop-shield-bar { top: 10%; width: 36%; }
+
+/* A shield waiting to be turned pulses until its owner picks a side. */
+.bishop-shield.pending .bishop-shield-bar {
+  animation: shield-pending 1.1s ease-in-out infinite;
+}
+@keyframes shield-pending {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 226, 235, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+  50%      { box-shadow: 0 0 9px 3px rgba(220, 226, 235, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+}
+
+/* Turning the shield: the bishop is ringed, its neighbours are the choices. */
+.square.shield-pending { box-shadow: inset 0 0 0 3px rgba(225, 230, 238, 0.95); }
+.square.shield-choice { box-shadow: inset 0 0 0 2px rgba(70, 77, 88, 0.55); }
+.square.shield-choice.light { background-color: #d3d7dd; }
+.square.shield-choice.dark  { background-color: #a3aab4; }
+.square.shield-choice-hover { box-shadow: inset 0 0 0 3px #3c434d; }
+.square.shield-choice-hover.light { background-color: #b7bdc6; }
+.square.shield-choice-hover.dark  { background-color: #868e9a; }
+
+/* Small shield badge: a capture the shield blocks (struck through), or a
+   shot that will bounce off it (arrows curving away). */
+.shield-hint {
+  position: absolute;
+  right: 4%;
+  bottom: 4%;
+  width: 34%;
+  height: 34%;
+  z-index: 4;
+  pointer-events: none;
+  background: center / contain no-repeat;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6));
+}
+.shield-hint.blocked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z' fill='%23b4bac3' stroke='%232c3036' stroke-width='1.5'/%3E%3Cpath d='M7 7l10 10' stroke='%23c62828' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.shield-hint.deflect {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z' fill='%23b4bac3' stroke='%232c3036' stroke-width='1.5'/%3E%3Cpath d='M8 15c1-4 4-6 8-6M13 6l3 3-3 3' fill='none' stroke='%232c3036' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.status-box.shield { color: #e3e7ee; }
+.status-box.shield::before { background: #b4bac3; }
+
+/* Instruction panel above the board while a shield waits to be turned —
+   same footprint as the Vanguard panel (and its .vg-* text classes). */
+.shield-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 10px);
+  height: 56px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--radius);
+  border: 2px solid #b4bac3;
+  background: linear-gradient(90deg, rgba(180, 186, 195, 0.24), rgba(180, 186, 195, 0.06) 60%), var(--bg-1);
+  box-shadow: 0 0 22px rgba(180, 186, 195, 0.35);
+  animation: vg-panel-in 0.3s ease-out;
+}
+.shield-panel .vg-title { color: #e3e7ee; }
+.shield-panel .btn { width: auto; padding: 7px 12px; font-size: 13px; white-space: nowrap; }
+.shield-panel.waiting .btn { display: none; }
+@media (max-width: 700px) {
+  .shield-panel { height: auto; min-height: 56px; flex-wrap: wrap; padding: 6px 8px; bottom: calc(100% + 6px); }
+  .shield-panel .vg-sub { white-space: normal; }
 }

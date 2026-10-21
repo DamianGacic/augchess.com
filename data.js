@@ -17,6 +17,7 @@ const AUGMENT_DESCRIPTION_PATH = 'augments/descriptions';
 const AUGMENT_IMAGE_PATH = 'augments/images';
 
 // ─── Figure Definitions ───────────────────────────────────────────────────────
+// Replaced figure art is archived in old_design/figures/ (see project.md).
 const FIGURE_IMAGE_PATH = 'figures/images';
 
 // piece types in display order (pawns first, king last)
@@ -26,9 +27,9 @@ const FIGURE_TYPE_NAMES = { p: 'Pawn', n: 'Knight', b: 'Bishop', r: 'Rook', q: '
 const FIGURES = [
   // Pawns
   { id: 'archer',      name: 'Archer',      replaces: 'p', image: 'archer-black.png', desc: 'An archer who moves quietly forward or diagonally, then strikes from a distance — the field two squares ahead, or either square flanking it — without ever leaving its position. Needs a moment to nock a fresh arrow, so it can’t shoot again the turn right after it fires.' },
-  { id: 'apprentice',  name: 'Apprentice',  replaces: 'p', image: null, desc: 'A cautious apprentice who has not yet learned to fight. It advances forward or diagonally onto open ground but can never capture a thing.' },
+  { id: 'apprentice',  name: 'Apprentice',  replaces: 'p', image: 'apprentice-black.svg', desc: 'A cautious apprentice who has not yet learned to fight. It advances forward or diagonally onto open ground but can never capture a thing.' },
   { id: 'ghoul',       name: 'Ghoul',       replaces: 'p', image: 'ghoul0.png', desc: 'A relentless ghoul that shambles straight ahead, clawing at the square directly before it — or charging an enemy two fields ahead across an empty square — but never diagonally.' },
-  { id: 'guardsman',   name: 'Guardsman',   replaces: 'p', image: null, desc: 'A disciplined guardsman who can shift to any adjacent square, yet still strikes only in the classic forward-diagonal pawn pattern.' },
+  { id: 'guardsman',   name: 'Guardsman',   replaces: 'p', image: 'guardsman-black.svg', desc: 'A disciplined guardsman who can shift to any adjacent square, yet still strikes only in the classic forward-diagonal pawn pattern.' },
   { id: 'spearman',    name: 'Spearman',    replaces: 'p', image: 'spearman-black.png', desc: 'A braced spearman who only ever moves or strikes one square straight ahead — but any foe that charges in from directly ahead to cut it down is skewered in turn.' },
   // Knights
   { id: 'cavalry',     name: 'Cavalry',     replaces: 'n', image: null, desc: 'A mounted warrior who charges across the field. Details coming soon.' },
@@ -49,6 +50,8 @@ const AUGMENTS = [
   { id: 'vanguard',    name: 'Vanguard',     cost: 3, desc: 'Loading description...', category: 'pregame' },
   { id: 'legion',      name: 'Legion',       cost: 8, desc: 'Loading description...', category: 'pregame' },
   { id: 'stunlock',    name: 'Stunlock',     cost: 5, desc: 'Loading description...', category: 'unitability' },
+  // Only for regular bishops — can't be combined with Longbowmen.
+  { id: 'bishopsShields', name: 'Bishops\' Shields', cost: 7, desc: 'Loading description...', excludes: ['longbowmen'] },
   { id: 'apprentices', name: 'Apprentices', cost: 1, desc: 'Loading description...', exchanges: 'apprentice' },
   { id: 'archers',     name: 'Archers',     cost: 4, desc: 'Loading description...', exchanges: 'archer' },
   { id: 'ghouls',      name: 'Ghouls',      cost: 2, desc: 'Loading description...', exchanges: 'ghoul' },

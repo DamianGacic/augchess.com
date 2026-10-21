@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <mask id="cut" maskUnits="userSpaceOnUse">
+      <rect width="100" height="100" fill="#fff"/>
+      <g fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <!-- visor slit -->
+        <path d="M41,22 L59,22" stroke-width="2.6"/>
+        <!-- pawn body standing in front of the cape -->
+        <path d="M41,44 C41,55 37,66 30,74"/>
+        <path d="M59,44 C59,55 63,66 70,74"/>
+        <path d="M18,75 L82,75"/>
+        <path d="M16,89 L84,89"/>
+        <!-- clearance around the shield -->
+        <path d="M58,50 L82,50 L82,63 C82,72 76,78 70,81 C64,78 58,72 58,63 Z" stroke-width="4" fill="#000"/>
+      </g>
+    </mask>
+  </defs>
+  <g fill="#2e2e2e" stroke="none" stroke-width="0.9" stroke-linejoin="round">
+    <g mask="url(#cut)">
+      <!-- plume -->
+      <path d="M49,9 C50,3 56,0 63,1 C59,3 55,6 53,10 Z"/>
+      <!-- rounded helm covering the pawn head -->
+      <path d="M50,8 C58,8 64,14 64,22 C64,30 58,35.5 50,35.5 C42,35.5 36,30 36,22 C36,14 42,8 50,8 Z"/>
+      <rect x="33" y="37" width="34" height="7" rx="3.5"/>
+      <!-- short cape falling behind the pawn body -->
+      <path d="M36,43 L64,43 C69,55 75,65 80,74 L20,74 C25,65 31,55 36,43 Z"/>
+      <path d="M28,76 L72,76 C76,79 80,83 80,88 L20,88 C20,83 24,79 28,76 Z"/>
+      <rect x="17" y="90" width="66" height="8" rx="3"/>
+    </g>
+    <!-- heater shield with a small crown cut through it -->
+    <path fill-rule="evenodd" d="M60,52 L80,52 L80,63 C80,71 75,76 70,79 C65,76 60,71 60,63 Z M63.5,58 L66.5,61.5 L70,56 L73.5,61.5 L76.5,58 L75.5,67 L64.5,67 Z"/>
+  </g>
+</svg>

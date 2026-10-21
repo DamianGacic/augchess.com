@@ -46,7 +46,8 @@ function demoFrameDuration(frame, next, shownMs) {
 }
 
 // ─── Piece elements (mirrors the piece markup in renderBoard) ───────────────
-function buildDemoPiece(p) {
+// `isFlipped`: drawn on a flipped board (board-anim.js ghosts on the real one).
+function buildDemoPiece(p, { isFlipped = false } = {}) {
   const el = document.createElement('div');
   const colorCls = p.color === 'w' ? 'white' : 'black';
   if (p.tower) {
@@ -72,6 +73,7 @@ function buildDemoPiece(p) {
   if (p.fig === 'ghoul') el.style.backgroundImage = `url("figures/images/ghoul${p.skin || 0}.png")`;
   if (p.ready && p.ready.length) el.appendChild(abilityReadyBadges(p.ready));
   if (p.badges.includes('cooldown')) el.classList.add('reloading');
+  if (p.shield) el.appendChild(bishopShieldEl(p.shield, { pending: !!p.shieldPending, isFlipped }));
   return el;
 }
 
@@ -230,6 +232,10 @@ class AugmentDemoPlayer {
         el.className = 'square ' + ((f + r) % 2 === 1 ? 'light' : 'dark');
         const classes = frame.squares[sq] || [];
         classes.forEach(c => el.classList.add(c));
+        // Shield hints are child elements on the real board (both of a
+        // square's pseudo-elements are taken), so rebuild them here too.
+        if (classes.includes('shield-blocked')) el.appendChild(shieldHintEl('blocked'));
+        else if (classes.includes('shield-deflect')) el.appendChild(shieldHintEl('deflect'));
         // An effect zone that just appeared (fire, lightning, sun marks,
         // chains…) flashes in rather than popping silently.
         if (animate && prevFrame) {

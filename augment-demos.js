@@ -40,6 +40,7 @@
   //   threat: 'd4'                 with a move: also show that archer's range
   //   quick: true                  filler reply, shown briefly
   //   arm: { key, unit }           arm a unit ability (Stunlock)
+  //   shield: 'n'                  turn the moved bishop's shield (Bishops' Shields)
   //   target: { kind, unit, preview }  show an ability's valid targets
   //   cast: { id, ...params }      castAbility, same params as the client
   //   rng: [..]                    Math.random values for this step's action
@@ -124,6 +125,18 @@
         { select: 'e5', caption: 'Black\'s knight and queen have no moves while the chains hold.' },
         { move: 'g8-h8', quick: true },
         { move: 'h2-h3', caption: 'After both players have taken their next turn, the chains break.', expect: s => !s.stunnedSquares.e5 },
+      ],
+    },
+
+    bishopsShields: {
+      augments: { w: ['bishopsShields'], b: ['archers'] },
+      position: 'wKh1 wBc1 wPa2 bKg8 bPe5 bNc4 bPh7',
+      steps: [
+        { move: 'c1-e3', caption: 'Your bishops carry a grey shield that starts out facing forward. Whenever a bishop moves, turning its shield is the last step of your turn…', expect: s => !!s.pendingShield },
+        { shield: 'n', caption: '…click a square next to the bishop and the shield faces that way. Here: towards the archer on e5.', expect: s => s.bishopShields.w.e3 === 'n' && !s.pendingShield },
+        { move: 'e5-e3', caption: 'Arrows and fireballs fired from the shielded side still fly…', after: '…but bounce off. Captures from that side are blocked outright.', expect: { e3: 'wB', e5: 'bP' } },
+        { move: 'a2-a3', quick: true },
+        { move: 'c4-e3', caption: 'Attacks from any other side get through, and so does a knight\'s jump: it has no clear direction.', expect: { e3: 'bN' } },
       ],
     },
 
@@ -567,7 +580,8 @@
   function figureKey(state, type, color) {
     if (type === 'p') {
       const fig = E.figurePawnType(state, color);
-      if (fig === 'spearman' || fig === 'archer' || fig === 'ghoul') return fig;
+      if (fig === 'spearman' || fig === 'archer' || fig === 'ghoul' || fig === 'apprentice') return fig;
+      if (fig === 'guardsman') return state.augments[color] && state.augments[color].includes('kingsguard') ? 'kingsguard' : fig;
     }
     if (type === 'b' && E.figureBishopType(state, color) === 'longbowman') return 'longbowman';
     if (type === 'r' && E.figureRookType(state, color) === 'troll') return 'troll';
@@ -593,6 +607,11 @@
       if (!mounted) p.ready = E.readyAbilityMarkers(state, sq);
       if (type === 'p' && E.figurePawnType(state, color) === 'archer' && E.isArcherOnCooldown(state, color, sq)) p.badges.push('cooldown');
       if (state.vanguardLocked && state.vanguardLocked.includes(sq)) p.badges.push('vanguard');
+      const shield = E.shieldDirAt(state, sq);
+      if (shield) {
+        p.shield = shield;
+        if (state.pendingShield && state.pendingShield.sq === sq) p.shieldPending = true;
+      }
       pieces.push(p);
     });
     return pieces;
@@ -670,6 +689,20 @@
       ann.target.preview.forEach(sq => add(sq, base + '-preview'));
     }
 
+    // Bishops' Shields: blocked captures / shots that will bounce off for the
+    // selected unit, and the turn-your-shield choice squares.
+    (ann.shieldBlocked || []).forEach(sq => add(sq, 'shield-blocked'));
+    for (const m of ann.legal || []) {
+      if ((m.special === 'archerShoot' || m.special === 'longbowmanShoot') && E.shieldBlocks(state, m.from, m.to)) add(m.to, 'shield-deflect');
+    }
+    if (ann.shieldChoice) {
+      add(ann.shieldChoice.sq, 'shield-pending');
+      for (const c of E.shieldChoiceSquares(ann.shieldChoice.sq)) {
+        add(c.sq, 'shield-choice');
+        if (c.dir === ann.shieldChoice.dir) add(c.sq, 'shield-choice-hover');
+      }
+    }
+
     if (!state.mounted.w && !state.mounted.b && !E.anyFigurePawnsInPlay(state) && !E.anyFigureRooksInPlay(state) &&
         !E.anyFigureBishopsInPlay(state) && state.game.in_check()) {
       const k = E.findKingSquare(state, turn);
@@ -705,6 +738,7 @@
     const piece = E.pieceAt(state, sq);
     const legal = exit ? E.generateExitMoves(state, sq) : E.generateMoves(state, sq);
     const ann = { selected: sq, legal };
+    if (!exit && E.anyShieldsInPlay(state)) ann.shieldBlocked = E.generateMoves(state, sq, { shieldBlocked: true }).map(m => m.to);
     const tower = state.mannedTowers[sq];
     if (tower) {
       if (state.mannedTowerOrigin[sq] === 'b') ann.shootRange = E.longbowShootRangeSquares(sq, state, tower);
@@ -836,7 +870,8 @@
 
     demo.steps.forEach((step, i) => {
       const label = `${demoId} step ${i + 1}`;
-      const actor = state.vanguard ? state.vanguard.color : state.pendingStunlock ? state.pendingStunlock.color : state.game.turn();
+      const actor = state.vanguard ? state.vanguard.color : state.pendingStunlock ? state.pendingStunlock.color
+        : state.pendingShield ? state.pendingShield.color : state.game.turn();
       const quickCaption = `${SIDE_NAMES[actor]} moves.`;
 
       if (step.select && !step.move) {
@@ -869,6 +904,14 @@
         hint = { pairs: placements };
       } else if (step.arm) {
         action = { type: 'armAbility', key: step.arm.key, unitSq: step.arm.unit };
+      } else if (step.shield) {
+        if (!state.pendingShield) throw new Error(`${label}: no shield is waiting to be turned`);
+        const { sq } = state.pendingShield;
+        emit('pre', step.caption, actor, { shieldChoice: { sq, dir: step.shield } });
+        // Like hovering the choice: the shield already swings that way.
+        const bishop = frames[frames.length - 1].pieces.find(p => p.sq === sq);
+        if (bishop) bishop.shield = step.shield;
+        action = { type: 'orientShield', dir: step.shield };
       } else if (step.cast) {
         // A cast from a unit (e.g. the King's auras) shows that unit selected.
         const ann = step.target ? { target: targetSquares(state, step.target), selected: step.target.unit }

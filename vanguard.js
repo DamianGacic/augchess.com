@@ -144,7 +144,7 @@ const Vanguard = (() => {
       const unit = pieces.find(u => u.sq === p.from);
       if (toEl && unit) {
         toEl.classList.add('vg-planned');
-        const ghost = buildDemoPiece(unit);
+        const ghost = buildDemoPiece(unit, { isFlipped: flipped });
         ghost.classList.add('vg-ghost');
         ghost.title = 'Click to take back';
         toEl.appendChild(ghost);

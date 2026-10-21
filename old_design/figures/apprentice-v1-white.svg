@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <mask id="cut" maskUnits="userSpaceOnUse">
+      <rect width="100" height="100" fill="#fff"/>
+      <g fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <!-- face inside the hood -->
+        <circle cx="50" cy="26" r="13.6"/>
+        <!-- cowl of the hood resting on the shoulders -->
+        <path d="M35,47 Q50,58 65,47"/>
+        <!-- rope belt + hanging cord -->
+        <path d="M33,68 Q50,72 67,68"/>
+        <path d="M57,70 L58,81"/>
+        <!-- hem above the base -->
+        <path d="M14,89.5 L86,89.5"/>
+      </g>
+    </mask>
+  </defs>
+  <g fill="#d0d0d0" stroke="rgba(0,0,0,0.4)" stroke-width="0.9" stroke-linejoin="round" mask="url(#cut)">
+    <!-- pointed hood framing the pawn head -->
+    <path d="M50,4 C59,9 67,17 67,29 C67,37 64,42 60,45 L40,45 C36,42 33,37 33,29 C33,17 41,9 50,4 Z"/>
+    <circle cx="50" cy="26" r="11.5"/>
+    <!-- robe flaring down to the base -->
+    <path d="M38,42 L62,42 C66,56 72,72 78,90 L22,90 C28,72 34,56 38,42 Z"/>
+    <rect x="17" y="90" width="66" height="8" rx="3"/>
+  </g>
+</svg>
