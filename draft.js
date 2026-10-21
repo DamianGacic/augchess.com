@@ -198,14 +198,10 @@ function renderDraft() {
     const ownerW = ds.owned.w.includes(aug.id);
     const ownerB = ds.owned.b.includes(aug.id);
     const affordable = ds.points[ds.current] >= aug.cost;
-    const exType = exchangeType(aug);
-    const conflictsWithOwned = exType && ds.owned[ds.current].some(ownedId => {
-      const ownedAug = AUGMENTS.find(a => a.id === ownedId);
-      return ownedAug && exchangeType(ownedAug) === exType;
-    });
+    const conflicts = conflictsWithOwned(state, ds.current, aug);
     const otherColor = ds.current === 'w' ? 'b' : 'w';
     const takenByOpponent = ds.owned[otherColor].includes(aug.id);
-    const disabled = !affordable || conflictsWithOwned || takenByOpponent || !canInteract;
+    const disabled = !affordable || conflicts || takenByOpponent || !canInteract;
 
     if (disabled) card.classList.add('disabled');
 

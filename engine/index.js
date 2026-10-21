@@ -47,7 +47,14 @@
   // Game actions that are blocked while a Vanguard deployment is pending, and
   // the unit square each one acts with (for White's first-turn lock on
   // freshly deployed Vanguard units).
-  const PLAY_ACTIONS = ['move', 'armAbility', 'castAbility', 'endRaiseTheDead', 'cancelAbility'];
+  const PLAY_ACTIONS = ['move', 'armAbility', 'castAbility', 'endRaiseTheDead', 'cancelAbility', 'orientShield'];
+
+  // While a bishop's shield waits to be turned, only that (and the Stunlock
+  // cast the same bishop's move may have opened, which resolves first) can happen.
+  function allowedWhileShieldPending(state, action) {
+    if (action.type === 'orientShield') return true;
+    return !!state.pendingStunlock && (action.type === 'cancelAbility' || (action.type === 'castAbility' && action.id === 'stunlock'));
+  }
   function actingSquare(state, color, action) {
     if (action.type === 'move') return action.from;
     if (action.type === 'armAbility') return action.unitSq;
@@ -64,6 +71,9 @@
     // evaluateGameOver re-open it.
     if (state.gameOver && PLAY_ACTIONS.includes(action.type)) return 'Game is over';
     if (state.vanguard && PLAY_ACTIONS.includes(action.type)) return 'Waiting for the Vanguard to deploy';
+    if (state.pendingShield && PLAY_ACTIONS.includes(action.type) && !allowedWhileShieldPending(state, action)) {
+      return 'Turn the bishop\'s shield first';
+    }
     if (state.vanguardLocked && color === 'w' && state.vanguardLocked.includes(actingSquare(state, color, action))) {
       return 'Vanguard units sit out White\'s first turn';
     }
@@ -108,7 +118,7 @@
         // optional follow-up step — don't settle until that's resolved
         // (either this same move just resolved it, or it declines via
         // cancelAbility below).
-        if (!pendingTargeting && !state.pendingSwiftMove) afterTurnSettles(state, now);
+        if (!pendingTargeting && !state.pendingSwiftMove) settleUnlessShieldPending(state, now);
         return null;
       }
 
@@ -152,7 +162,15 @@
         // cooldowns just like a move does. (A resolving Stunlock already had
         // its bishop's move do that.)
         if (raiseTheDeadResolved || turnConsuming) chessEngine.tickTurnWithoutMove(state);
-        if (stunlockResolved || raiseTheDeadResolved || turnConsuming) afterTurnSettles(state, now);
+        if (stunlockResolved || raiseTheDeadResolved || turnConsuming) settleUnlessShieldPending(state, now);
+        return null;
+      }
+
+      case 'orientShield': {
+        if (state.phase !== 'playing') return 'Not currently playing';
+        const err = augmentsEngine.orientShield(state, color, action.dir);
+        if (err) return err;
+        afterTurnSettles(state, now);
         return null;
       }
 
@@ -167,12 +185,14 @@
 
       case 'cancelAbility': {
         if (state.phase !== 'playing') return 'Not currently playing';
-        // Declining a pending Swift follow-up move is the one cancelAbility
-        // path that actually finishes a turn (the shot already happened and
-        // left it open) — settle once it clears.
+        // Declining a pending Swift follow-up move, or skipping a pending
+        // Stunlock cast, finishes a turn (the shot / the bishop's move
+        // already happened and left it open) — settle once it clears.
         const wasPendingSwift = !!state.pendingSwiftMove;
+        const wasPendingStunlock = !!state.pendingStunlock;
         const err = augmentsEngine.cancelAbility(state, color);
-        if (!err && wasPendingSwift && !state.pendingSwiftMove) afterTurnSettles(state, now);
+        const resolved = (wasPendingSwift && !state.pendingSwiftMove) || (wasPendingStunlock && !state.pendingStunlock);
+        if (!err && resolved) settleUnlessShieldPending(state, now);
         return err;
       }
 
@@ -198,6 +218,12 @@
       // A pending Vanguard deployment runs that check itself once it resolves.
       if (!state.vanguard) chessEngine.checkBreakingRank(state, state.game.turn());
     }
+  }
+
+  // A bishop that moved still has its shield to turn (Bishops' Shields) —
+  // the turn settles once orientShield resolves that instead.
+  function settleUnlessShieldPending(state, now) {
+    if (!state.pendingShield) afterTurnSettles(state, now);
   }
 
   // Called once a turn has genuinely finished (a move with no pending cast,
@@ -226,6 +252,7 @@
     // check then replays that history and throws (taking serializeState and
     // the server broadcast down with it). Reloading drops the stale history.
     if (state.game.fen() !== fenBefore) state.game.load(state.game.fen());
+    chessEngine.pruneBishopShields(state);
     chessEngine.tickTeleportMarks(state);
     chessEngine.tickFireDeathMarks(state);
     chessEngine.tickWarmWelcomeMarks(state);

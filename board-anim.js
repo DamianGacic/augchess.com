@@ -118,7 +118,7 @@ const BoardAnim = (() => {
       const t = squareBox(into);
       if (t) { wrap.style.setProperty('--dx', `${t.x - box.x}px`); wrap.style.setProperty('--dy', `${t.y - box.y}px`); }
     }
-    wrap.appendChild(buildDemoPiece(p));
+    wrap.appendChild(buildDemoPiece(p, { isFlipped: flipped }));
     sqEl.appendChild(wrap);
     setTimeout(() => wrap.remove(), dur + 50);
   }

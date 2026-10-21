@@ -16,7 +16,8 @@
   const isNode = typeof module !== 'undefined' && module.exports;
   const chessEngine = isNode ? require('./chess-engine.js') : root;
   const { sqToFR, frToSq, pieceAt, has, isEmpty, isPromoRank, flipTurnFen, clearMountedIfCaptured, figurePawnType, kingAuraSquares, findKingSquare,
-    unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry, warlordSurvives, killWarlordStriker, hitList } = chessEngine;
+    unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry, shieldBlocks, SHIELD_DIRS, shieldDirLabel,
+    warlordSurvives, killWarlordStriker, hitList } = chessEngine;
 
   // "e1 King" — the acting unit on its own square, as the history names it
   // (see the history scheme in chess-engine.js).
@@ -209,8 +210,10 @@
     if (!valid) return 'That target is out of range or not a valid line of sight';
 
     const victim = unitAt(state, targetSq, color);
-    const survived = warlordSurvives(state, targetSq);
-    if (!survived) {
+    // Fired into a shield's face, the bullet bounces off (and is still spent).
+    const deflected = shieldBlocks(state, kingSq, targetSq);
+    const survived = !deflected && warlordSurvives(state, targetSq);
+    if (!deflected && !survived) {
       if (state.mannedTowers[targetSq]) delete state.mannedTowers[targetSq];
       delete state.mannedTowerOrigin[targetSq];
       clearMountedIfCaptured(state, targetSq);
@@ -218,7 +221,9 @@
     }
 
     state.silverBulletUsed[color] = true;
-    logEntry(state, color, '🎯' + kingSq + targetSq, survived
+    logEntry(state, color, '🎯' + kingSq + targetSq, deflected
+      ? `${actor(state, color, kingSq, 'k')} fired a Silver Bullet at ${victim}, but its shield deflected it.`
+      : survived
       ? `${actor(state, color, kingSq, 'k')} shot ${victim} (Silver Bullet), who survived wounded.`
       : `${actor(state, color, kingSq, 'k')} killed ${victim} (Silver Bullet).`);
     state.armedAbility = null;
@@ -413,8 +418,12 @@
 
     const area = quadrantSquares(f, r);
     const troll = actor(state, color, trollSq, 'r');
+    // A bishop whose shield faces the Troll takes the blow on its shield.
+    const shielded = area.filter(sq => shieldBlocks(state, trollSq, sq));
+    const hit = area.filter(sq => !shielded.includes(sq));
+    const held = shielded.length ? ` ${listUnits(unitsIn(state, shielded, color))} held its shield.` : '';
     const smashed = [], wounded = [];
-    area.forEach(sq => {
+    hit.forEach(sq => {
       if (!pieceAt(state, sq) && !state.mannedTowers[sq]) return;
       const victim = unitAt(state, sq, color);
       if (warlordSurvives(state, sq)) { wounded.push(victim); return; }
@@ -429,7 +438,7 @@
 
     logEntry(state, color, '🔨' + cornerSq, (smashed.length || wounded.length
       ? `${troll} ${hitList(smashed, wounded)} (club).`
-      : `${troll} clubbed ${areaLabel(area)}. Only air was harmed.`) + (trollDied ? ' The Troll died for it.' : ''));
+      : `${troll} clubbed ${areaLabel(area)}.${held ? '' : ' Only air was harmed.'}`) + held + (trollDied ? ' The Troll died for it.' : ''));
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
@@ -471,7 +480,10 @@
 
     const roll = Math.random();
     const killCaster = roll < 2 / 6; // covers both the 1/6 "both die" and 1/6 "caster only" bands
-    const hitTarget = roll < 1 / 6 || roll >= 2 / 6; // everything except the 1/6 "caster only" band
+    // A fireball flies straight ahead, so a shield facing the Apprentice
+    // always catches it — the roll still decides whether it backfires.
+    const deflected = shieldBlocks(state, apprenticeSq, targetSq);
+    const hitTarget = !deflected && (roll < 1 / 6 || roll >= 2 / 6); // everything except the 1/6 "caster only" band
     const victim = unitAt(state, targetSq, color);
     const wounded = hitTarget && warlordSurvives(state, targetSq); // a fresh Warlord survives it
     const killTarget = hitTarget && !wounded;
@@ -499,10 +511,13 @@
 
     let san = '🔥' + apprenticeSq + (hitTarget ? 'x' : '-') + targetSq;
     if (hitTarget && killCaster) san += ' (backfired!)';
+    else if (deflected) san += killCaster ? ' (deflected, backfired!)' : ' (deflected)';
     else if (!hitTarget) san += ' (fizzled)';
     const caster = actor(state, color, apprenticeSq, 'p');
     const hit = `${wounded ? 'wounded' : 'killed'} ${victim}`;
-    const text = !killCaster ? `${caster} ${hit} (fireball).`
+    const text = deflected
+      ? `${caster} hurled a fireball at ${victim}, but its shield deflected it${killCaster ? ', and the backfire killed the caster' : ''}.`
+      : !killCaster ? `${caster} ${hit} (fireball).`
       : hitTarget ? `${caster} ${hit} and ${wounded ? 'killed ' : ''}itself (fireball backfired).`
       : `${caster} killed only itself (fireball fizzled).`;
     logEntry(state, color, san, text);
@@ -665,7 +680,7 @@
     moving.forEach(p => {
       state.game.put({ type: p.piece.type, color }, p.to);
       // Per-square bookkeeping travels with the unit.
-      for (const map of [state.stunlockCharges, state.ghoulSkin, state.apprenticeTeleportUsed]) {
+      for (const map of [state.stunlockCharges, state.ghoulSkin, state.apprenticeTeleportUsed, state.bishopShields]) {
         if (map && map[color] && p.from in map[color]) { map[color][p.to] = map[color][p.from]; delete map[color][p.from]; }
       }
     });
@@ -686,6 +701,23 @@
     state.vanguardFresh = state.vanguardFresh || { w: [], b: [] };
     state.vanguardFresh[color] = moving.map(p => ({ sq: p.to, type: p.piece.type }));
     state.vanguard = null;
+    return null;
+  }
+
+  // ── Bishops' Shields ───────────────────────────────────────────────────
+  // The last step of a turn in which a shielded bishop moved (see
+  // executeMove's pendingShield): its owner turns the shield to face one of
+  // the 8 directions. Any direction is allowed, including the one it
+  // already faces. A pending Stunlock cast from the same move goes first.
+  function orientShield(state, color, dir) {
+    const pending = state.pendingShield;
+    if (!pending) return 'No shield is waiting to be turned';
+    if (pending.color !== color) return 'Not your shield to turn';
+    if (state.pendingStunlock) return 'Resolve the Stunlock cast first';
+    if (!Object.prototype.hasOwnProperty.call(SHIELD_DIRS, dir)) return 'Unknown shield direction';
+    state.bishopShields[color][pending.sq] = dir;
+    state.pendingShield = null;
+    logEntry(state, color, '🛡' + pending.sq, `${actor(state, color, pending.sq, 'b')} turned its shield ${shieldDirLabel(color, dir)}.`, 'event');
     return null;
   }
 
@@ -890,7 +922,7 @@
     getClubbingQuadrants, castClubbing,
     getFireballTargets, castUnstableFireball,
     getTeleportTargets, castUnstableTeleport,
-    getRaiseTheDeadTargets, castRaiseTheDead, endRaiseTheDead, deployVanguard,
+    getRaiseTheDeadTargets, castRaiseTheDead, endRaiseTheDead, deployVanguard, orientShield,
     TURN_CONSUMING_ABILITIES, turnEndingAbilityActions, abilityKingSafetyError,
     unitAbilitiesFor, readyAbilityMarkers, globalAbilitiesFor, armAbility, castAbility, cancelAbility,
   };
