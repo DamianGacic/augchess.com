@@ -428,18 +428,33 @@ function showPromotionModal(color) {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  FIGURE IMAGES
 // ═══════════════════════════════════════════════════════════════════════════════
-// Figures (Troll, Spearman, Longbowman, Archer, Ghoul) render as a cut-out
-// image instead of the glyph font — see figures/images/ and the .figure-<id>
-// rules in style.css. Returns the CSS class to add (e.g. 'figure-troll') or
-// null if this piece type/color combo has no custom image and should use the
-// glyph.
+// Figures (Troll, Spearman, Longbowman, Archer, Ghoul, Warlord) render as a
+// cut-out image instead of the glyph font — see figures/images/ and the
+// .figure-<id> rules in style.css. Returns the CSS class to add (e.g.
+// 'figure-troll') or null if this piece type/color combo has no custom image
+// and should use the glyph.
 function figureImageKey(state, pieceType, color) {
   if (pieceType === 'p' && figurePawnType(state, color) === 'spearman') return 'spearman';
   if (pieceType === 'p' && figurePawnType(state, color) === 'archer') return 'archer';
   if (pieceType === 'p' && figurePawnType(state, color) === 'ghoul') return 'ghoul';
   if (pieceType === 'b' && figureBishopType(state, color) === 'longbowman') return 'longbowman';
   if (pieceType === 'r' && figureRookType(state, color) === 'troll') return 'troll';
+  if (pieceType === 'k' && hasWarlord(state, color)) return 'warlord';
   return null;
+}
+
+// Whether `color`'s Warlord already survived his one free blow (see
+// warlordSurvives in chess-engine.js) — he then wears a half-empty health bar.
+function isWarlordWounded(state, color) {
+  return hasWarlord(state, color) && !!(state.warlordWounded && state.warlordWounded[color]);
+}
+
+// Also used by the augment demo player.
+function warlordHealthBar() {
+  const bar = document.createElement('div');
+  bar.className = 'warlord-health';
+  bar.title = 'Wounded: the next blow kills him';
+  return bar;
 }
 
 // Ghouls share one un-tinted artwork set across both colors (unlike the other
@@ -720,6 +735,7 @@ function renderBoard() {
         }, { passive: false });
         kbadge.addEventListener('click', (ev) => ev.stopPropagation());
         pieceEl.appendChild(kbadge);
+        if (isWarlordWounded(state, color)) pieceEl.appendChild(warlordHealthBar());
 
         sqEl.appendChild(pieceEl);
       } else if (piece) {
@@ -735,6 +751,8 @@ function renderBoard() {
         // One small emblem per unit ability this unit can cast right now.
         const readyAbilities = readyAbilityMarkers(state, sq);
         if (readyAbilities.length) pieceEl.appendChild(abilityReadyBadges(readyAbilities));
+
+        if (piece.type === 'k' && isWarlordWounded(state, piece.color)) pieceEl.appendChild(warlordHealthBar());
 
         // White's freshly deployed Vanguard units sit out White's first turn.
         if (state.vanguardLocked && state.vanguardLocked.includes(sq)) {

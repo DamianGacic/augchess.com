@@ -20,8 +20,9 @@
     const wK = state.mounted.w || findKingSquare(state, 'w');
     const bK = state.mounted.b || findKingSquare(state, 'b');
 
-    if (!wK) { state.gameOver = true; state.gameOverText = '♛ Black wins — King captured!'; return; }
-    if (!bK) { state.gameOver = true; state.gameOverText = '♛ White wins — King captured!'; return; }
+    const fallen = color => has(state, color, 'warlord') ? 'Warlord slain' : 'King captured';
+    if (!wK) { state.gameOver = true; state.gameOverText = `♛ Black wins — ${fallen('w')}!`; return; }
+    if (!bK) { state.gameOver = true; state.gameOverText = `♛ White wins — ${fallen('b')}!`; return; }
 
     // Coronation: an instant win the moment that color's King is sitting on
     // the opponent's back rank, however it got there (a plain King step, or

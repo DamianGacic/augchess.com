@@ -39,7 +39,7 @@ const FIGURES = [
   // Queens
   { id: 'sorceress',   name: 'Sorceress',   replaces: 'q', image: null, desc: 'A powerful sorceress who bends the rules of movement. Details coming soon.' },
   // Kings
-  { id: 'warlord',     name: 'Warlord',     replaces: 'k', image: null, desc: 'A fearless warlord who leads from the front. Details coming soon.' },
+  { id: 'warlord',     name: 'Warlord',     replaces: 'k', image: 'warlord-black.svg', desc: 'A battle-hardened warlord who moves just like a king, and whose death still ends the game — but he survives the first blow that would kill him, and a foe who tried it up close dies on the spot. Once wounded, he is no tougher than any other king.' },
 ];
 
 const AUGMENTS = [
@@ -56,6 +56,7 @@ const AUGMENTS = [
   { id: 'spearmen',    name: 'Spearmen',   cost: 2, desc: 'Loading description...', exchanges: 'spearman' },
   { id: 'trolls',      name: 'Trolls',      cost: 3, desc: 'Loading description...', exchanges: 'troll' },
   { id: 'longbowmen',  name: 'Longbowmen', cost: 3, desc: 'Loading description...', exchanges: 'longbowman' },
+  { id: 'warlord',     name: 'Warlord',    cost: 5, desc: 'Loading description...', exchanges: 'warlord' },
   // Ghoul follow-ups — only offered to a player once they own Ghouls.
   { id: 'deviant',      name: 'Deviant',      cost: 2, desc: 'Loading description...', requires: 'ghouls' },
   { id: 'breakingRank', name: 'Breaking Rank', cost: 3, desc: 'Loading description...', requires: 'ghouls', category: 'globalability' },

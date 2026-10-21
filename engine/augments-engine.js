@@ -16,7 +16,7 @@
   const isNode = typeof module !== 'undefined' && module.exports;
   const chessEngine = isNode ? require('./chess-engine.js') : root;
   const { sqToFR, frToSq, pieceAt, has, isEmpty, isPromoRank, flipTurnFen, clearMountedIfCaptured, figurePawnType, kingAuraSquares, findKingSquare,
-    unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry } = chessEngine;
+    unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry, warlordSurvives, killWarlordStriker, hitList } = chessEngine;
 
   // "e1 King" — the acting unit on its own square, as the history names it
   // (see the history scheme in chess-engine.js).
@@ -209,13 +209,18 @@
     if (!valid) return 'That target is out of range or not a valid line of sight';
 
     const victim = unitAt(state, targetSq, color);
-    if (state.mannedTowers[targetSq]) delete state.mannedTowers[targetSq];
-    delete state.mannedTowerOrigin[targetSq];
-    clearMountedIfCaptured(state, targetSq);
-    state.game.remove(targetSq);
+    const survived = warlordSurvives(state, targetSq);
+    if (!survived) {
+      if (state.mannedTowers[targetSq]) delete state.mannedTowers[targetSq];
+      delete state.mannedTowerOrigin[targetSq];
+      clearMountedIfCaptured(state, targetSq);
+      state.game.remove(targetSq);
+    }
 
     state.silverBulletUsed[color] = true;
-    logEntry(state, color, '🎯' + kingSq + targetSq, `${actor(state, color, kingSq, 'k')} killed ${victim} (Silver Bullet).`);
+    logEntry(state, color, '🎯' + kingSq + targetSq, survived
+      ? `${actor(state, color, kingSq, 'k')} shot ${victim} (Silver Bullet), who survived wounded.`
+      : `${actor(state, color, kingSq, 'k')} killed ${victim} (Silver Bullet).`);
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
@@ -407,17 +412,24 @@
     if (!valid) return 'That is not a valid quadrant for this Troll';
 
     const area = quadrantSquares(f, r);
-    const smashed = unitsIn(state, area, color);
+    const troll = actor(state, color, trollSq, 'r');
+    const smashed = [], wounded = [];
     area.forEach(sq => {
+      if (!pieceAt(state, sq) && !state.mannedTowers[sq]) return;
+      const victim = unitAt(state, sq, color);
+      if (warlordSurvives(state, sq)) { wounded.push(victim); return; }
+      if (victim) smashed.push(victim);
       if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
       delete state.mannedTowerOrigin[sq];
       clearMountedIfCaptured(state, sq);
       if (pieceAt(state, sq)) state.game.remove(sq);
     });
+    // A club is a melee blow: clubbing a fresh Warlord costs the Troll its life.
+    const trollDied = wounded.length > 0 && killWarlordStriker(state, trollSq);
 
-    logEntry(state, color, '🔨' + cornerSq, smashed.length
-      ? `${actor(state, color, trollSq, 'r')} killed ${listUnits(smashed)} (club).`
-      : `${actor(state, color, trollSq, 'r')} clubbed ${areaLabel(area)}. Only air was harmed.`);
+    logEntry(state, color, '🔨' + cornerSq, (smashed.length || wounded.length
+      ? `${troll} ${hitList(smashed, wounded)} (club).`
+      : `${troll} clubbed ${areaLabel(area)}. Only air was harmed.`) + (trollDied ? ' The Troll died for it.' : ''));
     state.armedAbility = null;
     state.game.load(flipTurnFen(state));
     return null;
@@ -459,8 +471,10 @@
 
     const roll = Math.random();
     const killCaster = roll < 2 / 6; // covers both the 1/6 "both die" and 1/6 "caster only" bands
-    const killTarget = roll < 1 / 6 || roll >= 2 / 6; // everything except the 1/6 "caster only" band
+    const hitTarget = roll < 1 / 6 || roll >= 2 / 6; // everything except the 1/6 "caster only" band
     const victim = unitAt(state, targetSq, color);
+    const wounded = hitTarget && warlordSurvives(state, targetSq); // a fresh Warlord survives it
+    const killTarget = hitTarget && !wounded;
 
     if (killTarget) {
       if (state.mannedTowers[targetSq]) delete state.mannedTowers[targetSq];
@@ -483,12 +497,13 @@
       delete state.apprenticeTeleportUsed[color][apprenticeSq];
     }
 
-    let san = '🔥' + apprenticeSq + (killTarget ? 'x' : '-') + targetSq;
-    if (killTarget && killCaster) san += ' (backfired!)';
-    else if (!killTarget) san += ' (fizzled)';
+    let san = '🔥' + apprenticeSq + (hitTarget ? 'x' : '-') + targetSq;
+    if (hitTarget && killCaster) san += ' (backfired!)';
+    else if (!hitTarget) san += ' (fizzled)';
     const caster = actor(state, color, apprenticeSq, 'p');
-    const text = !killCaster ? `${caster} killed ${victim} (fireball).`
-      : killTarget ? `${caster} killed ${victim} and itself (fireball backfired).`
+    const hit = `${wounded ? 'wounded' : 'killed'} ${victim}`;
+    const text = !killCaster ? `${caster} ${hit} (fireball).`
+      : hitTarget ? `${caster} ${hit} and ${wounded ? 'killed ' : ''}itself (fireball backfired).`
       : `${caster} killed only itself (fireball fizzled).`;
     logEntry(state, color, san, text);
     state.lastMove = { from: apprenticeSq, to: targetSq };

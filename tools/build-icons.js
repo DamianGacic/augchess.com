@@ -39,6 +39,7 @@ const GLYPHS = {
   spearmen: 'spears',
   trolls: 'troll',
   longbowmen: 'high-shot',
+  warlord: 'warlord-helmet',
   deviant: 'divergence',
   breakingRank: 'claw-slashes',
   raiseTheDead: 'raise-zombie',

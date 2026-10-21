@@ -158,6 +158,10 @@
     // Units deployed by Vanguard that haven't moved yet: { w: [{ sq, type }], b: … }.
     state.vanguardFresh = { w: [], b: [] };
     ['w', 'b'].forEach(c => { if (has(state, c, 'vanguard')) state.vanguard = { color: c, ms: VANGUARD_MS }; });
+
+    // Warlord: flips to true once that side's Warlord has survived his one
+    // free blow (see warlordSurvives) — from then on he's a regular King.
+    state.warlordWounded = { w: false, b: false };
   }
 
   // Ranks a side's pawn-type units start on: the normal pawn row, plus the
@@ -196,6 +200,7 @@
     if (type === 'p') { const fig = figurePawnType(state, color); if (fig) return FIGURE_NAMES[fig]; }
     if (type === 'b' && figureBishopType(state, color)) return 'Longbowman';
     if (type === 'r' && figureRookType(state, color)) return 'Troll';
+    if (type === 'k' && hasWarlord(state, color)) return 'Warlord';
     return PIECE_NAMES[type];
   }
 
@@ -210,7 +215,7 @@
     const p = pieceAt(state, sq);
     if (!p) return null;
     let name = unitName(state, p.color, p.type);
-    if (p.type === 'k' && state.mounted[p.color] === sq) name = 'mounted King';
+    if (p.type === 'k' && state.mounted[p.color] === sq) name = 'mounted ' + name;
     else if (state.mannedTowers[sq]) name = 'manned ' + name;
     return (actor && p.color === actor ? 'own ' : '') + sq + ' ' + name;
   }
@@ -222,6 +227,14 @@
   // "a, b and c" for a list of victims.
   function listUnits(names) {
     return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+
+  // "killed a and b, and wounded c" — an effect's victims, where a fresh
+  // Warlord survives the hit wounded (see warlordSurvives).
+  function hitList(killed, wounded) {
+    if (!wounded.length) return 'killed ' + listUnits(killed);
+    const hurt = 'wounded ' + listUnits(wounded);
+    return killed.length ? `killed ${listUnits(killed)}, and ${hurt}` : hurt;
   }
 
   // Whether the unit on `sq` was deployed by Vanguard and hasn't moved since
@@ -289,6 +302,51 @@
 
   function anyFigureBishopsInPlay(state) {
     return figureBishopType(state, 'w') !== null || figureBishopType(state, 'b') !== null;
+  }
+
+  // ── Warlord ─────────────────────────────────────────────────────────────
+  // The Warlord replaces the King: same moves, and his death still ends the
+  // game, but he survives the first attempt on his life, whatever it is. A
+  // melee unit that made that attempt (one that strikes by moving onto him,
+  // or a Troll's club) dies instead. Until then he can't be put in check
+  // (see isKingAttacked) — capturing him is just a legal move that wounds
+  // him. Once wounded (state.warlordWounded) he's a regular King.
+  function hasWarlord(state, color) {
+    return has(state, color, 'warlord');
+  }
+
+  function anyWarlordInPlay(state) {
+    return hasWarlord(state, 'w') || hasWarlord(state, 'b');
+  }
+
+  function isWarlordFresh(state, color) {
+    return hasWarlord(state, color) && !(state.warlordWounded && state.warlordWounded[color]);
+  }
+
+  function isFreshWarlordAt(state, sq) {
+    const p = sq && pieceAt(state, sq);
+    return !!p && p.type === 'k' && isWarlordFresh(state, p.color);
+  }
+
+  // Every kill site asks this right before removing the unit on `sq`: true
+  // when it's a fresh Warlord, who then survives (now wounded) and must be
+  // left standing.
+  function warlordSurvives(state, sq) {
+    if (!isFreshWarlordAt(state, sq)) return false;
+    state.warlordWounded = state.warlordWounded || { w: false, b: false };
+    state.warlordWounded[pieceAt(state, sq).color] = true;
+    return true;
+  }
+
+  // The melee unit on `sq` that struck a fresh Warlord dies — unless it's a
+  // fresh Warlord itself, who survives that too. Returns whether it died.
+  function killWarlordStriker(state, sq) {
+    if (warlordSurvives(state, sq)) return false;
+    if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
+    delete state.mannedTowerOrigin[sq];
+    clearMountedIfCaptured(state, sq);
+    if (pieceAt(state, sq)) state.game.remove(sq);
+    return true;
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -707,6 +765,11 @@
   function applyBreakingRankCaptures(state, charges, color) {
     for (const { from, to } of charges) {
       const victim = unitAt(state, to, color);
+      if (warlordSurvives(state, to)) {
+        killWarlordStriker(state, from);
+        logEntry(state, color, '💥' + from + to, `${from} Ghoul charged ${victim}, who survived wounded — the Ghoul died (Breaking Rank).`, 'event');
+        continue;
+      }
       if (state.mannedTowers[to]) delete state.mannedTowers[to];
       delete state.mannedTowerOrigin[to];
       clearMountedIfCaptured(state, to);
@@ -763,18 +826,19 @@
       if (!state.lightningActive[color]) continue;
       const kingSq = findKingSquare(state, color);
       if (!kingSq) continue;
-      const killed = [];
+      const killed = [], wounded = [];
       for (const sq of kingAuraSquares(kingSq)) {
         if (!pieceAt(state, sq)) continue;
         const victim = unitAt(state, sq, color);
+        if (warlordSurvives(state, sq)) { wounded.push(victim); continue; }
         if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
         delete state.mannedTowerOrigin[sq];
         clearMountedIfCaptured(state, sq);
         state.game.remove(sq);
         killed.push({ sq, victim });
       }
-      if (killed.length) {
-        logEntry(state, color, '🌩' + killed.map(k => k.sq).join(''), `Lightning Aura killed ${listUnits(killed.map(k => k.victim))}.`, 'event');
+      if (killed.length || wounded.length) {
+        logEntry(state, color, '🌩' + killed.map(k => k.sq).join(''), `Lightning Aura ${hitList(killed.map(k => k.victim), wounded)}.`, 'event');
       }
     }
   }
@@ -803,7 +867,7 @@
         if (entry.color === color && !auraSet.has(sq)) delete state.fireAura[sq];
       }
 
-      const burned = [];
+      const burned = [], wounded = [];
       for (const sq of auraSquares) {
         const piece = pieceAt(state, sq);
         const entry = state.fireAura[sq];
@@ -816,6 +880,13 @@
           entry.turns++;
           if (entry.turns >= 2) {
             const victim = unitAt(state, sq, color);
+            // A fresh Warlord walks out of the flames wounded; staying in
+            // them takes another full round to burn him.
+            if (warlordSurvives(state, sq)) {
+              wounded.push(victim);
+              delete state.fireAura[sq];
+              continue;
+            }
             if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
             delete state.mannedTowerOrigin[sq];
             clearMountedIfCaptured(state, sq);
@@ -828,10 +899,10 @@
           state.fireAura[sq] = { turns: 1, sig, color };
         }
       }
-      if (burned.length) {
+      if (burned.length || wounded.length) {
         // '♨', not '🔥…': board-anim.js reads a 🔥 entry with two squares as a fireball.
         logEntry(state, color, '♨' + burned.map(b => b.sq).join(''),
-          `${has(state, color, 'inferno') ? 'Inferno' : 'Ring of Fire'} killed ${listUnits(burned.map(b => b.victim))}.`, 'event');
+          `${has(state, color, 'inferno') ? 'Inferno' : 'Ring of Fire'} ${hitList(burned.map(b => b.victim), wounded)}.`, 'event');
       }
     }
   }
@@ -889,6 +960,11 @@
         if (!target) return;
 
         const victim = unitAt(state, target, color);
+        if (warlordSurvives(state, target)) {
+          killWarlordStriker(state, sq);
+          marches.push({ san: sq + 'x' + target, text: `${sq} ${marcher} struck ${victim}, who survived wounded — the ${marcher} died` });
+          return;
+        }
         if (state.mannedTowers[target]) delete state.mannedTowers[target];
         delete state.mannedTowerOrigin[target];
         clearMountedIfCaptured(state, target);
@@ -1110,11 +1186,12 @@
 
   // Whether chess.js's own check/mate logic can't be trusted for `color`'s
   // move right now: augment units it doesn't know about, a mounted King, a
+  // Warlord (chess.js never lets a King be captured, nor stand in check), a
   // check that's about to burn away, or an effect that lands inside the
   // move itself (see hasDelayedEffects).
   function needsManualCheck(state, color) {
     return !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) ||
-      anyFigureBishopsInPlay(state) || isCheckDoomedByFire(state, color) || hasDelayedEffects(state, color);
+      anyFigureBishopsInPlay(state) || anyWarlordInPlay(state) || isCheckDoomedByFire(state, color) || hasDelayedEffects(state, color);
   }
 
   // ── Delayed effects ─────────────────────────────────────────────────────
@@ -1176,18 +1253,20 @@
     const burns = solarBurnsThisPly(state);
     if (!burns.length) return isKingAttacked(state, color) && !isCheckDoomedByFire(state, color);
     const sim = cloneForSimulation(state);
-    const kingSq = sim.mounted[color] || findKingSquare(sim, color);
-    if (!kingSq || burns.includes(kingSq)) return true;
     burns.forEach(sq => {
+      if (warlordSurvives(sim, sq)) return; // the strike only wounds him
       delete sim.mannedTowers[sq];
       if (pieceAt(sim, sq)) sim.game.remove(sq);
     });
+    if (!(sim.mounted[color] || findKingSquare(sim, color))) return true;
     return isKingAttacked(sim, color) && !isCheckDoomedByFire(sim, color);
   }
 
+  // A Warlord who hasn't been wounded yet is never in check: the blow would
+  // only wound him (see warlordSurvives).
   function isKingAttacked(state, color) {
     const kingSq = state.mounted[color] || findKingSquare(state, color);
-    if (!kingSq) return false;
+    if (!kingSq || isWarlordFresh(state, color)) return false;
     return squareAttackedBy(state, kingSq, color === 'w' ? 'b' : 'w');
   }
 
@@ -1378,6 +1457,21 @@
   //  MOVE EXECUTION
   // ═══════════════════════════════════════════════════════════════════════
   function applyMoveToState(state, m, color, testOnly) {
+    // A capture aimed at a fresh Warlord only wounds him (see
+    // warlordSurvives): a shot leaves him standing, and a melee striker dies
+    // where it stood instead of moving in. Either way the turn is spent.
+    if (m.captured && isFreshWarlordAt(state, m.to)) {
+      const striker = pieceAt(state, m.from);
+      const shot = m.special === 'archerShoot' || m.special === 'longbowmanShoot';
+      warlordSurvives(state, m.to);
+      const strikerDied = !shot && killWarlordStriker(state, m.from);
+      const lostCastling = strikerDied && striker && (striker.type === 'k' || (striker.type === 'r' && ['a1', 'h1', 'a8', 'h8'].includes(m.from)));
+      if (!(m.special === 'archerShoot' && has(state, color, 'swift'))) {
+        state.game.load(flipTurnFen(state, lostCastling ? color : null));
+      }
+      return;
+    }
+
     // Whatever previously stood on m.to is being overwritten or captured —
     // any "already used Unstable Teleport" flag tied to that square is now
     // stale (the piece it belonged to is gone). A same-piece Apprentice step
@@ -1631,7 +1725,7 @@
     const type = piece ? piece.type : 'p';
     const towerColor = state.mannedTowers[from];
     let moverName = unitName(state, color, type);
-    if (type === 'k' && state.mounted[color] === from) moverName = 'mounted King';
+    if (type === 'k' && state.mounted[color] === from) moverName = 'mounted ' + moverName;
     else if (towerColor === color) moverName = 'manned ' + moverName;
     const mover = `${from} ${moverName}`;
     // The garrison acting on its own: shooting from, or stepping out of, its tower.
@@ -1658,6 +1752,16 @@
     else if (m.special === 'leap' || m.special === 'ghoulDiagLeap') text = `${mover} moved to ${to} (leap).`;
     else text = victim ? `${mover} killed ${victim}.` : `${mover} moved to ${to}.`;
     if (m.promotion && type === 'p') text = text.replace(/\.$/, `, promoted to ${PIECE_NAMES[m.promotion]}.`);
+    // A fresh Warlord survives the blow (see applyMoveToState) — and a melee
+    // striker doesn't, unless it's a fresh Warlord too.
+    if (m.captured && isFreshWarlordAt(state, to)) {
+      if (m.special === 'archerShoot' || m.special === 'longbowmanShoot') {
+        text = `${towerColor === color ? garrison + ' (in tower)' : mover} shot ${victim}, who survived wounded.`;
+      } else {
+        text = `${mover} struck ${victim}, who survived wounded — ` +
+          (type === 'k' && isWarlordFresh(state, color) ? `and so did the ${moverName}.` : `the ${moverName} died.`);
+      }
+    }
     return { text, mover };
   }
 
@@ -1676,20 +1780,28 @@
     const continuesTurn = resolvesSwiftMove || !!state.solarStrikeCastThisTurn;
     const { text: moveText, mover } = describeMoveText(state, m, fromPiece, color);
     const followUps = []; // events this move set off, logged right after it
+    // A melee strike on a fresh Warlord: the striker never left m.from (and
+    // most likely died there) — see applyMoveToState.
+    const shot = m.special === 'archerShoot' || m.special === 'longbowmanShoot';
+    const warlordHeld = !!m.captured && !shot && isFreshWarlordAt(state, m.to);
 
     applyMoveToState(state, m, color, false);
 
     if (resolvesSwiftMove) state.pendingSwiftMove = null;
 
     if (impaled) {
-      if (state.mannedTowers[m.to]) delete state.mannedTowers[m.to];
-      delete state.mannedTowerOrigin[m.to];
-      clearMountedIfCaptured(state, m.to);
-      if (pieceAt(state, m.to)) state.game.remove(m.to);
-      followUps.push({ color: color === 'w' ? 'b' : 'w', san: '💀' + m.to, text: `${m.to} Spearman killed ${mover} (impaled).` });
+      if (warlordSurvives(state, m.to)) {
+        followUps.push({ color: color === 'w' ? 'b' : 'w', san: '💀' + m.to, text: `${m.to} Spearman wounded ${mover} (impaled), but he survived.` });
+      } else {
+        if (state.mannedTowers[m.to]) delete state.mannedTowers[m.to];
+        delete state.mannedTowerOrigin[m.to];
+        clearMountedIfCaptured(state, m.to);
+        if (pieceAt(state, m.to)) state.game.remove(m.to);
+        followUps.push({ color: color === 'w' ? 'b' : 'w', san: '💀' + m.to, text: `${m.to} Spearman killed ${mover} (impaled).` });
+      }
     }
 
-    if (m.special && m.special.indexOf('ghoul') === 0) {
+    if (m.special && m.special.indexOf('ghoul') === 0 && !warlordHeld) {
       state.ghoulJustMoved[color] = state.ghoulJustMoved[color].filter(sq => sq !== m.from);
       state.ghoulJustMoved[color].push(m.to);
     }
@@ -1741,7 +1853,7 @@
       const hadCharge = state.stunlockCharges[color][m.from];
       const wasArmed = !!(state.armedAbility && state.armedAbility.id === 'stunlock' && state.armedAbility.unitSq === m.from);
       delete state.stunlockCharges[color][m.from];
-      if (hadCharge) {
+      if (hadCharge && !warlordHeld) {
         state.stunlockCharges[color][bishopFinalSq] = true;
         if (wasArmed) {
           state.pendingStunlock = { color, bishopSq: bishopFinalSq };
@@ -1760,7 +1872,7 @@
     // A Vanguard-deployed unit that relocates is no longer fresh (a shot
     // fired from its square doesn't count), and whatever stood on m.to is gone.
     const relocated = m.special !== 'archerShoot' && m.special !== 'longbowmanShoot';
-    if (state.vanguardFresh) {
+    if (state.vanguardFresh && !warlordHeld) {
       ['w', 'b'].forEach(c => {
         state.vanguardFresh[c] = state.vanguardFresh[c].filter(u => u.sq !== m.to && !(relocated && u.sq === m.from));
       });
@@ -1853,12 +1965,15 @@
       if (!archerThreatSquares(state, color).has(landedSq)) continue;
 
       const victim = unitAt(state, landedSq, color);
+      state.warmWelcomeMarked[landedSq] = 2;
+      state.warmWelcomeCooldown[color] = WARM_WELCOME_COOLDOWN;
+      if (warlordSurvives(state, landedSq)) {
+        return { color, san: '🏹' + landedSq, text: `Warm Welcome wounded ${victim} (arrow).` };
+      }
       if (state.mannedTowers[landedSq]) delete state.mannedTowers[landedSq];
       delete state.mannedTowerOrigin[landedSq];
       clearMountedIfCaptured(state, landedSq);
       state.game.remove(landedSq);
-      state.warmWelcomeMarked[landedSq] = 2;
-      state.warmWelcomeCooldown[color] = WARM_WELCOME_COOLDOWN;
       return { color, san: '🏹' + landedSq, text: `Warm Welcome killed ${victim} (arrow).` };
     }
     return null;
@@ -1876,6 +1991,7 @@
   function tickSolarMarks(state) {
     const owners = state.solarMarkedBy || {};
     const strikes = {}; // caster color → names of what burned
+    const wounded = {}; // caster color → fresh Warlords it only wounded
     for (const sq of Object.keys(state.solarMarked)) {
       state.solarMarked[sq]--;
       if (state.solarMarked[sq] <= 0) {
@@ -1884,6 +2000,10 @@
         delete owners[sq];
         const burned = (strikes[by] = strikes[by] || []);
         const victim = unitAt(state, sq, by);
+        if (warlordSurvives(state, sq)) {
+          (wounded[by] = wounded[by] || []).push(victim);
+          continue;
+        }
         if (state.mannedTowers[sq]) delete state.mannedTowers[sq];
         delete state.mannedTowerOrigin[sq];
         clearMountedIfCaptured(state, sq);
@@ -1897,7 +2017,9 @@
     return Object.entries(strikes).map(([by, burned]) => ({
       color: by === 'null' ? null : by,
       san: '✹', // not '☀…' — board-anim.js reads that as a fresh cast
-      text: burned.length ? `Solar Strike killed ${listUnits(burned)}.` : 'Solar Strike went off and scorched only the floor.',
+      text: burned.length || wounded[by]
+        ? `Solar Strike ${hitList(burned, wounded[by] || [])}.`
+        : 'Solar Strike went off and scorched only the floor.',
     }));
   }
 
@@ -1953,6 +2075,7 @@
     VANGUARD_ZONES, VANGUARD_MS, isVanguardFresh,
     unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry,
     figureBishopType, anyFigureBishopsInPlay,
+    hasWarlord, anyWarlordInPlay, isWarlordFresh, isFreshWarlordAt, warlordSurvives, killWarlordStriker, hitList,
     sqToFR, frToSq, isEmpty, pieceAt, findKingSquare, isPromoRank,
     generateMoves, dedupeMoves, generateExitMoves,
     generateApprenticeMoves, generateArcherMoves, generateGhoulMoves, generateGuardsmenMoves,

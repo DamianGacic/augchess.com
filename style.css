@@ -600,6 +600,7 @@ main {
 .piece.figure-spearman, #drag-ghost.figure-spearman,
 .piece.figure-longbowman, #drag-ghost.figure-longbowman,
 .piece.figure-archer, #drag-ghost.figure-archer,
+.piece.figure-warlord, #drag-ghost.figure-warlord,
 .piece.figure-ghoul, #drag-ghost.figure-ghoul {
   background-size: contain;
   background-repeat: no-repeat;
@@ -613,6 +614,10 @@ main {
 .piece.black.figure-longbowman, #drag-ghost.black.figure-longbowman { background-image: url("figures/images/longbowman-black.png"); }
 .piece.white.figure-archer, #drag-ghost.white.figure-archer { background-image: url("figures/images/archer-white.png"); }
 .piece.black.figure-archer, #drag-ghost.black.figure-archer { background-image: url("figures/images/archer-black.png"); }
+/* The Warlord is a hand-written SVG (same white/black split, the white edge
+   drawn as a stroke). */
+.piece.white.figure-warlord, #drag-ghost.white.figure-warlord { background-image: url("figures/images/warlord-white.svg"); }
+.piece.black.figure-warlord, #drag-ghost.black.figure-warlord { background-image: url("figures/images/warlord-black.svg"); }
 /* Ghoul has no white/black variant — one shared, uncolored artwork set
    (figures/images/ghoul0.png .. ghoul4.png), so which file is used comes from
    an inline background-image style set in app.js (see ghoulSkinFile) rather
@@ -633,7 +638,8 @@ main {
 #drag-ghost.figure-troll,
 #drag-ghost.figure-spearman,
 #drag-ghost.figure-longbowman,
-#drag-ghost.figure-archer {
+#drag-ghost.figure-archer,
+#drag-ghost.figure-warlord {
   width: calc(var(--board-size) / 8 * 0.85);
   height: calc(var(--board-size) / 8 * 0.85);
 }
@@ -769,6 +775,23 @@ main {
    archer-<color>-empty.png is the same art with the arrows removed. */
 .piece.white.figure-archer.reloading, #drag-ghost.white.figure-archer.reloading { background-image: url("figures/images/archer-white-empty.png"); }
 .piece.black.figure-archer.reloading, #drag-ghost.black.figure-archer.reloading { background-image: url("figures/images/archer-black-empty.png"); }
+
+/* A Warlord who already survived his one free blow carries a half-empty
+   health bar over his head: from now on he's a regular King. */
+.warlord-health {
+  position: absolute;
+  top: -7%;
+  left: 22%;
+  width: 56%;
+  height: 10%;
+  box-sizing: border-box;
+  border: 1px solid rgba(0, 0, 0, 0.85);
+  border-radius: 3px;
+  background: linear-gradient(to right, #e5484d 50%, rgba(25, 25, 25, 0.8) 50%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  z-index: 5;
+}
 
 /* Board frame — the squares themselves are unchanged; this only dresses the
    edge so the board sits in the dark UI like a game table. */

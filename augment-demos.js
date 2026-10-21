@@ -199,6 +199,22 @@
       ],
     },
 
+    warlord: {
+      augments: { w: ['warlord'] },
+      position: 'wKe4 wPa2 bKg8 bRe8 bBb7 bPa7',
+      turn: 'b',
+      steps: [
+        {
+          move: 'e8-e4',
+          caption: 'The Warlord moves like a king, and his death still ends the game, but he survives the first blow. Until then he can\'t even be checked. Here a rook strikes him head-on…',
+          after: '…and dies on the spot, as any melee attacker would. The Warlord holds his square, wounded: see the half-empty health bar.',
+          expect: s => !s.game.get('e8') && s.game.get('e4').type === 'k' && s.warlordWounded.w,
+        },
+        { select: 'e4', caption: 'Wounded, he is a regular king: the bishop now gives check, and he has to step out of its line.' },
+        { move: 'e4-e5', caption: 'From here on, the next blow kills him.', expect: { e5: 'wK' } },
+      ],
+    },
+
     deviant: {
       augments: { w: ['ghouls', 'deviant'] },
       position: 'wKg1 wPd4 bKe8 bNc5 bBf6 bPd5 bPa7',
@@ -571,6 +587,7 @@
     }
     if (type === 'b' && E.figureBishopType(state, color) === 'longbowman') return 'longbowman';
     if (type === 'r' && E.figureRookType(state, color) === 'troll') return 'troll';
+    if (type === 'k' && E.hasWarlord(state, color)) return 'warlord';
     return null;
   }
 
@@ -593,6 +610,7 @@
       if (!mounted) p.ready = E.readyAbilityMarkers(state, sq);
       if (type === 'p' && E.figurePawnType(state, color) === 'archer' && E.isArcherOnCooldown(state, color, sq)) p.badges.push('cooldown');
       if (state.vanguardLocked && state.vanguardLocked.includes(sq)) p.badges.push('vanguard');
+      if (type === 'k' && E.hasWarlord(state, color) && state.warlordWounded && state.warlordWounded[color]) p.badges.push('wounded');
       pieces.push(p);
     });
     return pieces;

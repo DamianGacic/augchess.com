@@ -65,6 +65,7 @@ function buildDemoPiece(p) {
     badge.className = `mount-king-badge ${colorCls}`;
     badge.textContent = PIECES[p.color + 'K'];
     el.appendChild(badge);
+    if (p.badges.includes('wounded')) el.appendChild(warlordHealthBar());
     return el;
   }
   el.className = `piece ${colorCls}` + (p.fig ? ` figure-${p.fig}` : '');
@@ -72,6 +73,7 @@ function buildDemoPiece(p) {
   if (p.fig === 'ghoul') el.style.backgroundImage = `url("figures/images/ghoul${p.skin || 0}.png")`;
   if (p.ready && p.ready.length) el.appendChild(abilityReadyBadges(p.ready));
   if (p.badges.includes('cooldown')) el.classList.add('reloading');
+  if (p.badges.includes('wounded')) el.appendChild(warlordHealthBar());
   return el;
 }
 
