@@ -1776,8 +1776,12 @@
       if (movedPiece.type === 'k') stripCastleColor = color;
       else if (movedPiece.type === 'r' && ['a1', 'h1', 'a8', 'h8'].includes(m.from)) stripCastleColor = color;
       else if (movedPiece.type === 'p') {
+        // Only a double step off the home rank opens en passant. A Leaping
+        // Pawns jump from anywhere else would name a square chess.js rejects
+        // (it only accepts the 3rd/6th rank), and its load() then silently
+        // refuses the whole FEN — leaving the turn unflipped.
         const fromR = sqToFR(m.from).r, toR = sqToFR(m.to).r;
-        if (Math.abs(toR - fromR) === 2) epTargetSquare = frToSq(sqToFR(m.from).f, (fromR + toR) / 2);
+        if ((fromR === 1 && toR === 3) || (fromR === 6 && toR === 4)) epTargetSquare = frToSq(sqToFR(m.from).f, (fromR + toR) / 2);
       }
     }
     // Swift: a shot doesn't end the turn — the flip only happens once the

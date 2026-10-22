@@ -57,6 +57,11 @@ for (let g = 1; g <= games; g++) {
   } catch (e) {
     error = 'exception: ' + (e.stack || e).toString().split('\n').slice(0, 4).join(' | ');
   }
+  // A side should never get two turns in a row (follow-ups like a Swift
+  // step are logged as events, not turns).
+  const turns = (state.moveLog || []).filter(e => e.kind === 'turn');
+  const twice = turns.findIndex((e, i) => i > 0 && e.color === turns[i - 1].color);
+  if (!error && twice > 0) error = `${turns[twice].color} moved twice in a row: "${turns[twice - 1].text}" then "${turns[twice].text}"`;
   const outcome = state.gameOver ? state.gameOverText
     : `unfinished after ${state.turnNumber} turns (material for White ${state.game ? evaluateForBot(state, 'w').toFixed(1) : '?'})`;
   { const k = outcome.replace(/ [—(].*/, ''); results[k] = (results[k] || 0) + 1; }
