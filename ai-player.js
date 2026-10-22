@@ -1,5 +1,5 @@
 /**
- * ai-player.js — Play vs Computer. A hotseat game where one seat belongs to
+ * ai-player.js — Play vs AI. A hotseat game where one seat belongs to
  * the bot (engine/bot-engine.js): whenever the game waits on the bot's
  * color, it picks its actions and feeds them through dispatch() one at a
  * time, with a short pause between them so each step can be seen.
@@ -15,7 +15,7 @@
 const AiPlayer = (() => {
   const STEP_DELAY_MS = 450;
   const DRAFT_DELAY_MS = 700;
-  let vsComputer = false;  // chosen from the home page; seats assigned at "Start Draft"
+  let vsAi = false;  // chosen from the home page; seats assigned at "Start Draft"
   let colorChoice = 'w';   // the human's pick: 'w' | 'b' | 'random'
   let timer = null;
   let queue = [];
@@ -32,15 +32,15 @@ const AiPlayer = (() => {
   });
 
   function syncSettings() {
-    aiRow.classList.toggle('hidden', !vsComputer);
+    aiRow.classList.toggle('hidden', !vsAi);
     colorOptions.querySelectorAll('.tc-btn').forEach(b => b.classList.toggle('selected', b.dataset.color === colorChoice));
   }
 
-  // Home page "Play vs Computer": a fresh local game against the bot.
+  // Home page "Play vs AI": a fresh local game against the bot.
   function begin() {
     if (netMode) return;
     stop();
-    vsComputer = true;
+    vsAi = true;
     aiColor = null;
     myColor = null;
     state = createRoomState();
@@ -54,7 +54,7 @@ const AiPlayer = (() => {
   // Home page "Start New Game" (two players at one screen) or going online.
   function end() {
     stop();
-    vsComputer = false;
+    vsAi = false;
     aiColor = null;
     if (!netMode) myColor = null;
     syncSettings();
@@ -62,7 +62,7 @@ const AiPlayer = (() => {
 
   // Called as the draft starts: fixes who plays which color.
   function assignSeats() {
-    if (!vsComputer) return;
+    if (!vsAi) return;
     const human = colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : colorChoice;
     myColor = human;
     aiColor = human === 'w' ? 'b' : 'w';
@@ -91,7 +91,7 @@ const AiPlayer = (() => {
       // The plan went stale (e.g. a die rolled differently than simulated):
       // think again, but don't spin forever on an action it keeps getting wrong.
       queue = [];
-      if (++refusals > 3) { console.warn('Computer gave up on its turn:', err); return; }
+      if (++refusals > 3) { console.warn('AI gave up on its turn:', err); return; }
       schedule();
       return;
     }
@@ -104,7 +104,7 @@ const AiPlayer = (() => {
     queue = [];
   }
 
-  document.getElementById('play-computer-btn').addEventListener('click', begin);
+  document.getElementById('play-ai-btn').addEventListener('click', begin);
   document.getElementById('start-game-btn').addEventListener('click', end);
   document.getElementById('create-game-link-btn').addEventListener('click', end);
 

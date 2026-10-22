@@ -1061,7 +1061,7 @@ main {
 }
 .btn-multiplayer:hover { background: linear-gradient(180deg, rgba(76, 194, 240, 0.32), rgba(76, 194, 240, 0.14)); color: #fff; }
 
-/* "Play vs Computer" — chamfered and uppercase like its hero neighbours. */
+/* "Play vs AI" — chamfered and uppercase like its hero neighbours. */
 .hero-buttons .btn-secondary { clip-path: var(--chamfer); border: none; box-shadow: inset 0 0 0 1px var(--line-strong); text-transform: uppercase; }
 .hero-buttons .btn-secondary:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--gold); }
 

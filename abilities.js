@@ -207,7 +207,7 @@ function castGlobalAbility(key, color) {
 
 // Esc/Backspace: cancel whatever's in progress but not yet resolved.
 function cancelArmedAbility() {
-  if (aiColor && !isMyTurn()) return; // nothing of the computer's to cancel
+  if (aiColor && !isMyTurn()) return; // nothing of the AI's to cancel
   if (stunlockTargeting && state.pendingStunlock) { onStunlockSkip(); return; }
   if (state.pendingSwiftMove) { dispatch({ type: 'cancelAbility' }); return; }
   if (solarStrikeTargeting) { cancelSolarStrikeTargeting(); return; }

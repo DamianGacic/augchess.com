@@ -1,5 +1,5 @@
 /**
- * engine/bot-engine.js — A simple computer opponent. It never re-implements
+ * engine/bot-engine.js — A simple AI opponent. It never re-implements
  * any rules: every option it considers is played out on a throwaway copy of
  * the room state through the real applyAction (engine/index.js), so it can
  * only ever pick actions the server would accept, augments and all.

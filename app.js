@@ -22,7 +22,7 @@
 // ─── Play mode ────────────────────────────────────────────────────────────────
 let netMode = false;   // true once connected to a server room
 let myColor = null;    // 'w' | 'b' | null (spectator, or hotseat = unrestricted)
-let aiColor = null;    // the computer's color when playing it (ai-player.js), else null
+let aiColor = null;    // the AI's color when playing it (ai-player.js), else null
 
 // ─── Shared game/draft state (see engine/draft-engine.js createRoomState) ─────
 let state = createRoomState();
@@ -300,7 +300,7 @@ function pushUndoSnapshot(actor) {
 function undoMove() {
   if (netMode || undoStack.length === 0) return;
   let snap = undoStack.pop();
-  // Against the computer, undo takes back its reply too — back to the
+  // Against the AI, undo takes back its reply too — back to the
   // human's own last action.
   if (aiColor) {
     AiPlayer.stop();
@@ -1275,7 +1275,7 @@ function updateStatus() {
     return;
   }
   if (AiPlayer.thinking()) {
-    statusText.textContent = `🤖 The computer (${aiColor === 'w' ? 'White' : 'Black'}) is thinking…`;
+    statusText.textContent = `🤖 The AI (${aiColor === 'w' ? 'White' : 'Black'}) is thinking…`;
     return;
   }
   if (stunlockTargeting && state.pendingStunlock) {
