@@ -13,7 +13,7 @@ let stunlockHoverQuad = null;    // { f, r } — quadrant currently previewed wh
 // a pending cast that this client isn't already targeting for (e.g. right
 // after our own armed bishop's move lands).
 function syncStunlockTargeting() {
-  if (state.pendingStunlock && state.pendingStunlock.color === currentActor() && !stunlockTargeting) {
+  if (state.pendingStunlock && state.pendingStunlock.color === currentActor() && isMyTurn() && !stunlockTargeting) {
     beginStunlockTargeting();
   } else if (!state.pendingStunlock && stunlockTargeting) {
     stopStunlockTargeting();

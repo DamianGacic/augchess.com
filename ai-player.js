@@ -1,0 +1,112 @@
+/**
+ * ai-player.js — Play vs Computer. A hotseat game where one seat belongs to
+ * the bot (engine/bot-engine.js): whenever the game waits on the bot's
+ * color, it picks its actions and feeds them through dispatch() one at a
+ * time, with a short pause between them so each step can be seen.
+ *
+ * The human's seat is enforced the same way as online play: `myColor` is
+ * the human's color, and the input checks that look at `netMode`/`myColor`
+ * also look at `aiColor`.
+ *
+ * Depends on: app.js (state, dispatch, renderAll, aiColor, myColor, flipped, netMode,
+ * undoStack), draft.js (showGameSettings), engine/bot-engine.js.
+ */
+
+const AiPlayer = (() => {
+  const STEP_DELAY_MS = 450;
+  const DRAFT_DELAY_MS = 700;
+  let vsComputer = false;  // chosen from the home page; seats assigned at "Start Draft"
+  let colorChoice = 'w';   // the human's pick: 'w' | 'b' | 'random'
+  let timer = null;
+  let queue = [];
+  let refusals = 0;
+
+  const aiRow = document.getElementById('settings-ai-row');
+  const colorOptions = document.getElementById('settings-color-options');
+
+  colorOptions.querySelectorAll('.tc-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      colorChoice = btn.dataset.color;
+      syncSettings();
+    });
+  });
+
+  function syncSettings() {
+    aiRow.classList.toggle('hidden', !vsComputer);
+    colorOptions.querySelectorAll('.tc-btn').forEach(b => b.classList.toggle('selected', b.dataset.color === colorChoice));
+  }
+
+  // Home page "Play vs Computer": a fresh local game against the bot.
+  function begin() {
+    if (netMode) return;
+    stop();
+    vsComputer = true;
+    aiColor = null;
+    myColor = null;
+    state = createRoomState();
+    undoStack = [];
+    syncSettings();
+    showView('game');
+    showGameSettings();
+    renderAll();
+  }
+
+  // Home page "Start New Game" (two players at one screen) or going online.
+  function end() {
+    stop();
+    vsComputer = false;
+    aiColor = null;
+    if (!netMode) myColor = null;
+    syncSettings();
+  }
+
+  // Called as the draft starts: fixes who plays which color.
+  function assignSeats() {
+    if (!vsComputer) return;
+    const human = colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : colorChoice;
+    myColor = human;
+    aiColor = human === 'w' ? 'b' : 'w';
+    flipped = human === 'b';
+  }
+
+  function thinking() {
+    return !!aiColor && !netMode && botActor(state) === aiColor;
+  }
+
+  // Called after every render: if the game now waits on the bot, act soon.
+  function schedule() {
+    if (!thinking()) { queue = []; return; }
+    if (timer) return;
+    timer = setTimeout(step, state.phase === 'draft' ? DRAFT_DELAY_MS : STEP_DELAY_MS);
+  }
+
+  function step() {
+    timer = null;
+    if (!thinking()) { queue = []; return; }
+    if (!queue.length) queue = chooseBotActions(state, aiColor);
+    const action = queue.shift();
+    if (!action) return;
+    const err = dispatch(action, aiColor);
+    if (err) {
+      // The plan went stale (e.g. a die rolled differently than simulated):
+      // think again, but don't spin forever on an action it keeps getting wrong.
+      queue = [];
+      if (++refusals > 3) { console.warn('Computer gave up on its turn:', err); return; }
+      schedule();
+      return;
+    }
+    refusals = 0;
+  }
+
+  function stop() {
+    clearTimeout(timer);
+    timer = null;
+    queue = [];
+  }
+
+  document.getElementById('play-computer-btn').addEventListener('click', begin);
+  document.getElementById('start-game-btn').addEventListener('click', end);
+  document.getElementById('create-game-link-btn').addEventListener('click', end);
+
+  return { begin, end, assignSeats, schedule, stop, thinking };
+})();

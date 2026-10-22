@@ -31,7 +31,7 @@ const Vanguard = (() => {
 
   // Whether this client is the one deploying (always, in hotseat).
   function mine() {
-    return pending() && (!netMode || myColor === state.vanguard.color);
+    return pending() && ((!netMode && !aiColor) || myColor === state.vanguard.color);
   }
 
   function zone() {

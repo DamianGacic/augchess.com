@@ -116,7 +116,7 @@ function toggleUnitAbility(key, color) {
   if (state.gameOver || !selectedSquare) return;
   const piece = pieceAt(state, selectedSquare);
   if (!piece || piece.color !== color) return;
-  if (netMode && myColor !== color) return;
+  if ((netMode || aiColor) && myColor !== color) return;
   const idx = ABILITY_UNIT_KEYS.indexOf(key);
   if (idx === -1) return;
   const ability = unitAbilitiesFor(state, selectedSquare)[idx];
@@ -197,7 +197,7 @@ function toggleUnitAbility(key, color) {
 // it's filtered out below).
 function castGlobalAbility(key, color) {
   if (state.gameOver) return;
-  if (netMode && myColor !== color) return;
+  if ((netMode || aiColor) && myColor !== color) return;
   if (color !== state.game.turn()) return;
   const idx = ABILITY_GLOBAL_KEYS.indexOf(key);
   const ability = globalAbilitiesFor(state, color)[idx];
@@ -207,6 +207,7 @@ function castGlobalAbility(key, color) {
 
 // Esc/Backspace: cancel whatever's in progress but not yet resolved.
 function cancelArmedAbility() {
+  if (aiColor && !isMyTurn()) return; // nothing of the computer's to cancel
   if (stunlockTargeting && state.pendingStunlock) { onStunlockSkip(); return; }
   if (state.pendingSwiftMove) { dispatch({ type: 'cancelAbility' }); return; }
   if (solarStrikeTargeting) { cancelSolarStrikeTargeting(); return; }

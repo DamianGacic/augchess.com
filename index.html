@@ -53,6 +53,7 @@
             <p>Classic chess, until someone bids on an augment. Before every match, both players spend points on new units, abilities and rule-breaking powers. Draft carefully: a bad draft can lose the game before the first move.</p>
             <div class="hero-buttons">
               <button class="btn btn-primary btn-lg" id="start-game-btn">Start New Game</button>
+              <button class="btn btn-secondary btn-lg" id="play-computer-btn">Play vs Computer</button>
               <button class="btn btn-multiplayer btn-lg" id="create-game-link-btn">Create Game Link</button>
             </div>
           </div>
@@ -272,6 +273,15 @@
               <input type="number" class="tc-custom" id="settings-points-custom" min="1" max="99" step="1" placeholder="Custom" aria-label="Custom auction points" />
             </div>
           </div>
+
+          <div class="time-control hidden" id="settings-ai-row">
+            <div class="time-control-label">You Play</div>
+            <div class="time-control-options" id="settings-color-options">
+              <button class="tc-btn selected" data-color="w">White</button>
+              <button class="tc-btn" data-color="b">Black</button>
+              <button class="tc-btn" data-color="random">Random</button>
+            </div>
+          </div>
         </div>
 
         <div class="augment-actions">
@@ -381,6 +391,7 @@
   <script src="engine/augments-engine.js"></script>
   <script src="engine/clock-engine.js"></script>
   <script src="engine/index.js"></script>
+  <script src="engine/bot-engine.js"></script>
   <script src="netclient.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
@@ -402,5 +413,6 @@
   <script src="vanguard.js"></script>
   <script src="views.js"></script>
   <script src="app.js"></script>
+  <script src="ai-player.js"></script>
 </body>
 </html>

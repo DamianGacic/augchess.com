@@ -22,6 +22,7 @@
 // ─── Play mode ────────────────────────────────────────────────────────────────
 let netMode = false;   // true once connected to a server room
 let myColor = null;    // 'w' | 'b' | null (spectator, or hotseat = unrestricted)
+let aiColor = null;    // the computer's color when playing it (ai-player.js), else null
 
 // ─── Shared game/draft state (see engine/draft-engine.js createRoomState) ─────
 let state = createRoomState();
@@ -80,26 +81,28 @@ function currentActor() {
   return 'w';
 }
 
-function dispatch(action) {
+// Returns the engine's rejection reason locally (null on success).
+function dispatch(action, color = currentActor()) {
   if (netMode) {
     NetClient.send(action);
-    return;
+    return null;
   }
-  pushUndoSnapshot();
+  pushUndoSnapshot(color);
   const wasOver = state.gameOver;
-  const err = applyAction(state, currentActor(), action);
+  const err = applyAction(state, color, action);
   if (err) {
     undoStack.pop();
     console.warn('Action rejected:', err);
     // Rejected because the mover's flag had already fallen — show that.
     if (state.gameOver !== wasOver) renderAll();
-    return;
+    return err;
   }
   renderAll();
+  return null;
 }
 
 function isMyTurn() {
-  if (!netMode) return true;
+  if (!netMode && !aiColor) return true;
   if (!state.game || !myColor) return false;
   // A pending Stunlock cast or shield turn still belongs to the player whose
   // move opened it, though state.game.turn() has already flipped.
@@ -286,16 +289,24 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 //  UNDO (hotseat only — networked play has no client-side undo)
 // ═══════════════════════════════════════════════════════════════════════════════
-function pushUndoSnapshot() {
+function pushUndoSnapshot(actor) {
   if (netMode) return;
   const clone = JSON.parse(JSON.stringify(state, (k, v) => (k === 'game' ? undefined : v)));
   clone.gameFen = state.game ? state.game.fen() : null;
+  clone.undoActor = actor;
   undoStack.push(clone);
 }
 
 function undoMove() {
   if (netMode || undoStack.length === 0) return;
-  const snap = undoStack.pop();
+  let snap = undoStack.pop();
+  // Against the computer, undo takes back its reply too — back to the
+  // human's own last action.
+  if (aiColor) {
+    AiPlayer.stop();
+    while (snap.undoActor === aiColor && undoStack.length) snap = undoStack.pop();
+  }
+  delete snap.undoActor;
   const fen = snap.gameFen;
   delete snap.gameFen;
   state = snap;
@@ -316,6 +327,9 @@ function undoMove() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function renderAll() {
   syncClock();
+  // Only queues a timer, so it's safe ahead of rendering — and covers the
+  // draft too, which returns early below.
+  if (typeof AiPlayer !== 'undefined') AiPlayer.schedule();
 
   if (state.phase === 'settings') {
     settingsModal.classList.remove('hidden');
@@ -337,7 +351,7 @@ function renderAll() {
   // Swift: once a shot leaves a follow-up step pending, auto-select that
   // Archer for whoever's resolving it so its (restricted) step options show
   // immediately — mirrors syncStunlockTargeting's auto-begin above.
-  if (state.pendingSwiftMove && state.pendingSwiftMove.color === currentActor()) {
+  if (state.pendingSwiftMove && state.pendingSwiftMove.color === currentActor() && isMyTurn()) {
     selectedSquare = state.pendingSwiftMove.archerSq;
   }
   // Nothing else can be selected while a bishop's shield waits to be turned.
@@ -1258,6 +1272,10 @@ function updateStatus() {
 
   if (state.vanguard) {
     statusText.textContent = `${state.vanguard.color === 'w' ? 'White' : 'Black'} is deploying their Vanguard`;
+    return;
+  }
+  if (AiPlayer.thinking()) {
+    statusText.textContent = `🤖 The computer (${aiColor === 'w' ? 'White' : 'Black'}) is thinking…`;
     return;
   }
   if (stunlockTargeting && state.pendingStunlock) {

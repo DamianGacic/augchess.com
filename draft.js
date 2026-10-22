@@ -74,6 +74,7 @@ settingsPtOptions.querySelectorAll('.tc-btn').forEach(btn => {
 });
 
 btnSettingsStart.addEventListener('click', () => {
+  AiPlayer.assignSeats();
   dispatch({ type: 'settingsStart' });
 });
 
@@ -144,7 +145,7 @@ function renderAugmentSlots(color, container) {
         childCard.addEventListener('click', () => showAugmentDetail(childAug));
       } else {
         const affordable = ds.points[color] >= childAug.cost;
-        const canInteractHere = !state.gameOver && ds.current === color && (!netMode || myColor === color);
+        const canInteractHere = !state.gameOver && ds.current === color && ((!netMode && !aiColor) || myColor === color);
         if (affordable && canInteractHere) {
           childCard.addEventListener('click', () => dispatch({ type: 'draftPick', augId: childAug.id }));
         } else {
@@ -175,7 +176,7 @@ function renderDraft() {
   const who = ds.current === 'w' ? 'White' : 'Black';
   augmentTurnText.textContent = `${who}, choose an augment (or pass)`;
 
-  const canInteract = !netMode || myColor === ds.current;
+  const canInteract = (!netMode && !aiColor) || myColor === ds.current;
   btnAugmentPass.disabled = !canInteract;
 
   [augmentColPregame, augmentColWin, augmentColOther, augmentColExchange, augmentColAbility, augmentColGlobal].forEach(col => {
