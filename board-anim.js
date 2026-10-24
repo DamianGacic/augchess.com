@@ -178,7 +178,7 @@ const BoardAnim = (() => {
     const before = prev;
     prev = { pieces, logLen, lastMove, gameOver: state.gameOver };
     // Reduced motion, or a reconnect catching up on several turns at once.
-    if (reduceMotion.matches || logLen - before.logLen > 6) { dropTarget = null; return; }
+    if (reduceMotion.matches || !Settings.get('animations') || logLen - before.logLen > 6) { dropTarget = null; return; }
     play(pieces, removed, events, hint, before);
     dropTarget = null;
   }

@@ -17,7 +17,10 @@
  *   Server -> client: {type:'joined', color, token}, {type:'state', state, now}
  *     (now = server epoch ms, for the clock display),
  *     {type:'actionRejected', reason}, {type:'chat', color, text, at},
- *     {type:'chatHistory', messages}
+ *     {type:'chatHistory', messages}, {type:'rating', w, b} (ranked games)
+ *   Ranked rooms: 'joined' carries ranked:true and starts everyone as a
+ *   spectator; a signed-in client answers with {type:'auth', accessToken}
+ *   and gets a second 'joined' with its seat (server/rooms.js authenticate).
  *   Chat goes client -> server as {type:'chat', text}, outside the engine.
  */
 const NetClient = (function () {
@@ -32,6 +35,7 @@ const NetClient = (function () {
   let onJoinedCb = () => {};
   let onReconnectingCb = () => {};
   let onChatCb = () => {};
+  let onRatingCb = () => {};
   let reconnectAttempt = 0;
   let reconnectTimer = null;
   let intentionalClose = false;
@@ -52,10 +56,24 @@ const NetClient = (function () {
     return `${proto}//${location.host}/ws/${id}` + (qs ? `?${qs}` : '');
   }
 
-  async function createRoom() {
-    const res = await fetch('/api/games', { method: 'POST' });
+  async function createRoom(ranked = false) {
+    const res = await fetch('/api/games', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ranked }),
+    });
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not create the game');
     return data.gameId;
+  }
+
+  // Sent once the restored Supabase session (if any) is known.
+  function sendAuth(sock) {
+    if (typeof Auth === 'undefined') return;
+    Auth.ready.then(() => {
+      const accessToken = Auth.session && Auth.session.access_token;
+      if (accessToken && sock.readyState === WebSocket.OPEN) sock.send(JSON.stringify({ type: 'auth', accessToken }));
+    });
   }
 
   function scheduleReconnect() {
@@ -85,13 +103,16 @@ const NetClient = (function () {
         color = msg.color;
         token = msg.token;
         if (color && token) sessionStorage.setItem(storageKey(id), JSON.stringify({ color, token }));
-        onJoinedCb(color, token);
+        if (msg.ranked && !color) sendAuth(ws);
+        onJoinedCb(color, token, !!msg.ranked);
       } else if (msg.type === 'state') {
         onStateCb(msg.state, msg.now);
       } else if (msg.type === 'actionRejected') {
         onRejectedCb(msg.reason);
       } else if (msg.type === 'chat' || msg.type === 'chatHistory') {
         onChatCb(msg);
+      } else if (msg.type === 'rating') {
+        onRatingCb(msg);
       }
     });
     ws.addEventListener('close', () => {
@@ -142,6 +163,9 @@ const NetClient = (function () {
     // {type:'chat', color, text, at} for each new line, {type:'chatHistory',
     // messages} right after joining (see server/rooms.js addChat).
     onChat(cb) { onChatCb = cb; },
+    // {type:'rating', w: {rating, delta}, b: {rating, delta}} once a ranked
+    // game's result is recorded.
+    onRating(cb) { onRatingCb = cb; },
   };
 })();
 

@@ -10,12 +10,28 @@
 
 const crypto = require('crypto');
 const engine = require('../engine/index.js');
+const ratings = require('./ratings.js');
+
+// Ranked result from the game-over text (the engine keeps no structured
+// winner): 1 = White won, 0 = Black won, 0.5 = draw, null = unrecognized.
+// ponytail: parses gameOverText, like app.js's 'Draw' check; add a
+// state.winner to the engine if the wording ever stops following this.
+function whiteScore(text) {
+  if (/White wins/.test(text)) return 1;
+  if (/Black wins/.test(text)) return 0;
+  if (/^Draw/.test(text)) return 0.5;
+  return null;
+}
 
 class GameRoom {
-  constructor(id) {
+  // ranked: seats go only to signed-in players (claimed via authenticate),
+  // and the finished game's result updates both players' ratings.
+  constructor(id, { ranked = false } = {}) {
     this.id = id;
+    this.ranked = ranked;
+    this.rated = false; // the current game's result has been recorded
     this.state = engine.createRoomState();
-    this.seats = { w: null, b: null }; // { socket, token } | null
+    this.seats = { w: null, b: null }; // { socket, token, userId? } | null
     this.spectators = new Set();
     this.chat = []; // [{ color, text, at }], newest last, capped at CHAT_HISTORY
   }
@@ -30,10 +46,7 @@ class GameRoom {
     const msg = { color: meta.color, text, at: Date.now() };
     this.chat.push(msg);
     if (this.chat.length > CHAT_HISTORY) this.chat.shift();
-    const payload = JSON.stringify({ type: 'chat', ...msg });
-    for (const sock of [this.seats.w && this.seats.w.socket, this.seats.b && this.seats.b.socket, ...this.spectators]) {
-      if (sock && sock.readyState === sock.OPEN) sock.send(payload);
-    }
+    this.send({ type: 'chat', ...msg });
   }
 
   // The whole backlog, sent on (re)join so a reloaded tab sees the conversation.
@@ -58,6 +71,29 @@ class GameRoom {
     for (const ws of this.spectators) {
       if (ws.readyState === ws.OPEN) ws.send(payload);
     }
+    // Every state change goes out through here, so this is the one place a
+    // ranked game can be seen ending (move, flag fall, Vanguard timeout).
+    this.recordResult();
+  }
+
+  send(payload) {
+    const json = JSON.stringify(payload);
+    for (const sock of [this.seats.w && this.seats.w.socket, this.seats.b && this.seats.b.socket, ...this.spectators]) {
+      if (sock && sock.readyState === sock.OPEN) sock.send(json);
+    }
+  }
+
+  recordResult() {
+    if (!this.state.gameOver) { this.rated = false; return; } // a new game is under way
+    if (!this.ranked || this.rated || this.state.phase !== 'playing') return;
+    const score = whiteScore(this.state.gameOverText);
+    const w = this.seats.w && this.seats.w.userId;
+    const b = this.seats.b && this.seats.b.userId;
+    if (score === null || !w || !b) return;
+    this.rated = true; // set before the await: never record one game twice
+    ratings.recordRatedGame(w, b, score)
+      .then(result => this.send({ type: 'rating', ...result }))
+      .catch(err => console.error(`[room ${this.id}] recording rated game failed`, err));
   }
 
   sendState(ws) {
@@ -70,8 +106,9 @@ class GameRoom {
 
   // First connection to a fresh room is White, second is Black, everyone
   // after that is a read-only spectator. Returns the assignment.
+  // In a ranked room everyone starts out spectating; authenticate() seats them.
   join(ws) {
-    for (const color of ['w', 'b']) {
+    for (const color of this.ranked ? [] : ['w', 'b']) {
       if (!this.seats[color]) {
         const token = crypto.randomBytes(16).toString('hex');
         this.seats[color] = { socket: ws, token };
@@ -95,6 +132,29 @@ class GameRoom {
     return true;
   }
 
+  // A ranked room's player proves who they are with their Supabase access
+  // token; the first two different accounts get White then Black, and the
+  // same account coming back (new tab, lost reconnect token) gets its seat
+  // back. Resolves to the new assignment, or null if nothing changed.
+  async authenticate(ws, accessToken) {
+    if (!this.ranked || (ws.augchess && ws.augchess.color)) return null;
+    const userId = await ratings.verifyUser(accessToken);
+    if (!userId) { this.sendRejection(ws, 'Sign in to play ranked games'); return null; }
+    if (ws.readyState !== ws.OPEN) return null;
+    let color = ['w', 'b'].find(c => this.seats[c] && this.seats[c].userId === userId);
+    if (color) {
+      this.seats[color].socket = ws;
+    } else {
+      color = ['w', 'b'].find(c => !this.seats[c]);
+      if (!color) return null; // both seats taken: stay a spectator
+      this.seats[color] = { socket: ws, token: crypto.randomBytes(16).toString('hex'), userId };
+    }
+    this.spectators.delete(ws);
+    const { token } = this.seats[color];
+    ws.augchess = { color, token };
+    return { color, token };
+  }
+
   leave(ws) {
     this.spectators.delete(ws);
     for (const color of ['w', 'b']) {
@@ -108,6 +168,10 @@ class GameRoom {
     const meta = ws.augchess;
     if (!meta || !meta.color) return; // spectators can't act; silently ignore
     if (!action || typeof action.type !== 'string') return;
+    if (this.ranked && action.type === 'newGame' && this.state.phase === 'playing' && !this.state.gameOver) {
+      this.sendRejection(ws, "A ranked game can't be restarted until it's over");
+      return;
+    }
 
     // A bug in one room's action handling must never take the whole process
     // (and every other room's players) down with it.
@@ -191,10 +255,10 @@ class RoomStore {
     this.rooms = new Map();
   }
 
-  create() {
+  create(options) {
     let id;
     do { id = crypto.randomBytes(6).toString('hex'); } while (this.rooms.has(id));
-    const room = new GameRoom(id);
+    const room = new GameRoom(id, options);
     this.rooms.set(id, room);
     return room;
   }

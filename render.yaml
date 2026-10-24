@@ -7,3 +7,10 @@ services:
     buildCommand: npm install
     startCommand: node index.js
     autoDeployTrigger: commit
+    envVars:
+      # Ranked games (server/ratings.js). The service role key is secret:
+      # set it in the Render dashboard, never in this file.
+      - key: SUPABASE_URL
+        value: https://eosvuuqvzlibokvgtwnl.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

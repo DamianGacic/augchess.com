@@ -11,7 +11,9 @@
  * unique index in Postgres — see supabase/schema.sql). A name typed in at
  * signup rides along as auth user_metadata and is applied by the
  * track_login() RPC on first login only if it's still free; it can also be
- * set/changed anytime afterward from the profile menu via set_display_name().
+ * set/changed anytime afterward from the Settings page via set_display_name().
+ * Friends (request/accept/remove by display name) are thin RPC wrappers here;
+ * the UI for them lives in settings.js.
  *
  * Relies on (loaded before this file in index.html):
  *   the Supabase CDN script (exposes window.supabase), supabase-config.js
@@ -24,13 +26,20 @@ const Auth = (function () {
   let profile = null;
   let heartbeatTimer = null;
   let onChangeCb = () => {};
+  let markReady;
+  const ready = new Promise(resolve => { markReady = resolve; });
 
   function configured() {
     return typeof SUPABASE_URL === 'string' && !SUPABASE_URL.includes('YOUR-PROJECT') &&
            typeof SUPABASE_ANON_KEY === 'string' && !SUPABASE_ANON_KEY.includes('YOUR-ANON');
   }
 
-  async function init() {
+  // Resolves ready once the restored session (or lack of one) is known.
+  function init() {
+    return initClient().finally(markReady);
+  }
+
+  async function initClient() {
     if (!configured() || typeof window.supabase === 'undefined') return;
     try {
       client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -57,7 +66,7 @@ const Auth = (function () {
   async function fetchProfile() {
     const { data, error } = await client
       .from('profiles')
-      .select('display_name')
+      .select('*')
       .eq('id', session.user.id)
       .single();
     if (error) { console.warn('Auth: fetchProfile failed', error); return null; }
@@ -122,6 +131,18 @@ const Auth = (function () {
     return { available: data, error };
   }
 
+  // Friends — see supabase/migrations/0003_friends.sql. Each returns
+  // { data, error } straight from the RPC.
+  function rpc(name, args) {
+    if (!client) return Promise.resolve({ data: null, error: new Error('Supabase is not configured') });
+    return client.rpc(name, args);
+  }
+  const listFriends = () => rpc('list_friends');
+  const sendFriendRequest = (name) => rpc('send_friend_request', { friend_name: name });
+  const respondFriendRequest = (userId, accept) => rpc('respond_friend_request', { other: userId, accept });
+  const removeFriend = (userId) => rpc('remove_friend', { other: userId });
+  const leaderboard = () => rpc('leaderboard');
+
   async function signOut() {
     if (client) await client.auth.signOut();
   }
@@ -132,6 +153,13 @@ const Auth = (function () {
     signOut,
     setDisplayName,
     checkDisplayNameAvailable,
+    listFriends,
+    sendFriendRequest,
+    respondFriendRequest,
+    removeFriend,
+    leaderboard,
+    // Resolves once init() has restored the session (or found none).
+    ready,
     get session() { return session; },
     get profile() { return profile; },
     // Fires immediately on init (with the restored session/profile, or
@@ -140,10 +168,9 @@ const Auth = (function () {
   };
 })();
 
-// ─── Profile button / modal wiring ─────────────────────────────────────────
+// ─── Profile button / Settings account section / sign-in modal wiring ──────
 function initAuthUI() {
   const profileBtn   = document.getElementById('profile-btn');
-  const profileMenu  = document.getElementById('profile-menu');
   const profileEmail = document.getElementById('profile-email');
   const signOutBtn   = document.getElementById('sign-out-btn');
 
@@ -162,33 +189,31 @@ function initAuthUI() {
   const statusMsg   = document.getElementById('auth-status-msg');
 
   Auth.onChange((session, profile) => {
-    profileMenu.classList.add('hidden');
     nameForm.classList.add('hidden');
     profileBtn.classList.toggle('signed-in', !!session);
+    document.getElementById('account-signed-in').classList.toggle('hidden', !session);
+    document.getElementById('account-signed-out').classList.toggle('hidden', !!session);
+    document.getElementById('friends-signed-in').classList.toggle('hidden', !session);
+    document.getElementById('friends-signed-out').classList.toggle('hidden', !!session);
     if (session) {
+      Settings.refreshFriends();
       profileEmail.textContent = session.user.email;
-      nameLabel.textContent = profile && profile.display_name
-        ? `Playing as ${profile.display_name}`
-        : 'No display name set yet';
+      nameLabel.textContent = (profile && profile.display_name) || 'Not set';
+      document.getElementById('profile-rating').textContent = (profile && profile.rating) || '—';
     }
   });
   Auth.init();
 
-  profileBtn.addEventListener('click', () => {
-    if (Auth.session) {
-      profileMenu.classList.toggle('hidden');
-    } else {
-      statusMsg.textContent = '';
-      emailInput.value = '';
-      signupNameInput.value = '';
-      authModal.classList.remove('hidden');
-    }
+  profileBtn.addEventListener('click', () => showView('account'));
+
+  document.getElementById('account-sign-in-btn').addEventListener('click', () => {
+    statusMsg.textContent = '';
+    emailInput.value = '';
+    signupNameInput.value = '';
+    authModal.classList.remove('hidden');
   });
 
-  signOutBtn.addEventListener('click', async () => {
-    profileMenu.classList.add('hidden');
-    await Auth.signOut();
-  });
+  signOutBtn.addEventListener('click', () => Auth.signOut());
 
   sendLinkBtn.addEventListener('click', async () => {
     const email = emailInput.value.trim();
@@ -206,9 +231,10 @@ function initAuthUI() {
     }
     const { error } = await Auth.sendMagicLink(email, displayName);
     sendLinkBtn.disabled = false;
-    statusMsg.textContent = error
-      ? 'Something went wrong — try again.'
-      : 'Check your email for a sign-in link.';
+    if (!error) statusMsg.textContent = 'Check your email for a sign-in link.';
+    else if (error.code === 'over_email_send_rate_limit' || error.status === 429)
+      statusMsg.textContent = 'Too many sign-in emails sent recently — wait a bit and try again.';
+    else statusMsg.textContent = 'Something went wrong — try again.';
   });
 
   closeBtn.addEventListener('click', () => authModal.classList.add('hidden'));
@@ -229,13 +255,6 @@ function initAuthUI() {
     const { error } = await Auth.setDisplayName(value);
     nameSaveBtn.disabled = false;
     nameStatus.textContent = error ? (error.message || 'Could not save — try another name.') : 'Saved!';
-  });
-
-  document.addEventListener('click', (e) => {
-    if (!profileMenu.classList.contains('hidden') &&
-        !profileMenu.contains(e.target) && e.target !== profileBtn) {
-      profileMenu.classList.add('hidden');
-    }
   });
 }
 

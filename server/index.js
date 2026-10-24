@@ -11,6 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { RoomStore } = require('./rooms.js');
+const ratings = require('./ratings.js');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = process.env.PORT || 8000;
@@ -62,9 +63,17 @@ function readJsonBody(req) {
 
 const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/games') {
-    const room = store.create();
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ gameId: room.id }));
+    readJsonBody(req).catch(() => ({})).then((body) => {
+      const ranked = !!(body && body.ranked);
+      if (ranked && !ratings.enabled) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Ranked games are not set up on this server' }));
+        return;
+      }
+      const room = store.create({ ranked });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ gameId: room.id }));
+    });
     return;
   }
   if (req.method === 'GET' && req.url.startsWith('/api/games/')) {
@@ -102,7 +111,7 @@ wss.on('connection', (ws, req, room, url) => {
     assignment = room.join(ws);
   }
 
-  ws.send(JSON.stringify({ type: 'joined', color: assignment.color, token: assignment.token }));
+  ws.send(JSON.stringify({ type: 'joined', color: assignment.color, token: assignment.token, ranked: room.ranked }));
   room.sendChatHistory(ws);
   // Broadcast (not just sendState to the new socket) so everyone already in
   // the room — the host waiting on "Share this link", other spectators —
@@ -113,6 +122,13 @@ wss.on('connection', (ws, req, room, url) => {
     let action;
     try { action = JSON.parse(raw); } catch (e) { return; }
     if (action && action.type === 'chat') room.addChat(ws, action.text);
+    else if (action && action.type === 'auth') {
+      room.authenticate(ws, action.accessToken).then((seat) => {
+        if (!seat) return;
+        ws.send(JSON.stringify({ type: 'joined', color: seat.color, token: seat.token, ranked: true }));
+        room.broadcast();
+      }).catch(err => console.error(`[room ${room.id}] auth failed`, err));
+    }
     else room.applyAction(ws, action);
   });
 

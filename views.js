@@ -27,16 +27,22 @@ function showView(viewName) {
   gameView.classList.add('hidden');
   augmentsView.classList.add('hidden');
   document.getElementById('figures-view').classList.add('hidden');
+  document.getElementById('account-view').classList.add('hidden');
+  document.getElementById('leaderboard-view').classList.add('hidden');
 
   if (viewName === 'home')           homeView.classList.remove('hidden');
   else if (viewName === 'game')      gameView.classList.remove('hidden');
   else if (viewName === 'augments')  { augmentsView.classList.remove('hidden'); renderAugmentsPage(); }
   else if (viewName === 'figures')   { document.getElementById('figures-view').classList.remove('hidden'); renderFiguresPage(); }
+  else if (viewName === 'leaderboard') { document.getElementById('leaderboard-view').classList.remove('hidden'); renderLeaderboard(); }
+  else if (viewName === 'account')   { document.getElementById('account-view').classList.remove('hidden'); Settings.refreshFriends(); }
 
   navHomeBtn.classList.toggle('active', viewName === 'home');
   navGameBtn.classList.toggle('active', viewName === 'game');
   navAugmentsBtn.classList.toggle('active', viewName === 'augments');
   document.getElementById('nav-figures').classList.toggle('active', viewName === 'figures');
+  document.getElementById('profile-btn').classList.toggle('active', viewName === 'account');
+  document.getElementById('nav-leaderboard').classList.toggle('active', viewName === 'leaderboard');
 }
 
 // ─── Shared Augment UI Bits ───────────────────────────────────────────────────
@@ -304,9 +310,31 @@ function showFigureDetail(fig) {
   modal.classList.remove('hidden');
 }
 
+// ─── Leaderboard Page ─────────────────────────────────────────────────────────
+// Re-fetched on every visit; the RPC caps it at 100 rows.
+async function renderLeaderboard() {
+  const list = document.getElementById('leaderboard-list');
+  const status = document.getElementById('leaderboard-status');
+  status.textContent = 'Loading…';
+  const { data, error } = await Auth.leaderboard();
+  if (error) { list.replaceChildren(); status.textContent = 'Could not load the leaderboard.'; return; }
+  const me = Auth.profile && Auth.profile.display_name;
+  list.replaceChildren(...data.map((row, i) => {
+    const li = document.createElement('li');
+    li.className = 'leaderboard-row' + (row.display_name === me ? ' me' : '');
+    li.innerHTML = '<span class="lb-rank"></span><span class="lb-name"></span><span class="lb-rating"></span>';
+    li.querySelector('.lb-rank').textContent = i + 1;
+    li.querySelector('.lb-name').textContent = row.display_name;
+    li.querySelector('.lb-rating').textContent = row.rating;
+    return li;
+  }));
+  status.textContent = data.length ? '' : 'No rated players yet — set a display name in Settings to appear here.';
+}
+
 // ─── Navigation Init ──────────────────────────────────────────────────────────
 function initNavigation() {
   navHomeBtn.addEventListener('click', () => showView('home'));
+  document.getElementById('nav-leaderboard').addEventListener('click', () => showView('leaderboard'));
   navGameBtn.addEventListener('click', () => showView('game'));
   navAugmentsBtn.addEventListener('click', () => showView('augments'));
   document.getElementById('nav-figures').addEventListener('click', () => showView('figures'));
@@ -319,6 +347,12 @@ function initNavigation() {
 
   document.getElementById('create-game-link-btn').addEventListener('click', () => {
     createGameLink();
+  });
+
+  // Ranked needs an account: signed out, this opens the sign-in modal instead.
+  document.getElementById('play-ranked-btn').addEventListener('click', () => {
+    if (Auth.session) createGameLink(true);
+    else document.getElementById('account-sign-in-btn').click();
   });
 
   closeDetailBtn.addEventListener('click', closeAugmentDetail);

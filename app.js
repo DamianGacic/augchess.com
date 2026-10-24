@@ -140,15 +140,27 @@ NetClient.onRejected((reason) => {
   flashStatus(reason);
 });
 
+let rankedGame = false;
+let lastRating = null; // { rating, delta } for this player after a ranked game
+
 // Fires the instant color/token are actually known (right after the
 // server's {type:'joined'} reply) — NOT the same moment as onOpen, which
 // fires on the raw WebSocket handshake, strictly before that reply can have
 // arrived. Anything that needs myColor immediately (board flip) belongs
 // here, not in an onOpen handler.
-NetClient.onJoined((joinedColor) => {
+NetClient.onJoined((joinedColor, token, ranked) => {
   myColor = joinedColor;
+  rankedGame = ranked;
   if (joinedColor === 'b') flipped = true;
   updateMpBadge();
+  if (ranked && !joinedColor) Auth.ready.then(() => {
+    if (!Auth.session) showMpModal('Ranked game', 'Sign in to play ranked games. You are watching as a spectator.', false, false);
+  });
+});
+
+NetClient.onRating((result) => {
+  lastRating = result[myColor] || null;
+  updateStatus();
 });
 
 NetClient.onOpen(() => {
@@ -180,7 +192,7 @@ function updateMpBadge() {
   if (netMode && NetClient.active) {
     reconnecting = false;
     const colorLabel = myColor === 'w' ? 'White' : myColor === 'b' ? 'Black' : 'Spectator';
-    badge.textContent = `🟢 Online · You are ${colorLabel}`;
+    badge.textContent = `🟢 ${rankedGame ? 'Ranked' : 'Online'} · You are ${colorLabel}`;
     badge.classList.remove('hidden');
   } else if (netMode && reconnecting) {
     badge.textContent = '🟡 Reconnecting…';
@@ -194,9 +206,15 @@ function updateMpBadge() {
 }
 
 // Called by views.js "Create Game Link" button.
-async function createGameLink() {
+async function createGameLink(ranked = false) {
   showMpModal('Create Game Link', 'Generating your game link…', false, true);
-  const gameId = await NetClient.createRoom();
+  let gameId;
+  try {
+    gameId = await NetClient.createRoom(ranked);
+  } catch (err) {
+    showMpModal('Create Game Link', err.message, false, false);
+    return;
+  }
   const url = buildGameUrl(gameId);
   // Runs on every (re)connect, including automatic reconnects after a
   // dropped connection — cheap to re-show since it's a no-op once the host
@@ -208,7 +226,7 @@ async function createGameLink() {
     document.getElementById('btn-undo').classList.add('hidden');
     updateMpBadge();
     document.getElementById('mp-link-input').value = url;
-    showMpModal('Share this link', 'Send this link to your friend. You will play as White.', true, true);
+    showMpModal('Share this link', `Send this link to your friend. You will play as White${ranked ? ' in a ranked game — they need to be signed in' : ''}.`, true, true);
   });
   NetClient.connect(gameId);
 }
@@ -411,6 +429,7 @@ function attemptMove(from, to) {
     ((piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1'));
 
   if ((move.standard && reachesPromo) || move.needsPromo) {
+    if (Settings.get('autoQueen')) { submitMove(move, 'q'); return; }
     pendingPromotion = { from, to, move };
     showPromotionModal(piece.color);
     return;
@@ -1267,10 +1286,15 @@ function updateStatus() {
 
   if (state.gameOver) {
     statusText.textContent = state.gameOverText;
+    if (lastRating) {
+      const sign = lastRating.delta >= 0 ? '+' : '−';
+      statusText.textContent += ` · Rating ${lastRating.rating} (${sign}${Math.abs(lastRating.delta)})`;
+    }
     if (state.gameOverText.includes('Draw')) statusBox.classList.add('draw');
     else statusBox.classList.add('checkmate');
     return;
   }
+  lastRating = null;
 
   if (state.vanguard) {
     statusText.textContent = `${state.vanguard.color === 'w' ? 'White' : 'Black'} is deploying their Vanguard`;

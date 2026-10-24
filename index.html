@@ -19,6 +19,7 @@
       </div>
       <nav class="main-nav">
         <button class="nav-btn" id="nav-home">Home</button>
+        <button class="nav-btn" id="nav-leaderboard">Leaderboards</button>
         <button class="nav-btn" id="nav-game">Game</button>
         <button class="nav-btn" id="nav-augments">Augments</button>
         <button class="nav-btn" id="nav-figures">Figures</button>
@@ -27,19 +28,6 @@
         <button class="profile-btn" id="profile-btn" title="Account" aria-label="Account">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
         </button>
-        <div id="profile-menu" class="profile-menu hidden">
-          <div id="profile-email" class="profile-email"></div>
-          <div class="profile-displayname-row">
-            <span id="profile-displayname-label"></span>
-            <button class="link-btn" id="profile-displayname-edit-btn">Edit</button>
-          </div>
-          <div id="profile-displayname-form" class="profile-displayname-form hidden">
-            <input type="text" id="profile-displayname-input" class="auth-email-input" placeholder="Display name" maxlength="20" autocomplete="off" />
-            <button class="btn btn-primary" id="profile-displayname-save-btn">Save</button>
-            <p id="profile-displayname-status" class="auth-status-msg"></p>
-          </div>
-          <button class="btn btn-secondary" id="sign-out-btn">Sign out</button>
-        </div>
       </div>
     </header>
 
@@ -55,6 +43,7 @@
               <button class="btn btn-primary btn-lg" id="start-game-btn">Start New Game</button>
               <button class="btn btn-secondary btn-lg" id="play-ai-btn">Play vs AI</button>
               <button class="btn btn-multiplayer btn-lg" id="create-game-link-btn">Create Game Link</button>
+              <button class="btn btn-multiplayer btn-lg" id="play-ranked-btn">Play Ranked</button>
             </div>
           </div>
           <div class="hero-art" aria-hidden="true">
@@ -227,6 +216,96 @@
       </main>
     </div>
 
+    <!-- Leaderboard View (views.js) -->
+    <div id="leaderboard-view" class="view hidden">
+      <main class="augments-main account-main">
+        <div class="page-head">
+          <h1>Leaderboards</h1>
+          <p>Top rated players. Everyone starts at 1200.</p>
+        </div>
+        <section class="settings-card">
+          <ol id="leaderboard-list" class="leaderboard-list"></ol>
+          <p id="leaderboard-status" class="settings-note"></p>
+        </section>
+      </main>
+    </div>
+
+    <!-- Account / Settings View (settings.js, auth.js) -->
+    <div id="account-view" class="view hidden">
+      <main class="augments-main account-main">
+        <div class="page-head">
+          <h1>Settings</h1>
+          <p>Your account, friends and how the board looks.</p>
+        </div>
+
+        <section class="settings-card">
+          <h2>Account</h2>
+          <div id="account-signed-out">
+            <p class="settings-note">Not signed in. An account is optional; it gives you a display name and friends.</p>
+            <button class="btn btn-primary settings-inline-btn" id="account-sign-in-btn">Sign in</button>
+          </div>
+          <div id="account-signed-in" class="hidden">
+            <div class="settings-row">
+              <span class="settings-label">Email</span>
+              <span id="profile-email" class="settings-value"></span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-label">Display name</span>
+              <span class="settings-value">
+                <span id="profile-displayname-label"></span>
+                <button class="link-btn" id="profile-displayname-edit-btn">Edit</button>
+              </span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-label">Rating</span>
+              <span id="profile-rating" class="settings-value"></span>
+            </div>
+            <div id="profile-displayname-form" class="settings-inline-form hidden">
+              <input type="text" id="profile-displayname-input" class="auth-email-input" placeholder="Display name" maxlength="20" autocomplete="off" />
+              <button class="btn btn-primary settings-inline-btn" id="profile-displayname-save-btn">Save</button>
+            </div>
+            <p id="profile-displayname-status" class="auth-status-msg"></p>
+            <button class="btn btn-secondary settings-inline-btn" id="sign-out-btn">Sign out</button>
+          </div>
+        </section>
+
+        <section class="settings-card">
+          <h2>Friends</h2>
+          <p id="friends-signed-out" class="settings-note">Sign in to add friends.</p>
+          <div id="friends-signed-in" class="hidden">
+            <form id="friend-add-form" class="settings-inline-form">
+              <input type="text" id="friend-add-input" class="auth-email-input" placeholder="Friend's display name" maxlength="20" autocomplete="off" aria-label="Friend's display name" />
+              <button class="btn btn-primary settings-inline-btn" type="submit">Add friend</button>
+            </form>
+            <p id="friend-status" class="auth-status-msg"></p>
+            <h3 class="settings-subhead">Requests</h3>
+            <ul id="friend-requests" class="friend-list"></ul>
+            <h3 class="settings-subhead">Friends</h3>
+            <ul id="friend-list" class="friend-list"></ul>
+          </div>
+        </section>
+
+        <section class="settings-card">
+          <h2>Board</h2>
+          <label class="settings-row">
+            <span class="settings-label">Board theme</span>
+            <select id="pref-boardTheme" class="settings-select">
+              <option value="brown">Brown</option>
+              <option value="green">Green</option>
+              <option value="blue">Blue</option>
+              <option value="gray">Gray</option>
+            </select>
+          </label>
+          <label class="settings-row"><span class="settings-label">Show coordinates</span><input type="checkbox" id="pref-coords" class="settings-toggle"></label>
+          <label class="settings-row"><span class="settings-label">Show legal moves</span><input type="checkbox" id="pref-legalMoves" class="settings-toggle"></label>
+          <label class="settings-row"><span class="settings-label">Highlight last move</span><input type="checkbox" id="pref-lastMove" class="settings-toggle"></label>
+          <label class="settings-row"><span class="settings-label">Piece animations</span><input type="checkbox" id="pref-animations" class="settings-toggle"></label>
+          <label class="settings-row"><span class="settings-label">Always promote to Queen</span><input type="checkbox" id="pref-autoQueen" class="settings-toggle"></label>
+          <p class="settings-note">Saved on this device.</p>
+        </section>
+      </main>
+    </div>
+
     <!-- Figures View -->
     <div id="figures-view" class="view hidden">
       <main class="augments-main">
@@ -386,7 +465,7 @@
         <p class="augment-subtitle">Optional — sync your profile across devices. Playing and sharing game links never requires an account.</p>
         <input type="email" id="auth-email-input" class="auth-email-input" placeholder="you@example.com" autocomplete="email" />
         <input type="text" id="auth-displayname-input" class="auth-email-input" placeholder="Display name (optional)" maxlength="20" autocomplete="off" />
-        <p class="auth-hint">You can leave this blank and choose or change it anytime from your profile menu.</p>
+        <p class="auth-hint">You can leave this blank and choose or change it anytime in Settings.</p>
         <button class="btn btn-primary" id="auth-send-link-btn">Send magic link</button>
         <p id="auth-status-msg" class="auth-status-msg"></p>
         <button class="btn btn-secondary" id="auth-close-btn">Close</button>
@@ -406,6 +485,7 @@
   <script src="netclient.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
+  <script src="settings.js"></script>
   <script src="auth.js"></script>
   <script src="stunlock.js"></script>
   <script src="shields.js"></script>
