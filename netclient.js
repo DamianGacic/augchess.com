@@ -56,14 +56,9 @@ const NetClient = (function () {
     return `${proto}//${location.host}/ws/${id}` + (qs ? `?${qs}` : '');
   }
 
-  async function createRoom(ranked = false) {
-    const res = await fetch('/api/games', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ranked }),
-    });
+  async function createRoom() {
+    const res = await fetch('/api/games', { method: 'POST' });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Could not create the game');
     return data.gameId;
   }
 

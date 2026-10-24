@@ -11,12 +11,13 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { RoomStore } = require('./rooms.js');
-const ratings = require('./ratings.js');
+const { Matchmaker } = require('./matchmaking.js');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = process.env.PORT || 8000;
 
 const store = new RoomStore();
+const matchmaker = new Matchmaker(store);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -63,17 +64,9 @@ function readJsonBody(req) {
 
 const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/games') {
-    readJsonBody(req).catch(() => ({})).then((body) => {
-      const ranked = !!(body && body.ranked);
-      if (ranked && !ratings.enabled) {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Ranked games are not set up on this server' }));
-        return;
-      }
-      const room = store.create({ ranked });
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ gameId: room.id }));
-    });
+    const room = store.create();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ gameId: room.id }));
     return;
   }
   if (req.method === 'GET' && req.url.startsWith('/api/games/')) {
@@ -90,6 +83,19 @@ const wss = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  if (url.pathname === '/ws/queue') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.on('message', (raw) => {
+        let msg;
+        try { msg = JSON.parse(raw); } catch (e) { return; }
+        if (msg && msg.type === 'queue') {
+          matchmaker.add(ws, msg).catch(err => console.error('matchmaking failed', err));
+        }
+      });
+      ws.on('close', () => matchmaker.remove(ws));
+    });
+    return;
+  }
   const match = url.pathname.match(/^\/ws\/([a-f0-9]+)$/);
   if (!match) { socket.destroy(); return; }
   const room = store.get(match[1]);

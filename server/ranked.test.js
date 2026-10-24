@@ -1,8 +1,9 @@
-// Self-check for ranked rooms: node server/ranked.test.js (stubs Supabase).
+// Self-check for ranked rooms + matchmaking: node server/ranked.test.js (stubs Supabase).
 'use strict';
 const assert = require('assert');
 const ratings = require('./ratings.js');
-const { GameRoom } = require('./rooms.js');
+const { GameRoom, RoomStore } = require('./rooms.js');
+const { Matchmaker, ratingWindow } = require('./matchmaking.js');
 
 const users = { tokA: 'user-a', tokB: 'user-b' };
 ratings.verifyUser = async (t) => users[t] || null;
@@ -40,4 +41,50 @@ const sock = () => { const ws = { OPEN: 1, readyState: 1, sent: [], send(m) { ws
   const casual = new GameRoom('c');
   assert.strictEqual(casual.join(sock()).color, 'w', 'casual rooms seat on connect as before');
   console.log('ranked rooms ok');
+
+  // ─── Matchmaking ───
+  ratings.enabled = true; // Matchmaker reads this property, so the stub can flip it
+  const ratingOf = { u1: 1200, u2: 1900, u3: 1250 };
+  ratings.verifyUser = async (t) => t;
+  ratings.getRating = async (id) => ratingOf[id];
+  const store = new RoomStore();
+  const mm = new Matchmaker(store);
+  const last = (ws) => ws.sent.at(-1);
+
+  const c1 = sock(), c2 = sock();
+  await mm.add(c1, { mode: 'casual' });
+  assert.strictEqual(last(c1).type, 'queued', 'alone in casual: keeps searching');
+  await mm.add(c2, { mode: 'casual' });
+  assert.strictEqual(last(c1).type, 'matched');
+  assert.strictEqual(last(c1).gameId, last(c2).gameId, 'casual: first come, first served');
+  assert.strictEqual(store.get(last(c1).gameId).ranked, false);
+
+  const r1 = sock(), r2 = sock(), r3 = sock(), anon = sock();
+  await mm.add(anon, { mode: 'ranked' });
+  assert.strictEqual(last(anon).type, 'queueError', 'ranked needs an account');
+  await mm.add(r1, { mode: 'ranked', accessToken: 'u1' });
+  await mm.add(r2, { mode: 'ranked', accessToken: 'u2' });
+  assert.strictEqual(last(r1).type, 'queued', '700 apart: not matched right away');
+  await mm.add(r3, { mode: 'ranked', accessToken: 'u3' });
+  assert.strictEqual(last(r1).type, 'matched', '1200 meets 1250');
+  assert.strictEqual(last(r3).gameId, last(r1).gameId);
+  const matched = store.get(last(r1).gameId);
+  assert.ok(matched.ranked);
+  assert.deepStrictEqual(Object.values(matched.reserved).sort(), ['u1', 'u3'], 'seats reserved for the matched pair');
+  assert.strictEqual(await matched.authenticate(sock(), 'u2'), null, 'nobody else can take a reserved seat');
+
+  mm.ranked[0].since -= 60000; // u2 has now waited a minute: window ±700
+  assert.ok(ratingWindow(mm.ranked[0], Date.now()) >= 700);
+  const r4 = sock();
+  ratingOf.u4 = 1250;
+  await mm.add(r4, { mode: 'ranked', accessToken: 'u4' });
+  assert.strictEqual(last(r2).type, 'matched', 'a long wait widens the window');
+
+  const t1 = sock(), t2 = sock();
+  await mm.add(t1, { mode: 'ranked', accessToken: 'u1' });
+  await mm.add(t2, { mode: 'ranked', accessToken: 'u1' });
+  assert.strictEqual(last(t1).type, 'queueError', 'a second tab replaces the first');
+  assert.strictEqual(mm.ranked.length, 1, 'and never plays itself');
+  console.log('matchmaking ok');
+  process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

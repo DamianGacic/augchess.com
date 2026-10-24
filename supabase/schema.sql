@@ -342,3 +342,7 @@ $$;
 
 revoke all on function public.record_rated_game(uuid, uuid, numeric) from public, anon, authenticated;
 grant execute on function public.record_rated_game(uuid, uuid, numeric) to service_role;
+
+-- Matchmaking reads a player's rating with the service role key
+-- (server/ratings.js getRating).
+grant select on public.profiles to service_role;

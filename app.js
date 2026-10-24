@@ -206,15 +206,9 @@ function updateMpBadge() {
 }
 
 // Called by views.js "Create Game Link" button.
-async function createGameLink(ranked = false) {
+async function createGameLink() {
   showMpModal('Create Game Link', 'Generating your game link…', false, true);
-  let gameId;
-  try {
-    gameId = await NetClient.createRoom(ranked);
-  } catch (err) {
-    showMpModal('Create Game Link', err.message, false, false);
-    return;
-  }
+  const gameId = await NetClient.createRoom();
   const url = buildGameUrl(gameId);
   // Runs on every (re)connect, including automatic reconnects after a
   // dropped connection — cheap to re-show since it's a no-op once the host
@@ -226,9 +220,58 @@ async function createGameLink(ranked = false) {
     document.getElementById('btn-undo').classList.add('hidden');
     updateMpBadge();
     document.getElementById('mp-link-input').value = url;
-    showMpModal('Share this link', `Send this link to your friend. You will play as White${ranked ? ' in a ranked game — they need to be signed in' : ''}.`, true, true);
+    showMpModal('Share this link', 'Send this link to your friend. You will play as White.', true, true);
   });
   NetClient.connect(gameId);
+}
+
+// Called by views.js "Play Online" / "Play Ranked": waits in the server's
+// queue (server/matchmaking.js) until paired, then joins the new room like
+// any game link. Closing the modal leaves the queue.
+let queueSocket = null, searchTimer = null;
+function findMatch(ranked) {
+  cancelSearch();
+  const title = ranked ? 'Play Ranked' : 'Play Online';
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = queueSocket = new WebSocket(`${proto}//${location.host}/ws/queue`);
+  showMpModal(title, 'Searching for an opponent…', false, true);
+  ws.addEventListener('open', () => Auth.ready.then(() => {
+    const accessToken = ranked && Auth.session ? Auth.session.access_token : undefined;
+    ws.send(JSON.stringify({ type: 'queue', mode: ranked ? 'ranked' : 'casual', accessToken }));
+  }));
+  ws.addEventListener('message', (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'queued') {
+      const since = Date.now();
+      const tick = () => {
+        const s = Math.floor((Date.now() - since) / 1000);
+        mpStatusEl.textContent = `Searching for an opponent… ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` +
+          (msg.rating ? ` · Your rating ${msg.rating}` : '');
+      };
+      tick();
+      searchTimer = setInterval(tick, 1000);
+    } else if (msg.type === 'matched') {
+      cancelSearch();
+      history.replaceState(null, '', buildGameUrl(msg.gameId));
+      joinGameFromUrl(msg.gameId);
+    } else if (msg.type === 'queueError') {
+      cancelSearch();
+      showMpModal(title, msg.reason, false, false);
+    }
+  });
+  ws.addEventListener('close', () => {
+    if (queueSocket !== ws) return; // left on purpose
+    cancelSearch();
+    showMpModal(title, 'Lost connection to the server — try again.', false, false);
+  });
+}
+
+function cancelSearch() {
+  clearInterval(searchTimer);
+  searchTimer = null;
+  const ws = queueSocket;
+  queueSocket = null;
+  if (ws) ws.close();
 }
 
 // Called on page load when the URL has ?game=<id> — auto-join as guest/spectator.
@@ -281,8 +324,8 @@ function buildMpModal() {
       setTimeout(() => { mpCopyBtn.textContent = 'Copy'; }, 2000);
     });
   });
-  mpCloseBtn.addEventListener('click', () => mpModal.classList.add('hidden'));
-  mpModal.addEventListener('click', (e) => { if (e.target === mpModal) mpModal.classList.add('hidden'); });
+  mpCloseBtn.addEventListener('click', () => { cancelSearch(); mpModal.classList.add('hidden'); });
+  mpModal.addEventListener('click', (e) => { if (e.target === mpModal) { cancelSearch(); mpModal.classList.add('hidden'); } });
 }
 function showMpModal(title, status, showLink, showSpinner) {
   buildMpModal();

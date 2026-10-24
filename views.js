@@ -349,9 +349,10 @@ function initNavigation() {
     createGameLink();
   });
 
+  document.getElementById('play-online-btn').addEventListener('click', () => findMatch(false));
   // Ranked needs an account: signed out, this opens the sign-in modal instead.
   document.getElementById('play-ranked-btn').addEventListener('click', () => {
-    if (Auth.session) createGameLink(true);
+    if (Auth.session) findMatch(true);
     else document.getElementById('account-sign-in-btn').click();
   });
 

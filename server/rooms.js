@@ -30,6 +30,7 @@ class GameRoom {
     this.id = id;
     this.ranked = ranked;
     this.rated = false; // the current game's result has been recorded
+    this.reserved = null; // { w: userId, b: userId } for matchmade ranked games
     this.state = engine.createRoomState();
     this.seats = { w: null, b: null }; // { socket, token, userId? } | null
     this.spectators = new Set();
@@ -133,7 +134,8 @@ class GameRoom {
   }
 
   // A ranked room's player proves who they are with their Supabase access
-  // token; the first two different accounts get White then Black, and the
+  // token; the first two different accounts get White then Black (or, for a
+  // matchmade game, only the two reserved accounts their colors), and the
   // same account coming back (new tab, lost reconnect token) gets its seat
   // back. Resolves to the new assignment, or null if nothing changed.
   async authenticate(ws, accessToken) {
@@ -145,7 +147,7 @@ class GameRoom {
     if (color) {
       this.seats[color].socket = ws;
     } else {
-      color = ['w', 'b'].find(c => !this.seats[c]);
+      color = ['w', 'b'].find(c => !this.seats[c] && (!this.reserved || this.reserved[c] === userId));
       if (!color) return null; // both seats taken: stay a spectator
       this.seats[color] = { socket: ws, token: crypto.randomBytes(16).toString('hex'), userId };
     }
