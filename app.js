@@ -330,6 +330,7 @@ function renderAll() {
   // Only queues a timer, so it's safe ahead of rendering — and covers the
   // draft too, which returns early below.
   if (typeof AiPlayer !== 'undefined') AiPlayer.schedule();
+  if (typeof Chat !== 'undefined') Chat.sync();
 
   if (state.phase === 'settings') {
     settingsModal.classList.remove('hidden');
@@ -822,6 +823,7 @@ function renderBoard() {
 
   Vanguard.decorate();
   BoardAnim.afterRender();
+  if (window.Board3D) Board3D.sync(); // board3d.js, a module: absent until it loads
   renderAbilityBar();
 }
 

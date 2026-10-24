@@ -16,7 +16,9 @@
  *     'settingsStart'|'armAbility'|'castAbility'|'cancelAbility'|'newGame', ...}
  *   Server -> client: {type:'joined', color, token}, {type:'state', state, now}
  *     (now = server epoch ms, for the clock display),
- *     {type:'actionRejected', reason}
+ *     {type:'actionRejected', reason}, {type:'chat', color, text, at},
+ *     {type:'chatHistory', messages}
+ *   Chat goes client -> server as {type:'chat', text}, outside the engine.
  */
 const NetClient = (function () {
   let ws = null;
@@ -29,6 +31,7 @@ const NetClient = (function () {
   let onCloseCb = () => {};
   let onJoinedCb = () => {};
   let onReconnectingCb = () => {};
+  let onChatCb = () => {};
   let reconnectAttempt = 0;
   let reconnectTimer = null;
   let intentionalClose = false;
@@ -87,6 +90,8 @@ const NetClient = (function () {
         onStateCb(msg.state, msg.now);
       } else if (msg.type === 'actionRejected') {
         onRejectedCb(msg.reason);
+      } else if (msg.type === 'chat' || msg.type === 'chatHistory') {
+        onChatCb(msg);
       }
     });
     ws.addEventListener('close', () => {
@@ -134,6 +139,9 @@ const NetClient = (function () {
     // Fires (with the 1-based attempt number) whenever a reconnect attempt
     // is scheduled after an unexpected close.
     onReconnecting(cb) { onReconnectingCb = cb; },
+    // {type:'chat', color, text, at} for each new line, {type:'chatHistory',
+    // messages} right after joining (see server/rooms.js addChat).
+    onChat(cb) { onChatCb = cb; },
   };
 })();
 

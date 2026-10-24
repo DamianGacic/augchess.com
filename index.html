@@ -196,8 +196,19 @@
             <div class="controls">
               <button class="btn btn-primary" id="btn-new-game">New Game</button>
               <button class="btn btn-secondary" id="btn-flip">Flip Board</button>
+              <button class="btn btn-secondary" id="btn-3d">3D Board</button>
               <button class="btn btn-secondary" id="btn-undo">Undo</button>
             </div>
+          </div>
+
+          <!-- Chat (chat.js) -->
+          <div class="chat-container">
+            <div class="move-list-header">Chat</div>
+            <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
+            <form id="chat-form" class="chat-form">
+              <input id="chat-input" type="text" maxlength="300" autocomplete="off" aria-label="Chat message">
+              <button class="btn btn-secondary" type="submit">Send</button>
+            </form>
           </div>
 
         </div>
@@ -414,5 +425,13 @@
   <script src="views.js"></script>
   <script src="app.js"></script>
   <script src="ai-player.js"></script>
+  <script src="chat.js"></script>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+  <script type="module" src="board3d.js"></script>
 </body>
 </html>

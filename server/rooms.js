@@ -17,6 +17,28 @@ class GameRoom {
     this.state = engine.createRoomState();
     this.seats = { w: null, b: null }; // { socket, token } | null
     this.spectators = new Set();
+    this.chat = []; // [{ color, text, at }], newest last, capped at CHAT_HISTORY
+  }
+
+  // Chat lives beside the game, not in engine state: a seated player's line
+  // goes to everyone in the room (spectators read along but can't post).
+  addChat(ws, text) {
+    const meta = ws.augchess;
+    if (!meta || !meta.color || typeof text !== 'string') return;
+    text = text.trim().slice(0, CHAT_MAX_LENGTH);
+    if (!text) return;
+    const msg = { color: meta.color, text, at: Date.now() };
+    this.chat.push(msg);
+    if (this.chat.length > CHAT_HISTORY) this.chat.shift();
+    const payload = JSON.stringify({ type: 'chat', ...msg });
+    for (const sock of [this.seats.w && this.seats.w.socket, this.seats.b && this.seats.b.socket, ...this.spectators]) {
+      if (sock && sock.readyState === sock.OPEN) sock.send(payload);
+    }
+  }
+
+  // The whole backlog, sent on (re)join so a reloaded tab sees the conversation.
+  sendChatHistory(ws) {
+    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: 'chatHistory', messages: this.chat }));
   }
 
   // Every state message carries the server's time so clients can show the
@@ -154,6 +176,11 @@ class GameRoom {
 // Extra time the server waits past the Vanguard limit for the owner's own
 // (client-timed) deployment to arrive before resolving it itself.
 const VANGUARD_GRACE_MS = 5000;
+
+// ponytail: no rate limit — the length and history caps bound memory, a
+// spammer only annoys their own opponent. Add per-seat throttling if needed.
+const CHAT_MAX_LENGTH = 300;
+const CHAT_HISTORY = 100;
 
 // setTimeout can fire a few ms before its deadline; this keeps the clock
 // watcher from waking just short of the flag and having to re-arm.

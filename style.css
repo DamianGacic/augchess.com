@@ -51,7 +51,9 @@
   --square-dark: #b58863;
   --square-last-move-light: #b3a83c;
   --square-last-move-dark: #aaa23a;
-  --board-size: min(560px, 90vw, 80vh);
+  /* Fits the viewport: header + padding + both player bars take ~250px of
+     height; the ability rail + side panel + gaps take ~460px of width. */
+  --board-size: min(860px, calc(100vh - 250px), calc(100vw - 460px));
 
   --font-display: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -150,12 +152,13 @@ main {
 
 .game-layout {
   display: grid;
-  grid-template-columns: 100px var(--board-size) 290px;
-  grid-template-rows: auto var(--board-size) auto;
+  grid-template-columns: 100px 290px var(--board-size);
+  grid-template-rows: auto var(--board-size) auto auto;
   grid-template-areas:
-    ".         player-black side"
-    "abilities board        side"
-    ".         player-white side";
+    ".         side player-black"
+    "abilities side board"
+    ".         side player-white"
+    ".         .    chat";
   gap: 10px 18px;
   align-items: start;
 }
@@ -191,9 +194,10 @@ main {
    and reverse the rail so each cluster still sits next to its own bar. */
 .game-layout.flipped {
   grid-template-areas:
-    ".         player-white side"
-    "abilities board        side"
-    ".         player-black side";
+    ".         side player-white"
+    "abilities side board"
+    ".         side player-black"
+    ".         .    chat";
 }
 
 .game-layout.flipped #ability-rail {
@@ -850,6 +854,7 @@ main {
 .status-box,
 .active-augments,
 .move-list-container,
+.chat-container,
 .feature-card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 40%), var(--bg-1);
   border: 1px solid var(--line);
@@ -2193,13 +2198,14 @@ main {
 
   .game-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto auto auto;
+    grid-template-rows: auto auto auto auto auto auto;
     grid-template-areas:
       "abilities"
       "player-black"
       "board"
       "player-white"
-      "side";
+      "side"
+      "chat";
   }
 
   .game-layout.flipped {
@@ -2208,7 +2214,8 @@ main {
       "player-white"
       "board"
       "player-black"
-      "side";
+      "side"
+      "chat";
   }
 
   /* Not enough vertical room to keep the rail level with the board here —
@@ -3714,3 +3721,37 @@ main {
   .shield-panel { height: auto; min-height: 56px; flex-wrap: wrap; padding: 6px 8px; bottom: calc(100% + 6px); }
   .shield-panel .vg-sub { white-space: normal; }
 }
+
+/* ===== 3D board (board3d.js) — canvas covers the 2D board, which still renders underneath ===== */
+#board3d { position: absolute; inset: 0; z-index: 50; border-radius: 2px; touch-action: none; }
+
+/* Wide screens: chat gets its own full-height column right of the board
+   (narrower screens put it under the board instead). */
+@media (min-width: 1200px) {
+  :root { --board-size: min(860px, calc(100vh - 250px), calc(100vw - 770px)); }
+  .game-layout { grid-template-columns: 100px 290px var(--board-size) 290px; grid-template-rows: auto var(--board-size) auto; }
+  .game-layout { grid-template-areas:
+    ".         side player-black chat"
+    "abilities side board        chat"
+    ".         side player-white chat"; }
+  .game-layout.flipped { grid-template-areas:
+    ".         side player-white chat"
+    "abilities side board        chat"
+    ".         side player-black chat"; }
+  .game-layout .chat-container { height: calc(var(--board-size) + 132px); }
+}
+
+/* ===== Chat (chat.js) ===== */
+.chat-container { grid-area: chat; height: 240px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.chat-messages { flex: 1; min-height: 60px; overflow-y: auto; padding: 8px 14px; font-size: 13px; line-height: 1.45; }
+.chat-msg { overflow-wrap: anywhere; margin-bottom: 4px; color: var(--text-bright); }
+.chat-name { font-weight: 700; margin-right: 6px; }
+.chat-name.white { color: #f5f0e6; }
+.chat-name.black { color: var(--text-secondary); }
+.chat-form { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+.chat-form input {
+  flex: 1; width: auto; min-width: 0; padding: 7px 10px; border-radius: 6px; font: inherit; font-size: 13px;
+  background: var(--bg-2); color: var(--text-bright); border: 1px solid var(--line);
+}
+.chat-form input:disabled, .chat-form button:disabled { opacity: 0.5; cursor: not-allowed; }
+.chat-form .btn { flex: 0 0 auto; width: auto; padding: 7px 12px; }

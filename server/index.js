@@ -33,15 +33,19 @@ function serveStatic(req, res) {
   if (urlPath === '/') urlPath = '/index.html';
   const full = path.normalize(path.join(ROOT, urlPath));
   if (!full.startsWith(ROOT)) { res.writeHead(403); res.end('Forbidden'); return; }
-  fs.readFile(full, (err, data) => {
-    if (err) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, {
-      'Content-Type': MIME[path.extname(full)] || 'application/octet-stream',
-      // Short window: cuts repeat-load bandwidth (the free tier's real limit)
-      // without holding stale assets long after a deploy during active dev.
-      'Cache-Control': 'public, max-age=300',
+  fs.stat(full, (statErr, stat) => {
+    if (statErr || !stat.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+    // Revalidate every load: an unchanged file costs only a bodiless 304 (the
+    // free tier's real limit is bandwidth), and a deploy or local edit shows
+    // up on the very next reload instead of after a stale cache window.
+    const lastModified = stat.mtime.toUTCString();
+    const headers = { 'Cache-Control': 'no-cache', 'Last-Modified': lastModified };
+    if (req.headers['if-modified-since'] === lastModified) { res.writeHead(304, headers); res.end(); return; }
+    fs.readFile(full, (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not found'); return; }
+      res.writeHead(200, { ...headers, 'Content-Type': MIME[path.extname(full)] || 'application/octet-stream' });
+      res.end(data);
     });
-    res.end(data);
   });
 }
 
@@ -99,6 +103,7 @@ wss.on('connection', (ws, req, room, url) => {
   }
 
   ws.send(JSON.stringify({ type: 'joined', color: assignment.color, token: assignment.token }));
+  room.sendChatHistory(ws);
   // Broadcast (not just sendState to the new socket) so everyone already in
   // the room — the host waiting on "Share this link", other spectators —
   // finds out someone new arrived too, not just the arriver.
@@ -107,7 +112,8 @@ wss.on('connection', (ws, req, room, url) => {
   ws.on('message', (raw) => {
     let action;
     try { action = JSON.parse(raw); } catch (e) { return; }
-    room.applyAction(ws, action);
+    if (action && action.type === 'chat') room.addChat(ws, action.text);
+    else room.applyAction(ws, action);
   });
 
   ws.on('close', () => room.leave(ws));
