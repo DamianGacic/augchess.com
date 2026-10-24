@@ -1449,6 +1449,9 @@ main {
 
 .augment-slot-card.child.greyed:not(:disabled):hover .emblem { filter: none; }
 
+/* Unaffordable follow-up: its cost line says how many points are missing. */
+.augment-slot-card.child.short .as-cost { color: var(--danger); }
+
 .augment-slot-card.child.picked {
   cursor: pointer;
 }

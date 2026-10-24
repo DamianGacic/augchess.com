@@ -145,11 +145,21 @@ function renderAugmentSlots(color, container) {
         childCard.addEventListener('click', () => showAugmentDetail(childAug));
       } else {
         const affordable = ds.points[color] >= childAug.cost;
-        const canInteractHere = !state.gameOver && ds.current === color && ((!netMode && !aiColor) || myColor === color);
+        // No game-over check here: a draft is never "over", and the previous
+        // game's result used to linger into it (see resetToSettings in
+        // engine/index.js), locking every follow-up after a finished game.
+        const canInteractHere = ds.current === color && ((!netMode && !aiColor) || myColor === color);
         if (affordable && canInteractHere) {
           childCard.addEventListener('click', () => dispatch({ type: 'draftPick', augId: childAug.id }));
         } else {
           childCard.disabled = true;
+        }
+        // Say why it can't be bought, so it doesn't just look broken.
+        if (!affordable) {
+          const missing = childAug.cost - ds.points[color];
+          childCard.classList.add('short');
+          childCard.querySelector('.as-cost').textContent = `${childAug.cost} pts · ${missing} short`;
+          childCard.title = `Not enough points: ${childAug.name} costs ${childAug.cost}, ${ds.points[color]} left`;
         }
       }
       group.appendChild(childCard);

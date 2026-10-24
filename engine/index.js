@@ -288,6 +288,12 @@
   // player can re-pick time control/points before drafting again.
   function resetToSettings(state) {
     state.phase = 'settings';
+    // The finished game's result has to go too: until chessEngine.newGame
+    // runs at the end of the next draft, a leftover gameOver kept the whole
+    // draft looking "over" — the draft UI locked every follow-up augment
+    // (Deviant, Quickdraw, …) though the server would have sold them.
+    state.gameOver = false;
+    state.gameOverText = '';
     state.settings = { minutes: state.settings.minutes, points: state.settings.points, locked: false };
     state.draftState = null;
     state.augments = { w: [], b: [] };
