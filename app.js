@@ -60,6 +60,31 @@ document.getElementById('btn-new-game').addEventListener('click', () => {
 document.getElementById('btn-flip').addEventListener('click', () => { flipped = !flipped; renderBoard(); });
 document.getElementById('btn-undo').addEventListener('click', undoMove);
 document.getElementById('btn-undo').classList.toggle('hidden', netMode);
+// Hotseat has no seat of its own: the side to move is the one forfeiting.
+const myPlayColor = () => myColor || (netMode ? null : state.game && state.game.turn());
+document.getElementById('btn-forfeit').addEventListener('click', () => {
+  if (confirm('Forfeit this game?')) dispatch({ type: 'resign' }, myPlayColor());
+});
+document.getElementById('btn-draw').addEventListener('click', () => {
+  const answering = state.drawOffer && state.drawOffer !== myColor;
+  dispatch(answering ? { type: 'answerDraw', accept: true } : { type: 'offerDraw' }, myColor);
+});
+document.getElementById('btn-decline-draw').addEventListener('click', () => {
+  dispatch({ type: 'answerDraw', accept: false }, myColor);
+});
+
+// Forfeit for anyone with a seat; draws only between two people online.
+function syncGameEndButtons() {
+  const live = state.phase === 'playing' && !!state.game && !state.gameOver && !!myPlayColor();
+  const drawable = live && netMode;
+  const offered = state.drawOffer && state.drawOffer !== myColor;
+  const drawBtn = document.getElementById('btn-draw');
+  document.getElementById('btn-forfeit').classList.toggle('hidden', !live);
+  drawBtn.classList.toggle('hidden', !drawable);
+  drawBtn.textContent = offered ? 'Accept Draw' : state.drawOffer ? 'Draw Offered' : 'Offer Draw';
+  drawBtn.disabled = !!state.drawOffer && !offered;
+  document.getElementById('btn-decline-draw').classList.toggle('hidden', !(drawable && offered));
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  DISPATCH — the single bridge between a user action and the shared engine
@@ -422,6 +447,7 @@ function renderAll() {
   // draft too, which returns early below.
   if (typeof AiPlayer !== 'undefined') AiPlayer.schedule();
   if (typeof Chat !== 'undefined') Chat.sync();
+  syncGameEndButtons();
 
   // The settings and draft phases are React modals (src/game/).
   if (state.phase !== 'playing') return;

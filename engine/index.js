@@ -69,7 +69,8 @@
     // Not every play path checks gameOver itself (e.g. ending a Raise the
     // Dead session) — and settling a turn after the game ended would let
     // evaluateGameOver re-open it.
-    if (state.gameOver && PLAY_ACTIONS.includes(action.type)) return 'Game is over';
+    // (A late Vanguard deployment too: the game can be forfeited before it lands.)
+    if (state.gameOver && (PLAY_ACTIONS.includes(action.type) || action.type === 'vanguardDeploy')) return 'Game is over';
     if (state.vanguard && PLAY_ACTIONS.includes(action.type)) return 'Waiting for the Vanguard to deploy';
     if (state.pendingShield && PLAY_ACTIONS.includes(action.type) && !allowedWhileShieldPending(state, action)) {
       return 'Turn the bishop\'s shield first';
@@ -196,6 +197,38 @@
         return err;
       }
 
+      case 'resign': {
+        const err = liveGameError(state);
+        if (err) return err;
+        endGame(state, `🏳 ${colorName(other(color))} wins — ${colorName(color)} forfeited!`);
+        return null;
+      }
+
+      // A draw offer stands until the opponent answers it, or lapses once
+      // they make a move instead (see afterTurnSettles).
+      case 'offerDraw': {
+        const err = liveGameError(state);
+        if (err) return err;
+        if (state.drawOffer === color) return 'You already offered a draw';
+        if (state.drawOffer) return 'Your opponent already offered a draw — accept or decline it';
+        state.drawOffer = color;
+        chessEngine.logEntry(state, null, '½', `${colorName(color)} offers a draw.`, 'event');
+        return null;
+      }
+
+      case 'answerDraw': {
+        const err = liveGameError(state);
+        if (err) return err;
+        if (state.drawOffer !== other(color)) return 'No draw offer to answer';
+        if (action.accept) {
+          endGame(state, 'Draw — agreed');
+        } else {
+          state.drawOffer = null;
+          chessEngine.logEntry(state, null, '½', `${colorName(color)} declines the draw.`, 'event');
+        }
+        return null;
+      }
+
       case 'newGame': {
         if (state.phase === 'settings' || state.phase === 'draft') return 'A game is already being set up';
         resetToSettings(state);
@@ -205,6 +238,25 @@
       default:
         return 'Unknown action: ' + action.type;
     }
+  }
+
+  const other = color => (color === 'w' ? 'b' : 'w');
+  const colorName = color => (color === 'w' ? 'White' : 'Black');
+
+  function liveGameError(state) {
+    if (state.phase !== 'playing' || !state.game) return 'Not currently playing';
+    if (state.gameOver) return 'Game is over';
+    return null;
+  }
+
+  // Ends the game by agreement or forfeit rather than on the board. Nothing
+  // re-evaluates the board afterwards: every play action is refused once over.
+  function endGame(state, text) {
+    state.gameOver = true;
+    state.gameOverText = text;
+    state.drawOffer = null;
+    if (state.clock) state.clock.running = null;
+    noteOutcome(state, false);
   }
 
   // Called after any draft-phase action that might have flipped state.phase.
@@ -240,6 +292,8 @@
     // Rank and Warm Welcome are back from here on (the check just below too).
     const justMoved = state.game.turn() === 'w' ? 'b' : 'w';
     if (state.vanguardGrace === justMoved) state.vanguardGrace = null;
+    // Moving instead of answering a draw offer turns it down.
+    if (state.drawOffer && state.drawOffer !== justMoved) state.drawOffer = null;
     const fenBefore = state.game.fen();
     chessEngine.checkBreakingRank(state, state.game.turn());
     chessEngine.checkKingsLightning(state);
@@ -300,6 +354,7 @@
     delete state.game;
     delete state.clock;
     delete state.timeForfeit;
+    delete state.drawOffer;
   }
 
   function serializeState(state) {
