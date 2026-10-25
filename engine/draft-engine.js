@@ -22,6 +22,7 @@
   // ─── Settings phase ───────────────────────────────────────────────────────
   const MIN_POINTS = 1;
   const MAX_POINTS = 99;
+  const MAX_MINUTES = 180;
 
   function createRoomState() {
     return {
@@ -33,9 +34,14 @@
   }
 
   // Either player may change settings any time before the draft starts.
-  function updateSettings(state, minutes, points) {
+  // A field left out (undefined) keeps its current value, so two quick changes
+  // to different fields online can't undo each other.
+  function updateSettings(state, minutes = state.settings.minutes, points = state.settings.points) {
     if (state.phase !== 'settings') return 'Settings can only be changed before the draft starts';
     if (state.settings.locked) return 'Settings are already locked in';
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_MINUTES) {
+      return `Time control must be a whole number of minutes from 1 to ${MAX_MINUTES}`;
+    }
     // Points can be typed in freely (custom field), so bound them here where
     // the server also enforces it.
     if (!Number.isInteger(points) || points < MIN_POINTS || points > MAX_POINTS) {

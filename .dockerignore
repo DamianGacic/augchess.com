@@ -1,0 +1,10 @@
+node_modules
+server/node_modules
+dist
+.git
+supabase/.temp
+supabase/.branches
+old_design
+context
+*.md
+.env*

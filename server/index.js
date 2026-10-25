@@ -1,6 +1,8 @@
 /**
  * server/index.js — Single Node process serving the static site AND the
- * WebSocket game protocol on one port. Room creation is a small REST
+ * WebSocket game protocol on one port. The site is the Vite build in dist/
+ * (`npm run build` at the repo root); in development, Vite's own server on
+ * :5173 serves it instead and forwards /api and /ws here. Room creation is a small REST
  * endpoint (mirrors the old "Create Game Link" flow); everything else about
  * a game happens over `/ws/:gameId`.
  */
@@ -13,7 +15,8 @@ const { WebSocketServer } = require('ws');
 const { RoomStore } = require('./rooms.js');
 const { Matchmaker } = require('./matchmaking.js');
 
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', 'dist');
+if (!fs.existsSync(ROOT)) console.warn('No dist/ build — run `npm run build` at the repo root, or use `npm run dev` there (Vite) for development.');
 const PORT = process.env.PORT || 8000;
 
 const store = new RoomStore();

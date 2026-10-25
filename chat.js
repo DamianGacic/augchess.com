@@ -64,5 +64,7 @@ const Chat = (() => {
   }
 
   sync();
-  return { sync };
+  // Called when a tab leaves an online game, so its lines don't carry over.
+  function clear() { list.replaceChildren(); }
+  return { sync, clear };
 })();

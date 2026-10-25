@@ -9,7 +9,7 @@
  * also look at `aiColor`.
  *
  * Depends on: app.js (state, dispatch, renderAll, aiColor, myColor, flipped, netMode,
- * undoStack), draft.js (showGameSettings), engine/bot-engine.js.
+ * undoStack, showGameSettings), engine/bot-engine.js.
  */
 
 const AiPlayer = (() => {
@@ -21,34 +21,21 @@ const AiPlayer = (() => {
   let queue = [];
   let refusals = 0;
 
-  const aiRow = document.getElementById('settings-ai-row');
-  const colorOptions = document.getElementById('settings-color-options');
-
-  colorOptions.querySelectorAll('.tc-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      colorChoice = btn.dataset.color;
-      syncSettings();
-    });
-  });
-
-  function syncSettings() {
-    aiRow.classList.toggle('hidden', !vsAi);
-    colorOptions.querySelectorAll('.tc-btn').forEach(b => b.classList.toggle('selected', b.dataset.color === colorChoice));
+  // The "You Play" row of the React settings modal reads/sets this.
+  function setColorChoice(color) {
+    colorChoice = color;
+    GameBridge.changed();
   }
 
   // Home page "Play vs AI": a fresh local game against the bot.
   function begin() {
-    if (netMode) return;
     stop();
     vsAi = true;
     aiColor = null;
     myColor = null;
-    state = createRoomState();
-    undoStack = [];
-    syncSettings();
+    newLocalGame();
     showView('game');
     showGameSettings();
-    renderAll();
   }
 
   // Home page "Start New Game" (two players at one screen) or going online.
@@ -57,7 +44,6 @@ const AiPlayer = (() => {
     vsAi = false;
     aiColor = null;
     if (!netMode) myColor = null;
-    syncSettings();
   }
 
   // Called as the draft starts: fixes who plays which color.
@@ -104,9 +90,9 @@ const AiPlayer = (() => {
     queue = [];
   }
 
-  document.getElementById('play-ai-btn').addEventListener('click', begin);
-  document.getElementById('start-game-btn').addEventListener('click', end);
-  document.getElementById('create-game-link-btn').addEventListener('click', end);
-
-  return { begin, end, assignSeats, schedule, stop, thinking };
+  return {
+    begin, end, assignSeats, schedule, stop, thinking, setColorChoice,
+    get vsAi() { return vsAi; },
+    get colorChoice() { return colorChoice; },
+  };
 })();

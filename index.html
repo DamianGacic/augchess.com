@@ -12,85 +12,10 @@
 </head>
 <body>
   <div id="app">
-    <header>
-      <div class="logo" id="logo-home" title="Home">
-        <img class="logo-mark" src="assets/logo.svg" alt="" />
-        <span class="logo-text"><span class="logo-accent">Aug</span>Chess</span>
-      </div>
-      <nav class="main-nav">
-        <button class="nav-btn" id="nav-home">Home</button>
-        <button class="nav-btn" id="nav-leaderboard">Leaderboards</button>
-        <button class="nav-btn" id="nav-game">Game</button>
-        <button class="nav-btn" id="nav-augments">Augments</button>
-        <button class="nav-btn" id="nav-figures">Figures</button>
-      </nav>
-      <div class="profile-wrap">
-        <button class="profile-btn" id="profile-btn" title="Account" aria-label="Account">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
-        </button>
-      </div>
-    </header>
-
-    <!-- Homepage View -->
-    <div id="home-view" class="view">
-      <main class="home-main">
-        <section class="hero">
-          <div class="hero-copy">
-            <div class="hero-eyebrow">Chess, augmented</div>
-            <h1>Draft your<br><span class="accent">edge.</span><br>Break the rules.</h1>
-            <p>Classic chess, until someone bids on an augment. Before every match, both players spend points on new units, abilities and rule-breaking powers. Draft carefully: a bad draft can lose the game before the first move.</p>
-            <div class="hero-buttons">
-              <button class="btn btn-primary btn-lg" id="start-game-btn">Start New Game</button>
-              <button class="btn btn-secondary btn-lg" id="play-ai-btn">Play vs AI</button>
-              <button class="btn btn-multiplayer btn-lg" id="play-online-btn">Play Online</button>
-              <button class="btn btn-multiplayer btn-lg" id="play-ranked-btn">Play Ranked</button>
-              <button class="btn btn-secondary btn-lg" id="create-game-link-btn">Create Game Link</button>
-            </div>
-          </div>
-          <div class="hero-art" aria-hidden="true">
-            <div class="hero-board" id="hero-board"></div>
-          </div>
-        </section>
-
-        <div class="section-head">
-          <h2>How a match works</h2>
-          <p>Three phases, one winner.</p>
-        </div>
-        <div class="steps">
-          <div class="feature-card">
-            <span class="step-num">01</span>
-            <img class="emblem" src="augments/icons/coronation.svg" alt="" />
-            <h3>Set the stakes</h3>
-            <p>Agree on a time control and how many auction points each side gets to spend.</p>
-          </div>
-          <div class="feature-card">
-            <span class="step-num">02</span>
-            <img class="emblem" src="augments/icons/archers.svg" alt="" />
-            <h3>Draft augments</h3>
-            <p>Take turns picking augments. Swap your pawns for Archers or Ghouls, arm your King with Silver Bullet, or unlock follow-up upgrades.</p>
-          </div>
-          <div class="feature-card">
-            <span class="step-num">03</span>
-            <img class="emblem" src="augments/icons/solarStrike.svg" alt="" />
-            <h3>Play it out</h3>
-            <p>Everything else is ordinary chess. Use abilities with Q/W/E/R for the selected unit and A/S/D/F for global powers.</p>
-          </div>
-        </div>
-
-        <div class="section-head">
-          <h2>The Arsenal</h2>
-          <p>Every augment in the game. Click one for details.</p>
-        </div>
-        <div class="augment-marquee">
-          <div class="marquee-track" id="augment-marquee"></div>
-        </div>
-
-        <footer class="site-footer">
-          <span>AugChess: chess with augmented rules.</span>
-          <span>Icons by <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> (Lorc, Delapouite et al.), <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a></span>
-        </footer>
-      </main>
-    </div>
+    <!-- React root (src/main.jsx): header, home, leaderboards, settings,
+         augments, figures, sign-in. The game screen and its modals below
+         are still the classic scripts' static markup while they're ported. -->
+    <div id="root"></div>
 
     <!-- Game View -->
     <div id="game-view" class="view hidden">
@@ -205,119 +130,6 @@
       </main>
     </div>
 
-    <!-- Augments View -->
-    <div id="augments-view" class="view hidden">
-      <main class="augments-main">
-        <div class="page-head">
-          <h1>Augments</h1>
-          <p>Every power you can draft, and what it does to the board.</p>
-        </div>
-        <div class="filter-bar" id="augment-filters"></div>
-        <div id="augments-container"></div>
-      </main>
-    </div>
-
-    <!-- Leaderboard View (views.js) -->
-    <div id="leaderboard-view" class="view hidden">
-      <main class="augments-main account-main">
-        <div class="page-head">
-          <h1>Leaderboards</h1>
-          <p>Top rated players. Everyone starts at 1200.</p>
-        </div>
-        <section class="settings-card">
-          <ol id="leaderboard-list" class="leaderboard-list"></ol>
-          <p id="leaderboard-status" class="settings-note"></p>
-        </section>
-      </main>
-    </div>
-
-    <!-- Account / Settings View (settings.js, auth.js) -->
-    <div id="account-view" class="view hidden">
-      <main class="augments-main account-main">
-        <div class="page-head">
-          <h1>Settings</h1>
-          <p>Your account, friends and how the board looks.</p>
-        </div>
-
-        <section class="settings-card">
-          <h2>Account</h2>
-          <div id="account-signed-out">
-            <p class="settings-note">Not signed in. An account is optional; it gives you a display name and friends.</p>
-            <button class="btn btn-primary settings-inline-btn" id="account-sign-in-btn">Sign in</button>
-          </div>
-          <div id="account-signed-in" class="hidden">
-            <div class="settings-row">
-              <span class="settings-label">Email</span>
-              <span id="profile-email" class="settings-value"></span>
-            </div>
-            <div class="settings-row">
-              <span class="settings-label">Display name</span>
-              <span class="settings-value">
-                <span id="profile-displayname-label"></span>
-                <button class="link-btn" id="profile-displayname-edit-btn">Edit</button>
-              </span>
-            </div>
-            <div class="settings-row">
-              <span class="settings-label">Rating</span>
-              <span id="profile-rating" class="settings-value"></span>
-            </div>
-            <div id="profile-displayname-form" class="settings-inline-form hidden">
-              <input type="text" id="profile-displayname-input" class="auth-email-input" placeholder="Display name" maxlength="20" autocomplete="off" />
-              <button class="btn btn-primary settings-inline-btn" id="profile-displayname-save-btn">Save</button>
-            </div>
-            <p id="profile-displayname-status" class="auth-status-msg"></p>
-            <button class="btn btn-secondary settings-inline-btn" id="sign-out-btn">Sign out</button>
-          </div>
-        </section>
-
-        <section class="settings-card">
-          <h2>Friends</h2>
-          <p id="friends-signed-out" class="settings-note">Sign in to add friends.</p>
-          <div id="friends-signed-in" class="hidden">
-            <form id="friend-add-form" class="settings-inline-form">
-              <input type="text" id="friend-add-input" class="auth-email-input" placeholder="Friend's display name" maxlength="20" autocomplete="off" aria-label="Friend's display name" />
-              <button class="btn btn-primary settings-inline-btn" type="submit">Add friend</button>
-            </form>
-            <p id="friend-status" class="auth-status-msg"></p>
-            <h3 class="settings-subhead">Requests</h3>
-            <ul id="friend-requests" class="friend-list"></ul>
-            <h3 class="settings-subhead">Friends</h3>
-            <ul id="friend-list" class="friend-list"></ul>
-          </div>
-        </section>
-
-        <section class="settings-card">
-          <h2>Board</h2>
-          <label class="settings-row">
-            <span class="settings-label">Board theme</span>
-            <select id="pref-boardTheme" class="settings-select">
-              <option value="brown">Brown</option>
-              <option value="green">Green</option>
-              <option value="blue">Blue</option>
-              <option value="gray">Gray</option>
-            </select>
-          </label>
-          <label class="settings-row"><span class="settings-label">Show coordinates</span><input type="checkbox" id="pref-coords" class="settings-toggle"></label>
-          <label class="settings-row"><span class="settings-label">Show legal moves</span><input type="checkbox" id="pref-legalMoves" class="settings-toggle"></label>
-          <label class="settings-row"><span class="settings-label">Highlight last move</span><input type="checkbox" id="pref-lastMove" class="settings-toggle"></label>
-          <label class="settings-row"><span class="settings-label">Piece animations</span><input type="checkbox" id="pref-animations" class="settings-toggle"></label>
-          <label class="settings-row"><span class="settings-label">Always promote to Queen</span><input type="checkbox" id="pref-autoQueen" class="settings-toggle"></label>
-          <p class="settings-note">Saved on this device.</p>
-        </section>
-      </main>
-    </div>
-
-    <!-- Figures View -->
-    <div id="figures-view" class="view hidden">
-      <main class="augments-main">
-        <div class="page-head">
-          <h1>Figures</h1>
-          <p>Alternative units that replace standard pieces through Unit Exchange augments.</p>
-        </div>
-        <div id="figures-container"></div>
-      </main>
-    </div>
-
     <!-- Figure Detail Modal -->
     <div id="figure-detail-modal" class="modal hidden">
       <div class="modal-content figure-detail-content">
@@ -326,114 +138,6 @@
         <img id="figure-detail-img" src="" alt="" class="figure-detail-img" />
         <p id="figure-detail-description">Figure description</p>
         <button class="btn btn-primary" id="close-figure-detail-btn">Close</button>
-      </div>
-    </div>
-
-    <!-- Promotion modal -->
-    <div id="promotion-modal" class="modal hidden">
-      <div class="modal-content">
-        <h3>Promote Pawn</h3>
-        <div class="promotion-pieces" id="promotion-pieces"></div>
-      </div>
-    </div>
-
-    <!-- Game Settings modal (shown before the augment draft) -->
-    <div id="settings-modal" class="modal hidden">
-      <div class="modal-content augment-content">
-        <h3>Game Settings</h3>
-        <p class="augment-subtitle">Agree on a time control and auction points, then start the draft. Either player can choose.</p>
-
-        <div class="settings-body">
-          <div class="time-control">
-            <div class="time-control-label">Time Control</div>
-            <div class="time-control-options" id="settings-tc-options">
-              <button class="tc-btn selected" data-minutes="3">3 min</button>
-              <button class="tc-btn" data-minutes="5">5 min</button>
-              <button class="tc-btn" data-minutes="15">15 min</button>
-              <button class="tc-btn" data-minutes="25">25 min</button>
-              <button class="tc-btn" data-minutes="45">45 min</button>
-            </div>
-          </div>
-
-          <div class="time-control">
-            <div class="time-control-label">Auction Points</div>
-            <div class="time-control-options" id="settings-points-options">
-              <button class="tc-btn selected" data-points="3">3 pts</button>
-              <button class="tc-btn" data-points="9">9 pts</button>
-              <button class="tc-btn" data-points="14">14 pts</button>
-              <input type="number" class="tc-custom" id="settings-points-custom" min="1" max="99" step="1" placeholder="Custom" aria-label="Custom auction points" />
-            </div>
-          </div>
-
-          <div class="time-control hidden" id="settings-ai-row">
-            <div class="time-control-label">You Play</div>
-            <div class="time-control-options" id="settings-color-options">
-              <button class="tc-btn selected" data-color="w">White</button>
-              <button class="tc-btn" data-color="b">Black</button>
-              <button class="tc-btn" data-color="random">Random</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="augment-actions">
-          <button class="btn btn-primary" id="btn-settings-start">Start Draft</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Augment selection modal -->
-    <div id="augment-modal" class="modal hidden">
-      <div class="modal-content augment-content">
-        <h3>Augment Draft</h3>
-        <p class="augment-subtitle" id="augment-turn-text">White, choose an augment</p>
-        <div class="augment-points-row">
-          <div class="augment-points" id="augment-points-white">
-            <span class="ap-label">White</span>
-            <span class="ap-value" id="ap-white">3</span>
-          </div>
-          <div class="augment-points" id="augment-points-black">
-            <span class="ap-label">Black</span>
-            <span class="ap-value" id="ap-black">3</span>
-          </div>
-        </div>
-        <div class="augment-draft-layout">
-          <div class="augment-side-panel" id="augment-panel-white">
-            <div class="augment-side-label">White's Picks</div>
-            <div class="augment-side-slots" id="augment-slots-white"></div>
-          </div>
-          <div class="augment-list" id="augment-list">
-            <div class="augment-col augment-col-stack">
-              <div class="augment-col" id="augment-col-pregame">
-                <div class="augment-col-label">Pre-game</div>
-              </div>
-              <div class="augment-col" id="augment-col-wincondition">
-                <div class="augment-col-label">Win Condition</div>
-              </div>
-            </div>
-            <div class="augment-col" id="augment-col-other">
-              <div class="augment-col-label">Utility</div>
-            </div>
-            <div class="augment-col" id="augment-col-exchange">
-              <div class="augment-col-label">Unit Exchange</div>
-            </div>
-            <div class="augment-col augment-col-stack">
-              <div class="augment-col" id="augment-col-ability">
-                <div class="augment-col-label">Unit Abilities</div>
-              </div>
-              <div class="augment-col" id="augment-col-global">
-                <div class="augment-col-label">Global Abilities</div>
-              </div>
-            </div>
-          </div>
-          <div class="augment-side-panel" id="augment-panel-black">
-            <div class="augment-side-label">Black's Picks</div>
-            <div class="augment-side-slots" id="augment-slots-black"></div>
-          </div>
-        </div>
-        <div class="augment-actions">
-          <button class="btn btn-secondary" id="btn-augment-pass">Pass / Done</button>
-          <button class="btn btn-primary hidden" id="btn-augment-start">Start Game</button>
-        </div>
       </div>
     </div>
 
@@ -459,19 +163,6 @@
       </div>
     </div>
 
-    <!-- Auth modal (optional sign-in; never required to play) -->
-    <div id="auth-modal" class="modal hidden">
-      <div class="modal-content auth-modal-content">
-        <h3>Sign in</h3>
-        <p class="augment-subtitle">Optional — sync your profile across devices. Playing and sharing game links never requires an account.</p>
-        <input type="email" id="auth-email-input" class="auth-email-input" placeholder="you@example.com" autocomplete="email" />
-        <input type="text" id="auth-displayname-input" class="auth-email-input" placeholder="Display name (optional)" maxlength="20" autocomplete="off" />
-        <p class="auth-hint">You can leave this blank and choose or change it anytime in Settings.</p>
-        <button class="btn btn-primary" id="auth-send-link-btn">Send magic link</button>
-        <p id="auth-status-msg" class="auth-status-msg"></p>
-        <button class="btn btn-secondary" id="auth-close-btn">Close</button>
-      </div>
-    </div>
   </div>
 
   <script src="chess.js"></script>
@@ -497,7 +188,6 @@
   <script src="unstablefireball.js"></script>
   <script src="unstableteleport.js"></script>
   <script src="raisethedead.js"></script>
-  <script src="draft.js"></script>
   <script src="clock.js"></script>
   <script src="augment-demos.js"></script>
   <script src="augment-demo-player.js"></script>
@@ -507,12 +197,7 @@
   <script src="app.js"></script>
   <script src="ai-player.js"></script>
   <script src="chat.js"></script>
-  <script type="importmap">
-    { "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-    } }
-  </script>
   <script type="module" src="board3d.js"></script>
+  <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

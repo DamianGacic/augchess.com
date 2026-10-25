@@ -4,7 +4,8 @@ services:
     runtime: node
     plan: free
     rootDir: server
-    buildCommand: npm install
+    # Server deps, then the Vite build of the site into ../dist.
+    buildCommand: npm install && npm --prefix .. install --include=dev && npm --prefix .. run build
     startCommand: node index.js
     autoDeployTrigger: commit
     envVars:

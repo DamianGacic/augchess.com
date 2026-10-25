@@ -12,8 +12,9 @@
  * signup rides along as auth user_metadata and is applied by the
  * track_login() RPC on first login only if it's still free; it can also be
  * set/changed anytime afterward from the Settings page via set_display_name().
- * Friends (request/accept/remove by display name) are thin RPC wrappers here;
- * the UI for them lives in settings.js.
+ * Friends (request/accept/remove by display name) are thin RPC wrappers here.
+ * All of the UI (profile button, sign-in modal, Settings page) is React —
+ * src/ calls Auth.init() and subscribes with Auth.onChange.
  *
  * Relies on (loaded before this file in index.html):
  *   the Supabase CDN script (exposes window.supabase), supabase-config.js
@@ -111,6 +112,14 @@ const Auth = (function () {
     });
   }
 
+  // 'google' | 'x' — leaves the page for the provider, which sends the
+  // user back here signed in (onAuthStateChange then fires SIGNED_IN).
+  // Each provider must be enabled in the Supabase dashboard first.
+  async function signInWithProvider(provider) {
+    if (!client) return { error: new Error('Supabase is not configured') };
+    return client.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin } });
+  }
+
   // Set/change/clear (empty string) the signed-in user's display name.
   // Rejected server-side (error.message) if already taken by someone else.
   async function setDisplayName(name) {
@@ -150,6 +159,7 @@ const Auth = (function () {
   return {
     init,
     sendMagicLink,
+    signInWithProvider,
     signOut,
     setDisplayName,
     checkDisplayNameAvailable,
@@ -167,95 +177,3 @@ const Auth = (function () {
     onChange(cb) { onChangeCb = cb; },
   };
 })();
-
-// ─── Profile button / Settings account section / sign-in modal wiring ──────
-function initAuthUI() {
-  const profileBtn   = document.getElementById('profile-btn');
-  const profileEmail = document.getElementById('profile-email');
-  const signOutBtn   = document.getElementById('sign-out-btn');
-
-  const nameLabel   = document.getElementById('profile-displayname-label');
-  const nameEditBtn = document.getElementById('profile-displayname-edit-btn');
-  const nameForm    = document.getElementById('profile-displayname-form');
-  const nameEditInput = document.getElementById('profile-displayname-input');
-  const nameSaveBtn = document.getElementById('profile-displayname-save-btn');
-  const nameStatus  = document.getElementById('profile-displayname-status');
-
-  const authModal   = document.getElementById('auth-modal');
-  const emailInput  = document.getElementById('auth-email-input');
-  const signupNameInput = document.getElementById('auth-displayname-input');
-  const sendLinkBtn = document.getElementById('auth-send-link-btn');
-  const closeBtn    = document.getElementById('auth-close-btn');
-  const statusMsg   = document.getElementById('auth-status-msg');
-
-  Auth.onChange((session, profile) => {
-    nameForm.classList.add('hidden');
-    profileBtn.classList.toggle('signed-in', !!session);
-    document.getElementById('account-signed-in').classList.toggle('hidden', !session);
-    document.getElementById('account-signed-out').classList.toggle('hidden', !!session);
-    document.getElementById('friends-signed-in').classList.toggle('hidden', !session);
-    document.getElementById('friends-signed-out').classList.toggle('hidden', !!session);
-    if (session) {
-      Settings.refreshFriends();
-      profileEmail.textContent = session.user.email;
-      nameLabel.textContent = (profile && profile.display_name) || 'Not set';
-      document.getElementById('profile-rating').textContent = (profile && profile.rating) || '—';
-    }
-  });
-  Auth.init();
-
-  profileBtn.addEventListener('click', () => showView('account'));
-
-  document.getElementById('account-sign-in-btn').addEventListener('click', () => {
-    statusMsg.textContent = '';
-    emailInput.value = '';
-    signupNameInput.value = '';
-    authModal.classList.remove('hidden');
-  });
-
-  signOutBtn.addEventListener('click', () => Auth.signOut());
-
-  sendLinkBtn.addEventListener('click', async () => {
-    const email = emailInput.value.trim();
-    const displayName = signupNameInput.value.trim();
-    if (!email) return;
-    sendLinkBtn.disabled = true;
-    statusMsg.textContent = 'Sending…';
-    if (displayName) {
-      const { available, error: availErr } = await Auth.checkDisplayNameAvailable(displayName);
-      if (!availErr && available === false) {
-        statusMsg.textContent = 'That display name is taken — leave it blank and pick one later, or try another.';
-        sendLinkBtn.disabled = false;
-        return;
-      }
-    }
-    const { error } = await Auth.sendMagicLink(email, displayName);
-    sendLinkBtn.disabled = false;
-    if (!error) statusMsg.textContent = 'Check your email for a sign-in link.';
-    else if (error.code === 'over_email_send_rate_limit' || error.status === 429)
-      statusMsg.textContent = 'Too many sign-in emails sent recently — wait a bit and try again.';
-    else statusMsg.textContent = 'Something went wrong — try again.';
-  });
-
-  closeBtn.addEventListener('click', () => authModal.classList.add('hidden'));
-  authModal.addEventListener('click', (e) => {
-    if (e.target === authModal) authModal.classList.add('hidden');
-  });
-
-  nameEditBtn.addEventListener('click', () => {
-    nameEditInput.value = (Auth.profile && Auth.profile.display_name) || '';
-    nameStatus.textContent = '';
-    nameForm.classList.toggle('hidden');
-  });
-
-  nameSaveBtn.addEventListener('click', async () => {
-    const value = nameEditInput.value.trim();
-    nameSaveBtn.disabled = true;
-    nameStatus.textContent = 'Saving…';
-    const { error } = await Auth.setDisplayName(value);
-    nameSaveBtn.disabled = false;
-    nameStatus.textContent = error ? (error.message || 'Could not save — try another name.') : 'Saved!';
-  });
-}
-
-document.addEventListener('DOMContentLoaded', initAuthUI);

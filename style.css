@@ -1144,6 +1144,9 @@ main {
   transition: border-color 0.15s, background 0.15s, transform 0.1s;
 }
 
+.promotion-piece.w { color: #d0d0d0; }
+.promotion-piece.b { color: #2e2e2e; }
+
 .promotion-piece:hover {
   border-color: var(--gold);
   background: var(--bg-3);
@@ -3735,7 +3738,6 @@ body.hide-legal-moves .square.legal-capture::after { display: none; }
 
 /* ─── Settings page ───────────────────────────────────────────────────── */
 .account-main { max-width: 640px; }
-.settings-card .hidden { display: none; }
 
 .profile-btn.active { box-shadow: 0 0 0 3px rgba(242, 195, 91, 0.3); }
 
@@ -3778,12 +3780,12 @@ label.settings-row { cursor: pointer; }
 .settings-label { color: var(--text-primary); }
 .settings-value { color: var(--text-bright); display: flex; align-items: center; gap: 10px; word-break: break-all; }
 .settings-note { font-size: 13px; color: var(--text-faint); margin: 12px 0 0; }
-#account-signed-out .settings-note { margin: 0 0 12px; }
+.settings-note.lead { margin: 0 0 12px; }
 
 .settings-inline-form { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .settings-inline-form .auth-email-input { margin: 0; flex: 1; }
 .settings-inline-btn { width: auto; }
-#sign-out-btn { margin-top: 4px; }
+.sign-out-btn { margin-top: 4px; }
 
 .settings-select {
   padding: 6px 10px;
@@ -3834,3 +3836,14 @@ label.settings-row { cursor: pointer; }
 .leaderboard-row:nth-child(-n+3) .lb-rank { color: var(--gold); }
 .lb-name { flex: 1; color: var(--text-bright); word-break: break-all; }
 .lb-rating { font-family: var(--font-display); font-weight: 700; color: var(--text-bright); }
+
+/* Sign-in modal: Google / X buttons above the email form. */
+.auth-oauth { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.auth-oauth-btn { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.auth-oauth-btn svg { width: 18px; height: 18px; flex: none; }
+.auth-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; font-size: 12px; color: var(--text-faint); }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--line-strong); }
+
+/* React mounts into #root (src/main.jsx); it adds no box of its own so the
+   header and pages lay out exactly as when they were static markup. */
+#root { display: contents; }

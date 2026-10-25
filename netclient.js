@@ -82,23 +82,29 @@ const NetClient = (function () {
     }, delay);
   }
 
+  // Joining a room replaces any previous connection; events from a replaced
+  // socket are ignored (sock !== ws) so it can't overwrite the new room's
+  // state or schedule a reconnect to it.
   function connect(id) {
+    if (ws) { const old = ws; ws = null; old.close(); }
     gameId = id;
     intentionalClose = false;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-    ws = new WebSocket(wsUrl(id));
-    ws.addEventListener('open', () => {
+    const sock = ws = new WebSocket(wsUrl(id));
+    sock.addEventListener('open', () => {
+      if (sock !== ws) return;
       reconnectAttempt = 0;
       onOpenCb();
     });
-    ws.addEventListener('message', (ev) => {
+    sock.addEventListener('message', (ev) => {
+      if (sock !== ws) return;
       let msg;
       try { msg = JSON.parse(ev.data); } catch (e) { return; }
       if (msg.type === 'joined') {
         color = msg.color;
         token = msg.token;
         if (color && token) sessionStorage.setItem(storageKey(id), JSON.stringify({ color, token }));
-        if (msg.ranked && !color) sendAuth(ws);
+        if (msg.ranked && !color) sendAuth(sock);
         onJoinedCb(color, token, !!msg.ranked);
       } else if (msg.type === 'state') {
         onStateCb(msg.state, msg.now);
@@ -110,18 +116,21 @@ const NetClient = (function () {
         onRatingCb(msg);
       }
     });
-    ws.addEventListener('close', () => {
+    sock.addEventListener('close', () => {
+      if (sock !== ws) return;
       onCloseCb();
       if (!intentionalClose) scheduleReconnect();
     });
     // 'error' is always followed by a 'close' event for WebSocket, which is
     // what actually triggers the reconnect — this listener just prevents an
     // unhandled-error console spew.
-    ws.addEventListener('error', () => {});
+    sock.addEventListener('error', () => {});
   }
 
   function disconnect() {
     intentionalClose = true;
+    color = null;
+    token = null;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (ws) { try { ws.close(); } catch (e) { /* already closed */ } }
   }

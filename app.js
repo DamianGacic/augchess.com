@@ -16,7 +16,9 @@
  * Relies on (loaded before this file in index.html):
  *   chess.js, data.js, engine/draft-engine.js, engine/chess-engine.js,
  *   engine/gameover-engine.js, engine/augments-engine.js, engine/index.js,
- *   netclient.js, stunlock.js, abilities.js, draft.js, clock.js, views.js
+ *   netclient.js, stunlock.js, abilities.js, clock.js, views.js
+ * The settings form, augment draft and promotion picker are React
+ * (src/game/); renderAll() tells them to re-render via GameBridge.
  */
 
 // ─── Play mode ────────────────────────────────────────────────────────────────
@@ -31,7 +33,7 @@ let state = createRoomState();
 let flipped = false;
 let selectedSquare = null;
 let legalMoves = [];          // array of move objects (standard + special)
-let pendingPromotion = null;
+let pendingPromotion = null;  // { move, color } while the React promotion modal is open
 let dragState = null;
 let lastClickSquare = null;
 let lastClickTime = 0;
@@ -43,8 +45,6 @@ const statusBox       = document.getElementById('status-box');
 const moveListEl      = document.getElementById('move-list');
 const capturedWhite   = document.getElementById('captured-by-white');
 const capturedBlack   = document.getElementById('captured-by-black');
-const promotionModal  = document.getElementById('promotion-modal');
-const promotionPieces = document.getElementById('promotion-pieces');
 const clockWhiteEl    = document.getElementById('clock-white');
 const clockBlackEl    = document.getElementById('clock-black');
 const activeAugmentsEl= document.getElementById('active-augments');
@@ -205,8 +205,43 @@ function updateMpBadge() {
   }
 }
 
-// Called by views.js "Create Game Link" button.
+// Back to local play (Start New Game / Play vs AI after an online game):
+// drops the server connection and the room's state, and clears ?game= so a
+// reload doesn't rejoin it.
+function leaveOnlineGame() {
+  if (!netMode) return;
+  NetClient.disconnect();
+  netMode = false;
+  myColor = null;
+  rankedGame = false;
+  lastRating = null;
+  flipped = false;
+  netStateUpdateCount = 0;
+  state = createRoomState();
+  history.replaceState(null, '', location.pathname);
+  document.getElementById('btn-undo').classList.remove('hidden');
+  Chat.clear();
+  updateMpBadge();
+}
+
+// Shows the settings form (React, src/game/GameSettingsModal.jsx), which is
+// open on the game screen whenever state.phase is 'settings'.
+function showGameSettings() {
+  renderAll();
+}
+
+// A fresh local game (Start New Game, Play vs AI), whatever was going on before.
+function newLocalGame() {
+  leaveOnlineGame();
+  state = createRoomState();
+  undoStack = [];
+  selectedSquare = null;
+  legalMoves = [];
+}
+
+// Called by the home page's "Create Game Link" button.
 async function createGameLink() {
+  netStateUpdateCount = 0;
   showMpModal('Create Game Link', 'Generating your game link…', false, true);
   const gameId = await NetClient.createRoom();
   const url = buildGameUrl(gameId);
@@ -225,7 +260,7 @@ async function createGameLink() {
   NetClient.connect(gameId);
 }
 
-// Called by views.js "Play Online" / "Play Ranked": waits in the server's
+// Called by the home page's "Play Online" / "Play Ranked": waits in the server's
 // queue (server/matchmaking.js) until paired, then joins the new room like
 // any game link. Closing the modal leaves the queue.
 let queueSocket = null, searchTimer = null;
@@ -335,14 +370,8 @@ function showMpModal(title, status, showLink, showSpinner) {
   document.getElementById('mp-spinner').classList.toggle('hidden', !showSpinner);
   mpModal.classList.remove('hidden');
 }
+// #mp-badge itself is rendered by the React header (src/components/Header.jsx).
 document.addEventListener('DOMContentLoaded', () => {
-  const header = document.querySelector('header');
-  if (header) {
-    const badge = document.createElement('div');
-    badge.id = 'mp-badge';
-    badge.className = 'mp-badge hidden';
-    header.appendChild(badge);
-  }
   const gameId = getGameIdFromUrl();
   if (gameId) setTimeout(() => joinGameFromUrl(gameId), 300);
 });
@@ -387,27 +416,16 @@ function undoMove() {
 //  renders whatever's relevant for the current phase.
 // ═══════════════════════════════════════════════════════════════════════════════
 function renderAll() {
+  if (window.GameBridge) GameBridge.changed(); // React parts of the game screen (src/gameBridge.js)
   syncClock();
   // Only queues a timer, so it's safe ahead of rendering — and covers the
   // draft too, which returns early below.
   if (typeof AiPlayer !== 'undefined') AiPlayer.schedule();
   if (typeof Chat !== 'undefined') Chat.sync();
 
-  if (state.phase === 'settings') {
-    settingsModal.classList.remove('hidden');
-    augmentModal.classList.add('hidden');
-    syncSettingsUI();
-    return;
-  }
-  if (state.phase === 'draft') {
-    settingsModal.classList.add('hidden');
-    augmentModal.classList.remove('hidden');
-    renderDraft();
-    return;
-  }
+  // The settings and draft phases are React modals (src/game/).
+  if (state.phase !== 'playing') return;
   // 'playing' — covers both an ongoing game and a finished one (state.gameOver).
-  settingsModal.classList.add('hidden');
-  augmentModal.classList.add('hidden');
   syncStunlockTargeting();
   syncRaiseTheDeadTargeting();
   // Swift: once a shot leaves a follow-up step pending, auto-select that
@@ -473,8 +491,8 @@ function attemptMove(from, to) {
 
   if ((move.standard && reachesPromo) || move.needsPromo) {
     if (Settings.get('autoQueen')) { submitMove(move, 'q'); return; }
-    pendingPromotion = { from, to, move };
-    showPromotionModal(piece.color);
+    pendingPromotion = { move, color: piece.color };
+    GameBridge.changed();
     return;
   }
   submitMove(move);
@@ -491,24 +509,12 @@ function submitMove(move, promotionChoice) {
   if (!netMode) return; // hotseat: dispatch() already re-rendered via engine.applyAction
 }
 
-function showPromotionModal(color) {
-  promotionPieces.innerHTML = '';
-  ['q', 'r', 'b', 'n'].forEach(p => {
-    const btn = document.createElement('div');
-    btn.className = 'promotion-piece';
-    btn.title = { q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' }[p];
-    btn.textContent = PIECES[color + p.toUpperCase()];
-    btn.style.color = color === 'w' ? '#d0d0d0' : '#2e2e2e';
-    btn.addEventListener('click', () => {
-      promotionModal.classList.add('hidden');
-      if (pendingPromotion) {
-        submitMove(pendingPromotion.move, p);
-        pendingPromotion = null;
-      }
-    });
-    promotionPieces.appendChild(btn);
-  });
-  promotionModal.classList.remove('hidden');
+// Called by the React promotion modal with 'q' | 'r' | 'b' | 'n'.
+function choosePromotion(piece) {
+  const { move } = pendingPromotion;
+  pendingPromotion = null;
+  submitMove(move, piece);
+  GameBridge.changed(); // online, nothing re-renders until the server answers
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
