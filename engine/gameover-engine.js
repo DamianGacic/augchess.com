@@ -332,7 +332,19 @@
     else moves.push({ to: frToSq(tf, tr), kind: 'plain' });
   }
 
-  const exportsObj = { evaluateGameOver, sideToMoveHasSafeMove, pseudoMovesFor };
+  // A finished game's result from its game-over text (the engine keeps no
+  // structured winner): 'w' | 'b' | 'draw', or null if unrecognized. Used by
+  // the game history (server/rooms.js, app.js, the app's game.js).
+  // ponytail: parses gameOverText; add a state.winner if the wording ever
+  // stops following "White wins" / "Black wins" / "Draw".
+  function gameResult(text) {
+    if (/White wins/.test(text)) return 'w';
+    if (/Black wins/.test(text)) return 'b';
+    if (/^Draw/.test(text)) return 'draw';
+    return null;
+  }
+
+  const exportsObj = { evaluateGameOver, sideToMoveHasSafeMove, pseudoMovesFor, gameResult };
 
   if (isNode) module.exports = exportsObj;
   else Object.assign(root, exportsObj);

@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "AugChess",
+    "slug": "augchess",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0e19",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-image",
+      "expo-sqlite",
+      "expo-web-browser",
+      "@react-native-vector-icons/material-design-icons",
+      "expo-font"
+    ],
+    "scheme": "augchess",
+    "backgroundColor": "#0a0e19"
+  }
+}

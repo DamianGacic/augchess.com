@@ -11,25 +11,18 @@
 const crypto = require('crypto');
 const engine = require('../engine/index.js');
 const ratings = require('./ratings.js');
-
-// Ranked result from the game-over text (the engine keeps no structured
-// winner): 1 = White won, 0 = Black won, 0.5 = draw, null = unrecognized.
-// ponytail: parses gameOverText, like app.js's 'Draw' check; add a
-// state.winner to the engine if the wording ever stops following this.
-function whiteScore(text) {
-  if (/White wins/.test(text)) return 1;
-  if (/Black wins/.test(text)) return 0;
-  if (/^Draw/.test(text)) return 0.5;
-  return null;
-}
+const { gameResult } = require('../engine/gameover-engine.js');
 
 class GameRoom {
   // ranked: seats go only to signed-in players (claimed via authenticate),
   // and the finished game's result updates both players' ratings.
+  // Every finished game, ranked or not, goes into the game history.
   constructor(id, { ranked = false } = {}) {
     this.id = id;
     this.ranked = ranked;
-    this.rated = false; // the current game's result has been recorded
+    this.recorded = false; // the current game has been saved to the history
+    this.frames = []; // serialized state after every change of the current game, for its replay
+    this.startedAt = null;
     this.reserved = null; // { w: userId, b: userId } for matchmade ranked games
     this.state = engine.createRoomState();
     this.seats = { w: null, b: null }; // { socket, token, userId? } | null
@@ -57,12 +50,13 @@ class GameRoom {
 
   // Every state message carries the server's time so clients can show the
   // running clock against it rather than their own (possibly skewed) clock.
-  statePayload() {
-    return JSON.stringify({ type: 'state', state: engine.serializeState(this.state), now: Date.now() });
+  statePayload(snapshot = JSON.stringify(engine.serializeState(this.state))) {
+    return `{"type":"state","state":${snapshot},"now":${Date.now()}}`;
   }
 
   broadcast() {
-    const payload = this.statePayload();
+    const snapshot = JSON.stringify(engine.serializeState(this.state));
+    const payload = this.statePayload(snapshot);
     for (const color of ['w', 'b']) {
       const seat = this.seats[color];
       if (seat && seat.socket && seat.socket.readyState === seat.socket.OPEN) {
@@ -73,8 +67,17 @@ class GameRoom {
       if (ws.readyState === ws.OPEN) ws.send(payload);
     }
     // Every state change goes out through here, so this is the one place a
-    // ranked game can be seen ending (move, flag fall, Vanguard timeout).
+    // game can be followed move by move and seen ending (move, flag fall,
+    // Vanguard timeout).
+    this.captureFrame(snapshot);
     this.recordResult();
+  }
+
+  captureFrame(snapshot) {
+    if (this.state.phase !== 'playing') { this.frames = []; this.startedAt = null; return; }
+    if (!this.frames.length) this.startedAt = new Date().toISOString();
+    // A join or reconnect re-broadcasts an unchanged state.
+    if (this.frames[this.frames.length - 1] !== snapshot) this.frames.push(snapshot);
   }
 
   send(payload) {
@@ -85,16 +88,31 @@ class GameRoom {
   }
 
   recordResult() {
-    if (!this.state.gameOver) { this.rated = false; return; } // a new game is under way
-    if (!this.ranked || this.rated || this.state.phase !== 'playing') return;
-    const score = whiteScore(this.state.gameOverText);
-    const w = this.seats.w && this.seats.w.userId;
-    const b = this.seats.b && this.seats.b.userId;
-    if (score === null || !w || !b) return;
-    this.rated = true; // set before the await: never record one game twice
-    ratings.recordRatedGame(w, b, score)
-      .then(result => this.send({ type: 'rating', ...result }))
-      .catch(err => console.error(`[room ${this.id}] recording rated game failed`, err));
+    if (!this.state.gameOver) { this.recorded = false; return; } // a new game is under way
+    if (this.recorded || this.state.phase !== 'playing') return;
+    const result = gameResult(this.state.gameOverText);
+    const w = this.seats.w && this.seats.w.userId || null;
+    const b = this.seats.b && this.seats.b.userId || null;
+    if (!result || (this.ranked && (!w || !b))) return;
+    this.recorded = true; // set before the await: never record one game twice
+    const { state } = this;
+    ratings.recordGame({
+      room_id: this.id,
+      ranked: this.ranked,
+      white_id: w,
+      black_id: b,
+      result,
+      result_text: state.gameOverText,
+      white_augments: state.augments.w,
+      black_augments: state.augments.b,
+      minutes: state.settings.minutes,
+      points: state.settings.points,
+      moves: state.moveLog.length,
+      frames: this.frames.map(f => JSON.parse(f)),
+      started_at: this.startedAt,
+    })
+      .then(result => { if (this.ranked) this.send({ type: 'rating', ...result }); })
+      .catch(err => console.error(`[room ${this.id}] recording game failed`, err));
   }
 
   sendState(ws) {
@@ -138,8 +156,15 @@ class GameRoom {
   // matchmade game, only the two reserved accounts their colors), and the
   // same account coming back (new tab, lost reconnect token) gets its seat
   // back. Resolves to the new assignment, or null if nothing changed.
+  // In a casual room it only notes which account is in the sender's seat,
+  // so the game history can name them.
   async authenticate(ws, accessToken) {
-    if (!this.ranked || (ws.augchess && ws.augchess.color)) return null;
+    if (!this.ranked) {
+      const seat = ws.augchess && this.seats[ws.augchess.color];
+      if (seat && seat.socket === ws) seat.userId = await ratings.verifyUser(accessToken);
+      return null;
+    }
+    if (ws.augchess && ws.augchess.color) return null;
     const userId = await ratings.verifyUser(accessToken);
     if (!userId) { this.sendRejection(ws, 'Sign in to play ranked games'); return null; }
     if (ws.readyState !== ws.OPEN) return null;

@@ -4,6 +4,7 @@ import Header from './components/Header.jsx';
 import AuthModal from './components/AuthModal.jsx';
 import HomePage from './pages/HomePage.jsx';
 import LeaderboardPage from './pages/LeaderboardPage.jsx';
+import HistoryPage from './pages/HistoryPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import AugmentsPage from './pages/AugmentsPage.jsx';
 import FiguresPage from './pages/FiguresPage.jsx';
@@ -14,6 +15,7 @@ import DraftModal from './game/DraftModal.jsx';
 const PAGES = {
   home: HomePage,
   leaderboard: LeaderboardPage,
+  history: HistoryPage,
   account: SettingsPage,
   augments: AugmentsPage,
   figures: FiguresPage,

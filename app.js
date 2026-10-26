@@ -25,6 +25,7 @@
 let netMode = false;   // true once connected to a server room
 let myColor = null;    // 'w' | 'b' | null (spectator, or hotseat = unrestricted)
 let aiColor = null;    // the AI's color when playing it (ai-player.js), else null
+let replay = null;     // { frames, index } while stepping through a logged game (REPLAY below)
 
 // ─── Shared game/draft state (see engine/draft-engine.js createRoomState) ─────
 let state = createRoomState();
@@ -214,7 +215,10 @@ function flashStatus(text) {
 function updateMpBadge() {
   const badge = document.getElementById('mp-badge');
   if (!badge) return;
-  if (netMode && NetClient.active) {
+  if (replay) {
+    badge.textContent = '⏪ Replay';
+    badge.classList.remove('hidden');
+  } else if (netMode && NetClient.active) {
     reconnecting = false;
     const colorLabel = myColor === 'w' ? 'White' : myColor === 'b' ? 'Black' : 'Spectator';
     badge.textContent = `🟢 ${rankedGame ? 'Ranked' : 'Online'} · You are ${colorLabel}`;
@@ -235,6 +239,7 @@ function updateMpBadge() {
 // reload doesn't rejoin it.
 function leaveOnlineGame() {
   if (!netMode) return;
+  if (replay) endReplay();
   NetClient.disconnect();
   netMode = false;
   myColor = null;
@@ -262,6 +267,90 @@ function newLocalGame() {
   undoStack = [];
   selectedSquare = null;
   legalMoves = [];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  REPLAY — stepping through a logged game (src/pages/HistoryPage.jsx). The
+//  frames are the server's state after every change of that game; showing one
+//  is the same state replacement as an online spectator's, minus the server.
+// ═══════════════════════════════════════════════════════════════════════════════
+const replayBar = document.getElementById('replay-bar');
+
+function startReplay(frames) {
+  AiPlayer.end();
+  newLocalGame();
+  replay = { frames, index: 0 };
+  netMode = true; // read-only, like a spectator: myColor stays null
+  ['btn-undo', 'btn-new-game'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  replayBar.classList.remove('hidden');
+  updateMpBadge();
+  showReplayFrame(0);
+  showView('game');
+}
+
+function showReplayFrame(i) {
+  replay.index = Math.max(0, Math.min(replay.frames.length - 1, i));
+  const frame = structuredClone(replay.frames[replay.index]);
+  const game = new Chess();
+  game.load(frame.game.fen);
+  frame.game = game;
+  if (frame.clock) frame.clock.running = null; // frozen at that moment
+  state = frame;
+  selectedSquare = null;
+  legalMoves = [];
+  document.getElementById('replay-pos').textContent = `${replay.index + 1} / ${replay.frames.length}`;
+  renderAll();
+}
+
+function endReplay() {
+  replay = null;
+  replayBar.classList.add('hidden');
+  document.getElementById('btn-new-game').classList.remove('hidden');
+}
+
+const replaySteps = { 'replay-first': () => 0, 'replay-prev': () => replay.index - 1, 'replay-next': () => replay.index + 1, 'replay-last': () => Infinity };
+Object.entries(replaySteps).forEach(([id, to]) => {
+  document.getElementById(id).addEventListener('click', () => showReplayFrame(to()));
+});
+document.getElementById('replay-exit').addEventListener('click', () => showView('history'));
+document.addEventListener('keydown', (e) => {
+  if (!replay || e.target.closest('input, textarea')) return;
+  if (e.key === 'ArrowLeft') showReplayFrame(replay.index - 1);
+  else if (e.key === 'ArrowRight') showReplayFrame(replay.index + 1);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  GAME LOG — local games (vs the AI, hotseat) go into the game history from
+//  here, frames and all; the server records online games itself. Runs on
+//  every renderAll, which follows every state change.
+// ═══════════════════════════════════════════════════════════════════════════════
+let localLog = { frames: [], startedAt: null, recorded: false };
+
+function logLocalGame() {
+  if (netMode) return; // online (or a replay): not ours to record
+  if (state.phase !== 'playing' || !state.game) { localLog = { frames: [], startedAt: null, recorded: false }; return; }
+  if (!localLog.frames.length) localLog.startedAt = new Date().toISOString();
+  const snapshot = JSON.stringify(serializeState(state));
+  if (localLog.frames[localLog.frames.length - 1] !== snapshot) localLog.frames.push(snapshot);
+  // ponytail: one record per game — an undo past the end and a different
+  // finish isn't logged again; reset `recorded` on undo if that matters.
+  if (!state.gameOver || localLog.recorded) return;
+  localLog.recorded = true;
+  const result = gameResult(state.gameOverText);
+  if (!result) return;
+  Auth.recordLocalGame({
+    mode: aiColor ? 'ai' : 'local',
+    human: aiColor ? (aiColor === 'w' ? 'b' : 'w') : null,
+    result,
+    result_text: state.gameOverText,
+    white_augments: state.augments.w,
+    black_augments: state.augments.b,
+    minutes: state.settings.minutes,
+    points: state.settings.points,
+    moves: state.moveLog.length,
+    frames: localLog.frames.map(f => JSON.parse(f)),
+    started_at: localLog.startedAt,
+  }).then(({ error }) => { if (error) console.warn('Game log: recording failed', error); });
 }
 
 // Called by the home page's "Create Game Link" button.
@@ -448,6 +537,7 @@ function renderAll() {
   if (typeof AiPlayer !== 'undefined') AiPlayer.schedule();
   if (typeof Chat !== 'undefined') Chat.sync();
   syncGameEndButtons();
+  logLocalGame();
 
   // The settings and draft phases are React modals (src/game/).
   if (state.phase !== 'playing') return;

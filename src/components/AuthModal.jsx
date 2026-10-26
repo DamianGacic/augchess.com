@@ -10,21 +10,24 @@ const PROVIDERS = [
   )],
 ];
 
-// Optional sign-in: Google / X, or an email magic link (with an optional
-// display name applied on first login — see track_login()).
+// Optional sign-in: Google / X, or email + password. A display name typed
+// when creating an account is applied on first login (see track_login()).
 export default function AuthModal() {
   const { authOpen } = useStore();
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [status, setStatus] = useState('');
-  const [sending, setSending] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (authOpen) { setEmail(''); setDisplayName(''); setStatus(''); }
+    if (authOpen) { setEmail(''); setPassword(''); setDisplayName(''); setStatus(''); }
   }, [authOpen]);
 
   if (!authOpen) return null;
   const close = () => setState({ authOpen: false });
+  const signingUp = mode === 'signup';
 
   async function oauth(provider) {
     setStatus('Redirecting…');
@@ -32,31 +35,32 @@ export default function AuthModal() {
     if (error) setStatus(error.message || 'Could not start sign-in — try again.');
   }
 
-  async function sendLink() {
+  async function submit(e) {
+    e.preventDefault();
     const addr = email.trim();
     const name = displayName.trim();
-    if (!addr) return;
-    setSending(true);
-    setStatus('Sending…');
-    if (name) {
+    if (!addr || !password) return;
+    setBusy(true);
+    setStatus(signingUp ? 'Creating your account…' : 'Signing in…');
+    if (signingUp && name) {
       const { available, error } = await Auth.checkDisplayNameAvailable(name);
       if (!error && available === false) {
         setStatus('That display name is taken — leave it blank and pick one later, or try another.');
-        setSending(false);
+        setBusy(false);
         return;
       }
     }
-    const { error } = await Auth.sendMagicLink(addr, name);
-    setSending(false);
-    if (!error) setStatus('Check your email for a sign-in link.');
-    else if (error.code === 'over_email_send_rate_limit' || error.status === 429) setStatus('Too many sign-in emails sent recently — wait a bit and try again.');
-    else setStatus('Something went wrong — try again.');
+    const { data, error } = signingUp ? await Auth.signUp(addr, password, name) : await Auth.signIn(addr, password);
+    setBusy(false);
+    if (error) setStatus(error.message || 'Something went wrong — try again.');
+    else if (data.session) close();
+    else setStatus('Check your email to confirm your account, then sign in.');
   }
 
   return (
     <div className="modal" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="modal-content auth-modal-content">
-        <h3>Sign in</h3>
+        <h3>{signingUp ? 'Create account' : 'Sign in'}</h3>
         <p className="augment-subtitle">Optional — sync your profile across devices. Playing and sharing game links never requires an account.</p>
         <div className="auth-oauth">
           {PROVIDERS.map(([id, label, icon]) => (
@@ -64,10 +68,20 @@ export default function AuthModal() {
           ))}
         </div>
         <div className="auth-divider"><span>or use email</span></div>
-        <input type="email" className="auth-email-input" placeholder="you@example.com" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} />
-        <input type="text" className="auth-email-input" placeholder="Display name (optional)" maxLength={20} autoComplete="off" value={displayName} onChange={e => setDisplayName(e.target.value)} />
-        <p className="auth-hint">You can leave this blank and choose or change it anytime in Settings.</p>
-        <button className="btn btn-primary" disabled={sending} onClick={sendLink}>Send magic link</button>
+        <form className="auth-form" onSubmit={submit}>
+          <input type="email" className="auth-email-input" placeholder="you@example.com" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} />
+          <input type="password" className="auth-email-input" placeholder="Password" autoComplete={signingUp ? 'new-password' : 'current-password'} minLength={6} required value={password} onChange={e => setPassword(e.target.value)} />
+          {signingUp && (
+            <>
+              <input type="text" className="auth-email-input" placeholder="Display name (optional)" maxLength={20} autoComplete="off" value={displayName} onChange={e => setDisplayName(e.target.value)} />
+              <p className="auth-hint">You can leave this blank and choose or change it anytime in Settings.</p>
+            </>
+          )}
+          <button type="submit" className="btn btn-primary" disabled={busy}>{signingUp ? 'Create account' : 'Sign in'}</button>
+        </form>
+        <button type="button" className="link-btn" onClick={() => { setMode(signingUp ? 'signin' : 'signup'); setStatus(''); }}>
+          {signingUp ? 'Already have an account? Sign in' : 'New here? Create an account'}
+        </button>
         <p className="auth-status-msg">{status}</p>
         <button className="btn btn-secondary" onClick={close}>Close</button>
       </div>

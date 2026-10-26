@@ -1,5 +1,5 @@
 /**
- * auth.js — Optional Supabase-backed login (magic link) plus rough usage
+ * auth.js — Optional Supabase-backed login (email + password, Google, X) plus rough usage
  * logging. Talks directly from the browser to Supabase — server/index.js
  * and the game protocol are never involved, so hotseat play and game links
  * work identically whether or not this module ever succeeds at anything.
@@ -97,19 +97,27 @@ const Auth = (function () {
     heartbeatTimer = null;
   }
 
+  // New account with email + password. If the project requires email
+  // confirmation the result has no session yet: the user confirms, then signs in.
   // displayName is optional — if given, it's sent as user_metadata and
-  // applied server-side only if the account is new AND the name is still
-  // free by the time the magic link is clicked (see track_login()).
-  async function sendMagicLink(email, displayName) {
+  // applied server-side only if the name is still free by the time they
+  // first sign in (see track_login()).
+  async function signUp(email, password, displayName) {
     if (!client) return { error: new Error('Supabase is not configured') };
     const trimmed = (displayName || '').trim();
-    return client.auth.signInWithOtp({
+    return client.auth.signUp({
       email,
+      password,
       options: {
         emailRedirectTo: window.location.origin,
         ...(trimmed ? { data: { display_name: trimmed } } : {}),
       },
     });
+  }
+
+  async function signIn(email, password) {
+    if (!client) return { error: new Error('Supabase is not configured') };
+    return client.auth.signInWithPassword({ email, password });
   }
 
   // 'google' | 'x' — leaves the page for the provider, which sends the
@@ -151,6 +159,11 @@ const Auth = (function () {
   const respondFriendRequest = (userId, accept) => rpc('respond_friend_request', { other: userId, accept });
   const removeFriend = (userId) => rpc('remove_friend', { other: userId });
   const leaderboard = () => rpc('leaderboard');
+  // Game history — see supabase/migrations/0007_game_history.sql.
+  const listGames = () => rpc('list_games');
+  const gameReplay = (id) => rpc('game_replay', { game_id: id });
+  // Local games (vs AI / hotseat) — the browser posts these itself.
+  const recordLocalGame = (game) => rpc('record_local_game', { g: game });
 
   async function signOut() {
     if (client) await client.auth.signOut();
@@ -158,7 +171,8 @@ const Auth = (function () {
 
   return {
     init,
-    sendMagicLink,
+    signUp,
+    signIn,
     signInWithProvider,
     signOut,
     setDisplayName,
@@ -168,6 +182,9 @@ const Auth = (function () {
     respondFriendRequest,
     removeFriend,
     leaderboard,
+    listGames,
+    gameReplay,
+    recordLocalGame,
     // Resolves once init() has restored the session (or found none).
     ready,
     get session() { return session; },

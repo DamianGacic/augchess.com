@@ -3,9 +3,10 @@
  * with the service role key (never sent to browsers):
  *   verifyUser(accessToken)  who a player's Supabase session belongs to
  *   getRating(userId)        their current rating, for matchmaking
- *   recordRatedGame(...)     applies the Elo update (record_rated_game in
- *                            supabase/migrations/0005_rated_games.sql)
- * Ranked play is off unless SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
+ *   recordGame(game)         saves a finished game to the history and, for a
+ *                            ranked one, applies the Elo update (record_game in
+ *                            supabase/migrations/0007_game_history.sql)
+ * Ranked play and the history are off unless SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
  * set (on Render: the service's Environment tab).
  */
 'use strict';
@@ -41,20 +42,22 @@ async function getRating(userId) {
   return row.rating;
 }
 
-// whiteScore: 1 | 0.5 | 0. Resolves to { w: {rating, delta}, b: {rating, delta} }.
-async function recordRatedGame(whiteId, blackId, whiteScore) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/record_rated_game`, {
+// game: see record_game. Resolves to { w: {rating, delta}, b: {rating, delta} }
+// for a ranked game, {} otherwise.
+async function recordGame(game) {
+  if (!enabled) return {};
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/record_game`, {
     method: 'POST',
     headers: {
       apikey: SERVICE_KEY,
       Authorization: `Bearer ${SERVICE_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ white: whiteId, black: blackId, white_score: whiteScore }),
+    body: JSON.stringify({ g: game }),
   });
-  if (!res.ok) throw new Error(`record_rated_game ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`record_game ${res.status}: ${await res.text()}`);
   const rows = await res.json();
   return Object.fromEntries(rows.map(r => [r.color, { rating: r.rating, delta: r.delta }]));
 }
 
-module.exports = { enabled, verifyUser, getRating, recordRatedGame };
+module.exports = { enabled, verifyUser, getRating, recordGame };

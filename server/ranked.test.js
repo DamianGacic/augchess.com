@@ -8,7 +8,7 @@ const { Matchmaker, ratingWindow } = require('./matchmaking.js');
 const users = { tokA: 'user-a', tokB: 'user-b' };
 ratings.verifyUser = async (t) => users[t] || null;
 const recorded = [];
-ratings.recordRatedGame = async (w, b, s) => { recorded.push([w, b, s]); return { w: { rating: 1220, delta: 20 }, b: { rating: 1180, delta: -20 } }; };
+ratings.recordGame = async (g) => { recorded.push([g.white_id, g.black_id, g.result]); return { w: { rating: 1220, delta: 20 }, b: { rating: 1180, delta: -20 } }; };
 
 const sock = () => { const ws = { OPEN: 1, readyState: 1, sent: [], send(m) { ws.sent.push(JSON.parse(m)); } }; return ws; };
 
@@ -25,21 +25,33 @@ const sock = () => { const ws = { OPEN: 1, readyState: 1, sent: [], send(m) { ws
   assert.strictEqual((await room.authenticate(b, 'tokB')).color, 'b');
 
   room.state.phase = 'playing';
+  room.state.moveLog = [];
   room.state.gameOver = true;
   room.state.gameOverText = '♛ Black wins by checkmate!';
   room.broadcast();
   room.broadcast();
   await new Promise(r => setImmediate(r));
-  assert.deepStrictEqual(recorded, [['user-a', 'user-b', 0]], 'recorded exactly once, Black won');
+  assert.deepStrictEqual(recorded, [['user-a', 'user-b', 'b']], 'recorded exactly once, Black won');
   assert.ok(b.sent.some(m => m.type === 'rating' && m.b.delta === -20), 'players get the new ratings');
 
   room.state.gameOver = false; room.broadcast(); // next game starts
   room.state.gameOver = true; room.state.gameOverText = 'Draw — Stalemate'; room.broadcast();
   await new Promise(r => setImmediate(r));
-  assert.deepStrictEqual(recorded[1], ['user-a', 'user-b', 0.5], 'a rematch is rated too');
+  assert.deepStrictEqual(recorded[1], ['user-a', 'user-b', 'draw'], 'a rematch is rated too');
 
   const casual = new GameRoom('c');
-  assert.strictEqual(casual.join(sock()).color, 'w', 'casual rooms seat on connect as before');
+  const cw = sock();
+  assert.strictEqual(casual.join(cw).color, 'w', 'casual rooms seat on connect as before');
+  casual.join(sock());
+  assert.strictEqual(await casual.authenticate(cw, 'tokA'), null, 'casual auth never moves a seat');
+  casual.state.phase = 'playing';
+  casual.state.moveLog = [];
+  casual.broadcast(); casual.broadcast();
+  casual.state.turnNumber = 2; casual.broadcast();
+  assert.strictEqual(casual.frames.length, 2, 'one frame per change, repeats skipped');
+  casual.state.gameOver = true; casual.state.gameOverText = '🏳 White wins — Black forfeited!'; casual.broadcast();
+  await new Promise(r => setImmediate(r));
+  assert.deepStrictEqual(recorded[2], ['user-a', null, 'w'], 'casual games go into the history, guests as null');
   console.log('ranked rooms ok');
 
   // ─── Matchmaking ───

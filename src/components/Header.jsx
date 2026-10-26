@@ -3,6 +3,7 @@ import { useStore, showView } from '../store.js';
 const NAV = [
   ['home', 'Home'],
   ['leaderboard', 'Leaderboards'],
+  ['history', 'History'],
   ['game', 'Game'],
   ['augments', 'Augments'],
   ['figures', 'Figures'],

@@ -20,6 +20,7 @@
  *     {type:'chatHistory', messages}, {type:'rating', w, b} (ranked games)
  *   Ranked rooms: 'joined' carries ranked:true and starts everyone as a
  *   spectator; a signed-in client answers with {type:'auth', accessToken}
+ *   (in casual rooms too, which only records who is playing)
  *   and gets a second 'joined' with its seat (server/rooms.js authenticate).
  *   Chat goes client -> server as {type:'chat', text}, outside the engine.
  */
@@ -104,7 +105,7 @@ const NetClient = (function () {
         color = msg.color;
         token = msg.token;
         if (color && token) sessionStorage.setItem(storageKey(id), JSON.stringify({ color, token }));
-        if (msg.ranked && !color) sendAuth(sock);
+        if (!msg.ranked || !color) sendAuth(sock); // casual: names you in the game history
         onJoinedCb(color, token, !!msg.ranked);
       } else if (msg.type === 'state') {
         onStateCb(msg.state, msg.now);

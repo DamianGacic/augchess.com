@@ -12,7 +12,13 @@ let SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 // Served from localhost: use the local Supabase from `supabase start` (see
 // supabase/config.toml) so testing never touches the hosted project or its
 // email limits. These are the CLI's fixed, public demo values.
-if (['localhost', '127.0.0.1'].includes(location.hostname)) {
+// The hosted project everywhere, local dev included. To use the local
+// Supabase (`supabase start`) instead, run this in the browser console once:
+//   localStorage.setItem('augchess:localSupabase', '1')
+// and removeItem the same key to switch back.
+let useLocalSupabase = false;
+try { useLocalSupabase = localStorage.getItem('augchess:localSupabase') === '1'; } catch (e) { /* storage unavailable */ }
+if (useLocalSupabase && ['localhost', '127.0.0.1'].includes(location.hostname)) {
   SUPABASE_URL = 'http://127.0.0.1:54321';
   SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 }
