@@ -54,6 +54,11 @@ export default function AuthModal() {
     setBusy(false);
     if (error) setStatus(error.message || 'Something went wrong — try again.');
     else if (data.session) close();
+    // Supabase answers a sign-up for an already-registered email with a
+    // user that has no identities, and sends nothing.
+    else if (data.user && data.user.identities && !data.user.identities.length) {
+      setStatus('That email already has an account. Sign in instead, or use Google / X if that is how you signed up.');
+    }
     else setStatus('Check your email to confirm your account, then sign in.');
   }
 

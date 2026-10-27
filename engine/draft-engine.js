@@ -153,9 +153,39 @@
     state.phase = 'playing';
   }
 
+  // ─── Unlocks ────────────────────────────────────────────────────────────
+  // New players draft from a starter set of augments until they've finished
+  // UNLOCK_GAMES games of any kind; then everything is open, Ranked included
+  // (server/matchmaking.js checks the same count). Only the draft screens
+  // apply the starter set — the engine itself never refuses an augment.
+  // ponytail: a random set per player; hand-pick one if it should teach.
+  const UNLOCK_GAMES = 10;
+  const STARTER_AUGMENTS = 8;
+
+  // The starter augment ids for `seed` (an account id, or a device id for
+  // guests): the same top-level augments every time for that seed. A
+  // follow-up (Deviant, Inferno, …) comes with its parent.
+  function starterAugments(seed) {
+    let h = 2166136261; // FNV-1a hash of the seed, then mulberry32
+    for (const ch of String(seed)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    const rand = () => {
+      h = (h + 0x6D2B79F5) | 0;
+      let t = Math.imul(h ^ (h >>> 15), 1 | h);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const ids = AUGMENTS.filter(a => !a.requires).map(a => a.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    return ids.slice(0, STARTER_AUGMENTS);
+  }
+
   const exportsObj = {
     createRoomState, updateSettings, startSettings, startAugmentDraft,
     exchangeType, canAfford, conflictsWithOwned, draftPick, draftPass, advanceDraft, finishDraft,
+    UNLOCK_GAMES, STARTER_AUGMENTS, starterAugments,
   };
 
   if (isNode) module.exports = exportsObj;

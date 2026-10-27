@@ -353,6 +353,57 @@ function logLocalGame() {
   }).then(({ error }) => { if (error) console.warn('Game log: recording failed', error); });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  UNLOCKS — new players draft from a starter set of augments until they've
+//  finished UNLOCK_GAMES games (starterAugments, engine/draft-engine.js).
+//  Signed in, the count is the account's logged games (my_games_count); a
+//  guest's is kept on this device. The draft screen (src/game/DraftModal.jsx)
+//  reads starterSet().
+// ═══════════════════════════════════════════════════════════════════════════════
+const GAMES_KEY = 'augchess:gamesPlayed';
+const DEVICE_KEY = 'augchess:deviceId';
+let gamesPlayed = 0;
+let gameEndNoted = false;
+
+function readStorage(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function writeStorage(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* storage unavailable */ }
+}
+
+// A guest's starter set is tied to this device rather than rerolled each visit.
+function deviceId() {
+  let id = readStorage(DEVICE_KEY);
+  if (!id) { id = Math.random().toString(36).slice(2); writeStorage(DEVICE_KEY, id); }
+  return id;
+}
+
+// Called on every sign-in/out (src/main.jsx) and after each finished game.
+function refreshGamesPlayed() {
+  if (!Auth.session) { gamesPlayed = Number(readStorage(GAMES_KEY)) || 0; renderAll(); return; }
+  Auth.myGamesCount().then(({ data }) => {
+    if (typeof data === 'number') { gamesPlayed = data; renderAll(); }
+  });
+}
+
+// The augment ids this player may draft, or null once everything's unlocked.
+// Guests playing on this screen (Start New Game, Play vs AI) are never capped.
+function starterSet() {
+  if (gamesPlayed >= UNLOCK_GAMES || (!Auth.session && !netMode)) return null;
+  return new Set(starterAugments(Auth.session ? Auth.session.user.id : deviceId()));
+}
+
+// A game this player took part in just ended: count it.
+function noteGameEnd() {
+  const over = state.phase === 'playing' && state.gameOver && !replay && (!netMode || !!myColor);
+  if (!over) { gameEndNoted = false; return; }
+  if (gameEndNoted) return;
+  gameEndNoted = true;
+  if (!Auth.session) writeStorage(GAMES_KEY, String(gamesPlayed + 1));
+  setTimeout(refreshGamesPlayed, 3000); // signed in: once the game is logged
+}
+
 // Called by the home page's "Create Game Link" button.
 async function createGameLink() {
   netStateUpdateCount = 0;
@@ -538,6 +589,7 @@ function renderAll() {
   if (typeof Chat !== 'undefined') Chat.sync();
   syncGameEndButtons();
   logLocalGame();
+  noteGameEnd();
 
   // The settings and draft phases are React modals (src/game/).
   if (state.phase !== 'playing') return;

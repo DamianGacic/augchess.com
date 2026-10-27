@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react';
 import E from './engine.js';
 import { getPref } from './prefs.js';
 import * as Net from './net.js';
-import { currentSession, recordLocalGame } from './auth.js';
+import { currentSession, recordLocalGame, myGamesCount, onAuthChange } from './auth.js';
 
 export const UNIT_KEYS = ['Q', 'W', 'E', 'R'];
 export const GLOBAL_KEYS = ['A', 'S', 'D', 'F'];
@@ -87,6 +87,7 @@ export const G = {
   myColor: null,     // 'w' | 'b' | null (spectator, or hotseat = unrestricted)
   aiColor: null,     // the AI's color when playing it, else null
   replay: null,      // { frames, index } while stepping through a logged game
+  gamesPlayed: 0,    // finished games, for unlocks (see Unlocks below)
   vsAi: false,
   colorChoice: 'w',  // the human's pick against the AI: 'w' | 'b' | 'random'
   rankedGame: false,
@@ -136,6 +137,7 @@ export function changed() {
   watchLocalClock();
   scheduleAi();
   logLocalGame();
+  noteGameEnd();
   version++;
   listeners.forEach(l => l());
 }
@@ -171,6 +173,61 @@ function logLocalGame() {
     frames: localLog.frames.map(f => JSON.parse(f)),
     started_at: localLog.startedAt,
   }).then(({ error }) => { if (error) console.warn('Game log: recording failed', error); });
+}
+
+// ─── Unlocks ─────────────────────────────────────────────────────────────────
+// New players draft from a starter set of augments until they've finished
+// E.UNLOCK_GAMES games (starterAugments, engine/draft-engine.js). Signed in,
+// the count is the account's logged games; a guest's is kept on this phone.
+// Same as the site's UNLOCKS section (app.js).
+const GAMES_KEY = 'augchess:gamesPlayed';
+const DEVICE_KEY = 'augchess:deviceId';
+let gameEndNoted = false;
+
+function readStorage(key) {
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+function writeStorage(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* storage unavailable */ }
+}
+
+// A guest's starter set is tied to this phone rather than rerolled each launch.
+function deviceId() {
+  let id = readStorage(DEVICE_KEY);
+  if (!id) { id = Math.random().toString(36).slice(2); writeStorage(DEVICE_KEY, id); }
+  return id;
+}
+
+function refreshGamesPlayed() {
+  if (!currentSession()) { G.gamesPlayed = Number(readStorage(GAMES_KEY)) || 0; changed(); return; }
+  myGamesCount().then(({ data }) => {
+    if (typeof data === 'number' && data !== G.gamesPlayed) { G.gamesPlayed = data; changed(); }
+  });
+}
+let lastUserId;
+onAuthChange(() => {
+  const session = currentSession();
+  const id = session ? session.user.id : null;
+  if (id !== lastUserId) { lastUserId = id; refreshGamesPlayed(); }
+});
+
+// The augment ids this player may draft, or null once everything's unlocked.
+// Guests playing on this phone (Start New Game, Play vs AI) are never capped.
+export function starterSet() {
+  const session = currentSession();
+  if (G.gamesPlayed >= E.UNLOCK_GAMES || (!session && !G.netMode)) return null;
+  return new Set(E.starterAugments(session ? session.user.id : deviceId()));
+}
+
+// A game this player took part in just ended: count it.
+function noteGameEnd() {
+  const s = G.state;
+  const over = s.phase === 'playing' && s.gameOver && !G.replay && (!G.netMode || !!G.myColor);
+  if (!over) { gameEndNoted = false; return; }
+  if (gameEndNoted) return;
+  gameEndNoted = true;
+  if (!currentSession()) writeStorage(GAMES_KEY, String(G.gamesPlayed + 1));
+  setTimeout(refreshGamesPlayed, 3000); // signed in: once the game is logged
 }
 
 let flashTimer = null;

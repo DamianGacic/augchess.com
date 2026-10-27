@@ -36,6 +36,9 @@ export function useAuth() {
 
 export function currentSession() { return snapshot.session; }
 
+// Outside React: called on every sign-in/out (and profile change).
+export function onAuthChange(cb) { listeners.add(cb); }
+
 async function fetchProfile(session) {
   const { data, error } = await client.from('profiles').select('*').eq('id', session.user.id).single();
   if (error) { console.warn('Auth: fetchProfile failed', error); return null; }
@@ -127,5 +130,7 @@ export const leaderboard = () => client.rpc('leaderboard');
 // server records online ones (supabase/migrations/0008_local_game_history.sql).
 export const recordLocalGame = (game) => client.rpc('record_local_game', { g: game });
 export const listGames = () => client.rpc('list_games');
+// Finished games on this account, for unlocks (0009_games_count.sql).
+export const myGamesCount = () => client.rpc('my_games_count');
 export const gameReplay = (id) => client.rpc('game_replay', { game_id: id });
 export const signOut = () => client.auth.signOut();

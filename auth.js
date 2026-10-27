@@ -164,6 +164,8 @@ const Auth = (function () {
   const gameReplay = (id) => rpc('game_replay', { game_id: id });
   // Local games (vs AI / hotseat) — the browser posts these itself.
   const recordLocalGame = (game) => rpc('record_local_game', { g: game });
+  // Finished games on this account, for unlocks (0009_games_count.sql).
+  const myGamesCount = () => rpc('my_games_count');
 
   async function signOut() {
     if (client) await client.auth.signOut();
@@ -185,6 +187,7 @@ const Auth = (function () {
     listGames,
     gameReplay,
     recordLocalGame,
+    myGamesCount,
     // Resolves once init() has restored the session (or found none).
     ready,
     get session() { return session; },

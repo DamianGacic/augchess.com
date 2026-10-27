@@ -3,6 +3,8 @@
  * with the service role key (never sent to browsers):
  *   verifyUser(accessToken)  who a player's Supabase session belongs to
  *   getRating(userId)        their current rating, for matchmaking
+ *   gamesPlayed(userId)      how many logged games they've finished (Ranked
+ *                            unlocks at UNLOCK_GAMES, engine/draft-engine.js)
  *   recordGame(game)         saves a finished game to the history and, for a
  *                            ranked one, applies the Elo update (record_game in
  *                            supabase/migrations/0007_game_history.sql)
@@ -42,6 +44,16 @@ async function getRating(userId) {
   return row.rating;
 }
 
+async function gamesPlayed(userId) {
+  const id = encodeURIComponent(userId);
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/games?select=id&or=(white_id.eq.${id},black_id.eq.${id})`, {
+    method: 'HEAD',
+    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, Prefer: 'count=exact' },
+  });
+  if (!res.ok) throw new Error(`gamesPlayed ${res.status}`);
+  return Number((res.headers.get('content-range') || '').split('/')[1]) || 0;
+}
+
 // game: see record_game. Resolves to { w: {rating, delta}, b: {rating, delta} }
 // for a ranked game, {} otherwise.
 async function recordGame(game) {
@@ -60,4 +72,4 @@ async function recordGame(game) {
   return Object.fromEntries(rows.map(r => [r.color, { rating: r.rating, delta: r.delta }]));
 }
 
-module.exports = { enabled, verifyUser, getRating, recordGame };
+module.exports = { enabled, verifyUser, getRating, gamesPlayed, recordGame };

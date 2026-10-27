@@ -85,20 +85,22 @@ function SidePanel({ color, label }) {
   );
 }
 
-function DraftCard({ aug }) {
+// locked: not in this new player's starter set (starterSet in app.js).
+function DraftCard({ aug, locked }) {
   const ds = state.draftState;
   const current = ds.current;
   const other = current === 'w' ? 'b' : 'w';
-  const disabled = ds.points[current] < aug.cost || conflictsWithOwned(state, current, aug) ||
+  const disabled = locked || ds.points[current] < aug.cost || conflictsWithOwned(state, current, aug) ||
     ds.owned[other].includes(aug.id) || !canActFor(current);
   return (
     <button
-      className={`augment-card cost-${aug.cost}` + (disabled ? ' disabled' : '')}
+      className={`augment-card cost-${aug.cost}` + (disabled ? ' disabled' : '') + (locked ? ' locked' : '')}
       data-aug-id={aug.id}
+      title={locked ? `Unlocks after ${UNLOCK_GAMES} games` : undefined}
       onClick={disabled ? undefined : () => dispatch({ type: 'draftPick', augId: aug.id })}
     >
       <img className="emblem" src={augmentIconUrl(aug.id)} alt="" draggable={false} />
-      <div className="ac-cost">{aug.cost}</div>
+      <div className="ac-cost">{locked ? '🔒' : aug.cost}</div>
       <div className="ac-body">
         <div className="ac-name">
           {aug.name}{' '}
@@ -121,12 +123,19 @@ export default function DraftModal() {
   // own picks move to their side panel instead of lingering in the grid.
   const grid = [...AUGMENTS].sort((a, b) => a.cost - b.cost)
     .filter(a => !a.requires && !ds.owned[ds.current].includes(a.id));
+  // Starter limits only apply to picks this player makes.
+  const starter = canActFor(ds.current) ? starterSet() : null;
 
   return (
     <div className="modal">
       <div className="modal-content augment-content">
         <h3>Augment Draft</h3>
         <p className="augment-subtitle">{ds.current === 'w' ? 'White' : 'Black'}, choose an augment (or pass)</p>
+        {starter && (
+          <p className="augment-unlock-note">
+            New player: {STARTER_AUGMENTS} starter augments. Everything unlocks after {UNLOCK_GAMES} games ({gamesPlayed}/{UNLOCK_GAMES}).
+          </p>
+        )}
         <div className="augment-points-row">
           {[['w', 'White'], ['b', 'Black']].map(([c, label]) => (
             <div key={c} className={'augment-points' + (ds.current === c ? ' active' : '')}>
@@ -142,7 +151,7 @@ export default function DraftModal() {
               const cols = stack.map(label => (
                 <div key={label} className="augment-col">
                   <div className="augment-col-label">{label}</div>
-                  {grid.filter(a => augmentColumn(a) === label).map(aug => <DraftCard key={aug.id} aug={aug} />)}
+                  {grid.filter(a => augmentColumn(a) === label).map(aug => <DraftCard key={aug.id} aug={aug} locked={!!starter && !starter.has(aug.id)} />)}
                 </div>
               ));
               return stack.length > 1 ? <div key={i} className="augment-col augment-col-stack">{cols}</div> : cols[0];

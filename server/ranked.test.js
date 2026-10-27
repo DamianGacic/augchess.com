@@ -59,6 +59,7 @@ const sock = () => { const ws = { OPEN: 1, readyState: 1, sent: [], send(m) { ws
   const ratingOf = { u1: 1200, u2: 1900, u3: 1250 };
   ratings.verifyUser = async (t) => t;
   ratings.getRating = async (id) => ratingOf[id];
+  ratings.gamesPlayed = async (id) => (id === 'newbie' ? 3 : 10);
   const store = new RoomStore();
   const mm = new Matchmaker(store);
   const last = (ws) => ws.sent.at(-1);
@@ -74,6 +75,10 @@ const sock = () => { const ws = { OPEN: 1, readyState: 1, sent: [], send(m) { ws
   const r1 = sock(), r2 = sock(), r3 = sock(), anon = sock();
   await mm.add(anon, { mode: 'ranked' });
   assert.strictEqual(last(anon).type, 'queueError', 'ranked needs an account');
+  const newbie = sock();
+  ratingOf.newbie = 1200;
+  await mm.add(newbie, { mode: 'ranked', accessToken: 'newbie' });
+  assert.ok(last(newbie).type === 'queueError' && /3/.test(last(newbie).reason), 'ranked needs UNLOCK_GAMES games first');
   await mm.add(r1, { mode: 'ranked', accessToken: 'u1' });
   await mm.add(r2, { mode: 'ranked', accessToken: 'u2' });
   assert.strictEqual(last(r1).type, 'queued', '700 apart: not matched right away');

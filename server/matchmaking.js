@@ -15,6 +15,7 @@
 'use strict';
 
 const ratings = require('./ratings.js');
+const { UNLOCK_GAMES } = require('../engine/draft-engine.js');
 
 // Rating gap accepted for a player who has waited `ms`: ±100 at once,
 // +100 more every 10s (so ±400 after 30s).
@@ -51,10 +52,15 @@ class Matchmaker {
     if (!ratings.enabled) return send(ws, { type: 'queueError', reason: 'Ranked games are not set up on this server' });
     const userId = await ratings.verifyUser(accessToken);
     if (!userId) return send(ws, { type: 'queueError', reason: 'Sign in to play ranked games' });
-    let rating;
-    try { rating = await ratings.getRating(userId); } catch (err) {
-      console.error('matchmaking: getRating failed', err);
+    let rating, played;
+    try {
+      [rating, played] = await Promise.all([ratings.getRating(userId), ratings.gamesPlayed(userId)]);
+    } catch (err) {
+      console.error('matchmaking: getRating/gamesPlayed failed', err);
       return send(ws, { type: 'queueError', reason: 'Could not load your rating — try again' });
+    }
+    if (played < UNLOCK_GAMES) {
+      return send(ws, { type: 'queueError', reason: `Ranked unlocks after ${UNLOCK_GAMES} games while signed in — you've played ${played}.` });
     }
     if (ws.readyState !== ws.OPEN) return;
     // The same account searching from a second tab replaces the first.

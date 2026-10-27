@@ -3840,6 +3840,10 @@ label.settings-row { cursor: pointer; }
 .lb-name { flex: 1; color: var(--text-bright); word-break: break-all; }
 .lb-rating { font-family: var(--font-display); font-weight: 700; color: var(--text-bright); }
 
+/* Draft: augments outside a new player's starter set. */
+.augment-unlock-note { margin: -4px 0 10px; text-align: center; font-size: 13px; color: var(--gold); }
+.augment-card.locked { opacity: 0.35; filter: grayscale(1); }
+
 /* ─── History page + replay ───────────────────────────────────────────── */
 .history-row { width: 100%; background: none; border: none; border-bottom: 1px solid var(--line); color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .history-row:hover { background: rgba(255, 255, 255, 0.04); }

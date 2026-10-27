@@ -576,3 +576,18 @@ $$;
 
 revoke all on function public.list_games(integer) from public;
 grant execute on function public.list_games(integer) to anon, authenticated;
+
+-- ─── Games count for unlocks (supabase/migrations/0009_games_count.sql) ───
+create or replace function public.my_games_count()
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)::integer from public.games
+  where auth.uid() is not null and (white_id = auth.uid() or black_id = auth.uid());
+$$;
+
+revoke all on function public.my_games_count() from public;
+grant execute on function public.my_games_count() to authenticated;
