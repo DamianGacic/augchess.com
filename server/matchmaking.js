@@ -17,7 +17,7 @@
 const ratings = require('./ratings.js');
 
 // Finished games an account needs before it can join the Ranked queue.
-const RANKED_MIN_GAMES = 10;
+const RANKED_MIN_GAMES = 5;
 
 // Rating gap accepted for a player who has waited `ms`: ±100 at once,
 // +100 more every 10s (so ±400 after 30s).
@@ -56,13 +56,13 @@ class Matchmaker {
     if (!userId) return send(ws, { type: 'queueError', reason: 'Sign in to play ranked games' });
     let rating, played;
     try {
-      [rating, played] = await Promise.all([ratings.getRating(userId), ratings.gamesPlayed(userId)]);
+      [rating, played] = await Promise.all([ratings.getRating(userId), ratings.gamesPlayed(userId, RANKED_MIN_GAMES)]);
     } catch (err) {
       console.error('matchmaking: getRating/gamesPlayed failed', err);
       return send(ws, { type: 'queueError', reason: 'Could not load your rating — try again' });
     }
     if (played < RANKED_MIN_GAMES) {
-      return send(ws, { type: 'queueError', reason: `Ranked unlocks after ${RANKED_MIN_GAMES} games while signed in — you've played ${played}.` });
+      return send(ws, { type: 'queueError', reason: `Ranked unlocks after ${RANKED_MIN_GAMES} finished games while signed in — you've finished ${played}.` });
     }
     if (ws.readyState !== ws.OPEN) return;
     // The same account searching from a second tab replaces the first.

@@ -59,7 +59,16 @@ const sock = () => { const ws = { OPEN: 1, readyState: 1, sent: [], send(m) { ws
   const ratingOf = { u1: 1200, u2: 1900, u3: 1250 };
   ratings.verifyUser = async (t) => t;
   ratings.getRating = async (id) => ratingOf[id];
-  ratings.gamesPlayed = async (id) => (id === 'newbie' ? 3 : 10);
+  // gamesPlayed asks Supabase only for games both sides got to play in.
+  const realFetch = global.fetch;
+  let asked;
+  global.fetch = async (url) => { asked = url; return { ok: true, json: async () => [{ id: 1 }, { id: 2 }] }; };
+  assert.strictEqual(await ratings.gamesPlayed('u1', 5), 2);
+  assert.ok(asked.includes('frames->-1->turnNumber=gte.2'), 'cancelled games are not counted');
+  assert.ok(asked.includes('limit=5'), 'stops counting at the limit');
+  global.fetch = realFetch;
+
+  ratings.gamesPlayed = async (id) => (id === 'newbie' ? 4 : 5);
   const store = new RoomStore();
   const mm = new Matchmaker(store);
   const last = (ws) => ws.sent.at(-1);
@@ -78,7 +87,7 @@ const sock = () => { const ws = { OPEN: 1, readyState: 1, sent: [], send(m) { ws
   const newbie = sock();
   ratingOf.newbie = 1200;
   await mm.add(newbie, { mode: 'ranked', accessToken: 'newbie' });
-  assert.ok(last(newbie).type === 'queueError' && /3/.test(last(newbie).reason), 'ranked needs RANKED_MIN_GAMES games first');
+  assert.ok(last(newbie).type === 'queueError' && /after 5 finished games.*finished 4/.test(last(newbie).reason), 'ranked needs RANKED_MIN_GAMES games first');
   await mm.add(r1, { mode: 'ranked', accessToken: 'u1' });
   await mm.add(r2, { mode: 'ranked', accessToken: 'u2' });
   assert.strictEqual(last(r1).type, 'queued', '700 apart: not matched right away');
