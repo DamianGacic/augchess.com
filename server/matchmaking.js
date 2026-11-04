@@ -15,7 +15,9 @@
 'use strict';
 
 const ratings = require('./ratings.js');
-const { UNLOCK_GAMES } = require('../engine/draft-engine.js');
+
+// Finished games an account needs before it can join the Ranked queue.
+const RANKED_MIN_GAMES = 10;
 
 // Rating gap accepted for a player who has waited `ms`: ±100 at once,
 // +100 more every 10s (so ±400 after 30s).
@@ -59,8 +61,8 @@ class Matchmaker {
       console.error('matchmaking: getRating/gamesPlayed failed', err);
       return send(ws, { type: 'queueError', reason: 'Could not load your rating — try again' });
     }
-    if (played < UNLOCK_GAMES) {
-      return send(ws, { type: 'queueError', reason: `Ranked unlocks after ${UNLOCK_GAMES} games while signed in — you've played ${played}.` });
+    if (played < RANKED_MIN_GAMES) {
+      return send(ws, { type: 'queueError', reason: `Ranked unlocks after ${RANKED_MIN_GAMES} games while signed in — you've played ${played}.` });
     }
     if (ws.readyState !== ws.OPEN) return;
     // The same account searching from a second tab replaces the first.

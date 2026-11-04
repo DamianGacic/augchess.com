@@ -78,7 +78,7 @@ const sock = () => { const ws = { OPEN: 1, readyState: 1, sent: [], send(m) { ws
   const newbie = sock();
   ratingOf.newbie = 1200;
   await mm.add(newbie, { mode: 'ranked', accessToken: 'newbie' });
-  assert.ok(last(newbie).type === 'queueError' && /3/.test(last(newbie).reason), 'ranked needs UNLOCK_GAMES games first');
+  assert.ok(last(newbie).type === 'queueError' && /3/.test(last(newbie).reason), 'ranked needs RANKED_MIN_GAMES games first');
   await mm.add(r1, { mode: 'ranked', accessToken: 'u1' });
   await mm.add(r2, { mode: 'ranked', accessToken: 'u2' });
   assert.strictEqual(last(r1).type, 'queued', '700 apart: not matched right away');

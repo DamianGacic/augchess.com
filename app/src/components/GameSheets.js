@@ -118,19 +118,17 @@ function Picks({ color }) {
   );
 }
 
-// locked: not in this new player's starter set (Game.starterSet).
-function DraftCard({ aug, locked }) {
+function DraftCard({ aug }) {
   const ds = G.state.draftState;
   const cur = ds.current;
   const other = cur === 'w' ? 'b' : 'w';
-  const disabled = locked || ds.points[cur] < aug.cost || E.conflictsWithOwned(G.state, cur, aug) ||
+  const disabled = ds.points[cur] < aug.cost || E.conflictsWithOwned(G.state, cur, aug) ||
     ds.owned[other].includes(aug.id) || !Game.canActFor(cur);
   return (
     <Pressable
       onPress={() => !disabled && Game.dispatch({ type: 'draftPick', augId: aug.id })}
       onLongPress={() => showAugmentDetail(aug)}
-      style={[styles.card, disabled && styles.cardDisabled, locked && styles.cardLocked]}
-      accessibilityLabel={locked ? `${aug.name}, locked: unlocks after ${E.UNLOCK_GAMES} games` : undefined}
+      style={[styles.card, disabled && styles.cardDisabled]}
     >
       <Emblem id={aug.id} size={44} />
       <View style={{ flex: 1, gap: 2 }}>
@@ -138,7 +136,7 @@ function DraftCard({ aug, locked }) {
           <Text style={styles.cardName}>{aug.name}</Text>
           {ds.owned.w.includes(aug.id) && <Text style={styles.owner}>W</Text>}
           {ds.owned.b.includes(aug.id) && <Text style={styles.owner}>B</Text>}
-          <Text style={styles.cost}>{locked ? '🔒' : aug.cost}</Text>
+          <Text style={styles.cost}>{aug.cost}</Text>
         </View>
         <Text style={styles.cardDesc} numberOfLines={3}>{aug.desc}</Text>
       </View>
@@ -156,8 +154,6 @@ export function DraftSheet() {
   // picks move to their picks row instead of lingering in the list.
   const list = [...E.AUGMENTS].sort((a, b) => a.cost - b.cost).filter(a => !a.requires && !ds.owned[ds.current].includes(a.id));
   const thinking = Game.aiThinking();
-  // Starter limits only apply to picks this player makes.
-  const starter = Game.canActFor(ds.current) ? Game.starterSet() : null;
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg0 }]}>
       <SafeAreaView edges={['bottom']} style={{ flex: 1 }}>
@@ -166,11 +162,6 @@ export function DraftSheet() {
           <Text style={[S.muted, { color: C.goldStrong }]}>
             {thinking ? '🤖 The AI is choosing…' : `${ds.current === 'w' ? 'White' : 'Black'}, choose an augment (or pass)`}
           </Text>
-          {starter && (
-            <Text style={styles.unlockNote}>
-              New player: {E.STARTER_AUGMENTS} starter augments. Everything unlocks after {E.UNLOCK_GAMES} games ({G.gamesPlayed}/{E.UNLOCK_GAMES}).
-            </Text>
-          )}
           <Picks color="w" />
           <Picks color="b" />
         </View>
@@ -181,7 +172,7 @@ export function DraftSheet() {
             return (
               <View key={group} style={{ gap: 8 }}>
                 <Text style={styles.label}>{group}</Text>
-                {augs.map(aug => <DraftCard key={aug.id} aug={aug} locked={!!starter && !starter.has(aug.id)} />)}
+                {augs.map(aug => <DraftCard key={aug.id} aug={aug} />)}
               </View>
             );
           })}
@@ -269,8 +260,6 @@ const styles = StyleSheet.create({
   childGreyed: { opacity: 0.5, borderStyle: 'dashed' },
   childBuyable: { opacity: 1 },
   card: { flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: C.bg1, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10 },
-  cardLocked: { opacity: 0.35 },
-  unlockNote: { color: C.gold, fontSize: 13 },
   cardDisabled: { opacity: 0.4 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   cardName: { color: C.textBright, fontWeight: '800', fontSize: 15, flexShrink: 1 },

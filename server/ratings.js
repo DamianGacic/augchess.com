@@ -4,7 +4,7 @@
  *   verifyUser(accessToken)  who a player's Supabase session belongs to
  *   getRating(userId)        their current rating, for matchmaking
  *   gamesPlayed(userId)      how many logged games they've finished (Ranked
- *                            unlocks at UNLOCK_GAMES, engine/draft-engine.js)
+ *                            unlocks at RANKED_MIN_GAMES, server/matchmaking.js)
  *   recordGame(game)         saves a finished game to the history and, for a
  *                            ranked one, applies the Elo update (record_game in
  *                            supabase/migrations/0007_game_history.sql)

@@ -10,10 +10,7 @@ import './gameBridge.js';
 // app.js and ai-player.js still navigate with a global showView().
 window.showView = showView;
 
-Auth.onChange((session, profile) => {
-  setState({ session, profile });
-  refreshGamesPlayed(); // unlocks follow the account (app.js)
-});
+Auth.onChange((session, profile) => setState({ session, profile }));
 Auth.init();
 
 // Synchronous first render: the header's #mp-badge has to exist before
