@@ -11,7 +11,7 @@ import Button from './Button.js';
 import { C, S } from '../theme.js';
 
 const MINUTES = [3, 5, 15, 25, 45];
-const POINT_PRESETS = [3, 9, 14];
+const POINT_PRESETS = [4, 9, 14];
 const COLORS = [['w', 'White'], ['b', 'Black'], ['random', 'Random']];
 
 function Chip({ label, selected, onPress }) {
