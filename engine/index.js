@@ -70,7 +70,8 @@
     // Dead session) — and settling a turn after the game ended would let
     // evaluateGameOver re-open it.
     // (A late Vanguard deployment too: the game can be forfeited before it lands.)
-    if (state.gameOver && (PLAY_ACTIONS.includes(action.type) || action.type === 'vanguardDeploy')) return 'Game is over';
+    if (state.gameOver && (PLAY_ACTIONS.includes(action.type) || action.type === 'vanguardDeploy' || action.type === 'patchyArrange')) return 'Game is over';
+    if (state.patchy && PLAY_ACTIONS.includes(action.type)) return 'Waiting for the Patchy Lines to be arranged';
     if (state.vanguard && PLAY_ACTIONS.includes(action.type)) return 'Waiting for the Vanguard to deploy';
     if (state.pendingShield && PLAY_ACTIONS.includes(action.type) && !allowedWhileShieldPending(state, action)) {
       return 'Turn the bishop\'s shield first';
@@ -85,6 +86,15 @@
         // The deployment happens before White's first turn — that turn's
         // start-of-turn check (Breaking Rank) runs now, against the new board.
         if (!err) chessEngine.checkBreakingRank(state, state.game.turn());
+        return err;
+      }
+
+      case 'patchyArrange': {
+        if (state.phase !== 'playing') return 'Not currently playing';
+        const err = augmentsEngine.arrangePatchyLines(state, color, action.moves);
+        // Like a Vanguard deployment: White's first turn starts now — unless
+        // a Vanguard deployment (opened just now) still comes first.
+        if (!err && !state.vanguard) chessEngine.checkBreakingRank(state, state.game.turn());
         return err;
       }
 
@@ -267,8 +277,9 @@
       // Breaking Rank fires at the beginning of *either* player's turn, so
       // White's very first turn needs its own check here — every other turn
       // gets one via afterTurnSettles below, right after the prior move.
-      // A pending Vanguard deployment runs that check itself once it resolves.
-      if (!state.vanguard) chessEngine.checkBreakingRank(state, state.game.turn());
+      // A pending Vanguard deployment (or Patchy Lines arrangement) runs that
+      // check itself once it resolves.
+      if (!state.vanguard && !state.patchy) chessEngine.checkBreakingRank(state, state.game.turn());
     }
   }
 

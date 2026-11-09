@@ -145,6 +145,9 @@ const BoardAnim = (() => {
       else if (san.startsWith('⚔')) {
         const pairs = san.slice(1).split(',').filter(Boolean).map(s => ({ from: s.slice(0, 2), to: s.slice(2, 4) }));
         events.push({ kind: 'vanguard', color, pairs });
+      } else if (san.startsWith('⇄')) {
+        const pairs = san.slice(1).split(',').filter(Boolean).map(s => ({ from: s.slice(0, 2), to: s.slice(2, 4) }));
+        events.push({ kind: 'patchy', color, pairs });
       }
     }
     return events;
@@ -169,6 +172,7 @@ const BoardAnim = (() => {
     const events = readEvents(state.moveLog.slice(prev.logLen));
     const has = kind => events.find(e => e.kind === kind);
     const hint = has('vanguard') ? { pairs: has('vanguard').pairs }
+      : has('patchy') ? { pairs: has('patchy').pairs }
       : has('teleport') ? { blink: true }
       : has('raise') ? { raise: true }
       : (lastMove && lastMove !== prev.lastMove)
@@ -185,7 +189,8 @@ const BoardAnim = (() => {
 
   function play(pieces, removed, events, hint, before) {
     const moving = pieces.filter(p => p.from);
-    const vanguard = events.find(e => e.kind === 'vanguard');
+    // (A Patchy Lines arrangement slides out the same way.)
+    const vanguard = events.find(e => e.kind === 'vanguard' || e.kind === 'patchy');
     const march = !vanguard && (events.some(e => e.kind === 'march') || moving.length > 2);
     // A Vanguard deployment: every unit marches out together, a bit slower.
     const slideMs = vanguard ? 650 : march ? 300 : 180;
@@ -243,6 +248,13 @@ const BoardAnim = (() => {
         banner.className = 'ba-banner';
         banner.textContent = e.pairs.length ? 'Vanguard' : 'Vanguard holds';
         addFx(banner, 1500);
+      } else if (e.kind === 'patchy') {
+        const rows = startingPawnRanks(state, e.color);
+        ripple(rows.flatMap(rank => 'abcdefgh'.split('').map(file => file + rank)), null, 'rgba(255, 123, 114, 0.6)', { dur: 650 });
+        const banner = document.createElement('div');
+        banner.className = 'ba-banner';
+        banner.textContent = 'Patchy Lines';
+        addFx(banner, 1300);
       } else if (e.kind === 'lightning' || e.kind === 'fire') {
         const king = state.mounted[e.color] || findKingSquare(state, e.color);
         if (!king) continue;

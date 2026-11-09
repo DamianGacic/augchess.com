@@ -45,6 +45,7 @@
   //   cast: { id, ...params }      castAbility, same params as the client
   //   rng: [..]                    Math.random values for this step's action
   //   vanguard: ['d2-d5', …]       a Vanguard deployment (from-to per unit)
+  //   patchy: ['a2-c2', …]         a Patchy Lines arrangement (from-to per unit)
   //   expect: { sq: 'wP' | null } or (state) => bool
   const DEMOS = {
     leaping: {
@@ -96,6 +97,25 @@
         { move: 'a2-a3', quick: true },
         { move: 'g8-f6', quick: true },
         { move: 'e5-f6', caption: 'From your second turn on, they fight like any other unit.', expect: { f6: 'wP' } },
+      ],
+    },
+
+    // The position stands in for the random draw: newGame has already opened
+    // the arrangement, and here the dice took the c2, d2 and f2 pawns.
+    patchyLines: {
+      augments: { w: ['patchyLines'] },
+      position: 'wRa1 wNb1 wBc1 wQd1 wKe1 wBf1 wNg1 wRh1 wPa2 wPb2 wPe2 wPg2 wPh2 '
+        + 'bRa8 bNb8 bBc8 bQd8 bKe8 bBf8 bNg8 bRh8 bPa7 bPb7 bPc7 bPd7 bPe7 bPf7 bPg7 bPh7',
+      steps: [
+        {
+          patchy: ['a2-c2', 'b2-d2', 'h2-f2'],
+          caption: 'Patchy Lines gives you 1 extra point, but you start 3 pawns short, picked at random: here c2, d2 and f2, right in the centre. You get 10 free seconds to slide your pawns along their row…',
+          after: '…so you choose where the gaps go: out on the wings, with the centre intact. Your opponent only sees the result.',
+          expect: { c2: 'wP', d2: 'wP', f2: 'wP', a2: null, b2: null, h2: null },
+        },
+        { move: 'e2-e4', caption: 'Then the game starts as usual.', expect: { e4: 'wP' } },
+        { move: 'e7-e5', quick: true },
+        { select: 'a1', caption: 'A gap is not all bad: with a2 empty, the rook already reaches up the a-file to a7.' },
       ],
     },
 
@@ -717,6 +737,10 @@
     (ann.clawRange || []).forEach(sq => { if (!taken.has(sq)) add(sq, 'claw-range-preview'); });
     if (ann.aim) add(ann.aim, 'demo-aim');
     (ann.zone || []).forEach(sq => add(sq, 'vanguard-zone'));
+    (ann.patchyZone || []).forEach(sq => {
+      add(sq, 'patchy-zone');
+      if (!E.pieceAt(state, sq)) add(sq, 'patchy-gap');
+    });
 
     if (ann.target) {
       const base = TARGET_CLASSES[ann.target.kind];
@@ -907,7 +931,7 @@
 
     demo.steps.forEach((step, i) => {
       const label = `${demoId} step ${i + 1}`;
-      const actor = state.vanguard ? state.vanguard.color : state.pendingStunlock ? state.pendingStunlock.color
+      const actor = state.patchy ? state.patchy.color : state.vanguard ? state.vanguard.color : state.pendingStunlock ? state.pendingStunlock.color
         : state.pendingShield ? state.pendingShield.color : state.game.turn();
       const quickCaption = `${SIDE_NAMES[actor]} moves.`;
 
@@ -939,6 +963,12 @@
         emit('pre', step.caption, actor, { zone: E.VANGUARD_ZONES[actor] });
         action = { type: 'vanguardDeploy', placements };
         hint = { pairs: placements };
+      } else if (step.patchy) {
+        const moves = step.patchy.map(s => { const [from, to] = s.split('-'); return { from, to }; });
+        const rows = E.startingPawnRanks(state, actor).flatMap(rank => FILES.split('').map(file => file + rank));
+        emit('pre', step.caption, actor, { patchyZone: rows });
+        action = { type: 'patchyArrange', moves };
+        hint = { pairs: moves };
       } else if (step.arm) {
         action = { type: 'armAbility', key: step.arm.key, unitSq: step.arm.unit };
       } else if (step.shield) {

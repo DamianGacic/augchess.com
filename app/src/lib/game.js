@@ -106,6 +106,9 @@ export const G = {
   vanguardPlan: [],  // [{ from, to }]
   vanguardSelected: null,
   vanguardSeenAt: null,
+  patchyPos: {},     // Patchy Lines plan: origin square → planned square
+  patchySelected: null, // origin square of the unit being slid
+  patchySeenAt: null,
   undoStack: [],
   clockOffset: 0,
 };
@@ -131,6 +134,7 @@ export function changed() {
     if (s.pendingShield) { G.selectedSquare = null; G.legalMoves = []; }
     if (G.selectedSquare) G.legalMoves = computeLegalMovesFor(G.selectedSquare);
     syncVanguard();
+    syncPatchy();
   } else {
     G.targeting = null;
   }
@@ -191,6 +195,7 @@ export function currentActor() {
   if (s.pendingStunlock) return s.pendingStunlock.color;
   if (s.pendingShield) return s.pendingShield.color;
   if (s.phase === 'playing' && s.vanguard) return s.vanguard.color;
+  if (s.phase === 'playing' && s.patchy) return s.patchy.color;
   if (s.phase === 'draft' && s.draftState) return s.draftState.current;
   if (s.phase === 'playing' && s.game) return s.game.turn();
   return 'w';
@@ -771,12 +776,108 @@ export function clearVanguardPlan() {
   changed();
 }
 
+// ─── Patchy Lines ────────────────────────────────────────────────────────────
+// The owner slides the units left in their pawn row(s) side to side to choose
+// where the gaps go, then sends the plan as one patchyArrange (patchy.js on
+// the site). The 10s limit counts from when this phone first saw it; the
+// server resolves it itself if this phone is gone.
+let patchyKey = null;
+let patchyTicker = null;
+
+export function patchyPending() {
+  const s = G.state;
+  return s.phase === 'playing' && !!s.game && !!s.patchy;
+}
+
+export function patchyMine() {
+  return patchyPending() && ((!G.netMode && !G.aiColor) || G.myColor === G.state.patchy.color);
+}
+
+export function patchyZone() {
+  if (!patchyPending()) return [];
+  return E.startingPawnRanks(G.state, G.state.patchy.color).flatMap(rank => FILE_LETTERS.map(file => file + rank));
+}
+
+export function patchyRemainingMs() {
+  if (!patchyPending() || G.patchySeenAt === null) return 0;
+  return Math.max(0, G.state.patchy.ms - (Date.now() - G.patchySeenAt));
+}
+
+const FILE_LETTERS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+function patchyLineUnit(sq) {
+  const s = G.state;
+  const p = E.pieceAt(s, sq);
+  return !!p && p.color === s.patchy.color && p.type === 'p' && E.startingPawnRanks(s, s.patchy.color).includes(sq[1]);
+}
+
+// The origin of the unit planned to stand on `sq`, or null.
+export function patchyOccupant(sq) {
+  for (const from in G.patchyPos) if (G.patchyPos[from] === sq) return from;
+  return patchyLineUnit(sq) && !(sq in G.patchyPos) ? sq : null;
+}
+
+// Whether the picked unit can slide to `sq`: free once the plan applies, on its row.
+export function patchyCanGo(sq) {
+  const from = G.patchySelected;
+  if (!from || sq[1] !== from[1] || !patchyZone().includes(sq) || patchyOccupant(sq)) return false;
+  return !E.pieceAt(G.state, sq) || (patchyLineUnit(sq) && sq in G.patchyPos);
+}
+
+function syncPatchy() {
+  if (!patchyPending()) {
+    clearInterval(patchyTicker); patchyTicker = null;
+    G.patchyPos = {}; G.patchySelected = null; G.patchySeenAt = null; patchyKey = null;
+    return;
+  }
+  const key = G.state.patchy.color + ':' + G.state.moveLog.length;
+  if (patchyKey !== key) { patchyKey = key; G.patchySeenAt = Date.now(); G.patchyPos = {}; G.patchySelected = null; }
+  if (!patchyTicker) {
+    patchyTicker = setInterval(() => {
+      if (!patchyPending()) return;
+      if (patchyRemainingMs() <= 0 && patchyMine()) sendPatchy();
+      else changed();
+    }, 500);
+  }
+}
+
+function patchyTap(sq) {
+  const unit = patchyOccupant(sq);
+  if (unit) {
+    G.patchySelected = unit;
+  } else if (patchyCanGo(sq)) {
+    const from = G.patchySelected;
+    const pos = { ...G.patchyPos };
+    if (sq === from) delete pos[from]; else pos[from] = sq;
+    G.patchyPos = pos;
+    G.patchySelected = null;
+  } else {
+    G.patchySelected = null;
+  }
+  changed();
+}
+
+export function sendPatchy() {
+  if (!patchyMine()) return;
+  const moves = Object.keys(G.patchyPos).map(from => ({ from, to: G.patchyPos[from] }));
+  G.patchyPos = {};
+  G.patchySelected = null;
+  dispatch({ type: 'patchyArrange', moves });
+}
+
+export function resetPatchy() {
+  G.patchyPos = {};
+  G.patchySelected = null;
+  changed();
+}
+
 // ─── The one tap handler for the board ───────────────────────────────────────
 let lastTap = { sq: null, at: 0 };
 
 export function tapSquare(sq) {
   const s = G.state;
   if (s.phase !== 'playing' || !s.game) return;
+  if (patchyPending()) { if (patchyMine()) patchyTap(sq); return; }
   if (vanguardPending()) { if (vanguardMine()) vanguardTap(sq); return; }
   if (s.gameOver || !isMyTurn()) return;
 
@@ -940,6 +1041,7 @@ export function statusLine() {
     return { text, tone: s.gameOverText.includes('Draw') ? 'draw' : 'over' };
   }
   if (!s.game) return { text: '', tone: null };
+  if (s.patchy) return { text: `${s.patchy.color === 'w' ? 'White' : 'Black'} is arranging their Patchy Lines`, tone: null };
   if (s.vanguard) return { text: `${s.vanguard.color === 'w' ? 'White' : 'Black'} is deploying their Vanguard`, tone: null };
   if (aiThinking()) return { text: `🤖 The AI (${G.aiColor === 'w' ? 'White' : 'Black'}) is thinking…`, tone: null };
   const active = activeTargeting();

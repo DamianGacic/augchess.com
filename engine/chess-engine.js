@@ -157,7 +157,13 @@
     state.vanguardGrace = null;
     // Units deployed by Vanguard that haven't moved yet: { w: [{ sq, type }], b: … }.
     state.vanguardFresh = { w: [], b: [] };
-    ['w', 'b'].forEach(c => { if (has(state, c, 'vanguard')) state.vanguard = { color: c, ms: VANGUARD_MS }; });
+
+    // Patchy Lines: the owner starts PATCHY_GAPS pawn-type units short (picked
+    // at random), then gets a free PATCHY_MS to slide the rest side to side
+    // along their row(s) (arrangePatchyLines in augments-engine.js). Nothing
+    // else happens until that resolves — a Vanguard deployment waits too.
+    setupPatchyLines(state);
+    if (!state.patchy) startVanguard(state);
 
     // Warlord: flips to true once that side's Warlord has survived his one
     // free blow (see warlordSurvives) — from then on he's a regular King.
@@ -176,6 +182,32 @@
     // Beloved: the square of each side's Beloved Queen, carried along as she
     // moves (applyMoveToState, deployVanguard in augments-engine.js).
     seedBelovedQueens(state);
+  }
+
+  // Opens the Vanguard deployment if either side has it (from newGame, or
+  // once a Patchy Lines arrangement before it has resolved).
+  function startVanguard(state) {
+    state.vanguard = null;
+    ['w', 'b'].forEach(c => { if (has(state, c, 'vanguard')) state.vanguard = { color: c, ms: VANGUARD_MS }; });
+  }
+
+  // Patchy Lines: knock PATCHY_GAPS random pawn-type units out of the
+  // owner's starting row(s) and open the free rearranging window.
+  function setupPatchyLines(state) {
+    state.patchy = null;
+    ['w', 'b'].forEach(color => {
+      if (!has(state, color, 'patchyLines')) return;
+      const squares = startingPawnRanks(state, color)
+        .flatMap(rank => FILES.map(file => file + rank))
+        .filter(sq => { const p = state.game.get(sq); return p && p.color === color && p.type === 'p'; });
+      for (let i = 0; i < PATCHY_GAPS && squares.length; i++) {
+        const sq = squares.splice(Math.floor(Math.random() * squares.length), 1)[0];
+        state.game.remove(sq);
+        if (state.ghoulSkin && state.ghoulSkin[color]) delete state.ghoulSkin[color][sq];
+      }
+      state.patchy = { color, ms: PATCHY_MS };
+    });
+    state.game.load(state.game.fen());
   }
 
   // Ranks a side's pawn-type units start on: the normal pawn row, plus the
@@ -547,6 +579,10 @@
     b: ['d6', 'e6', 'c5', 'd5', 'e5', 'f5', 'd4', 'e4'],
   };
   const VANGUARD_MS = 30000;
+  // Patchy Lines: how many pawn-type units the owner starts without, and how
+  // long they get to rearrange the rest (also free time).
+  const PATCHY_GAPS = 3;
+  const PATCHY_MS = 10000;
   const GHOUL_SKIN_COUNT = 5; // ghoul0.png .. ghoul4.png in figures/images/
 
   function sqToFR(sq) {
@@ -2330,7 +2366,8 @@
 
   const exportsObj = {
     newGame, has, startingPawnRanks, figurePawnType, anyFigurePawnsInPlay, ghoulCount, figureRookType, anyFigureRooksInPlay,
-    VANGUARD_ZONES, VANGUARD_MS, isVanguardFresh,
+    VANGUARD_ZONES, VANGUARD_MS, isVanguardFresh, startVanguard,
+    PATCHY_GAPS, PATCHY_MS,
     unitName, unitAt, unitsIn, listUnits, pluralUnit, logEntry,
     figureBishopType, anyFigureBishopsInPlay,
     hasWarlord, anyWarlordInPlay, isWarlordFresh, isFreshWarlordAt, warlordSurvives, warlordSurvivalText, killWarlordStriker, hitList,

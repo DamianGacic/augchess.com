@@ -218,6 +218,7 @@ class GameRoom {
       if (this.state.gameOver !== wasOver) this.broadcast();
     } else {
       this.broadcast();
+      this.watchPatchy();
       this.watchVanguard();
     }
     this.watchClock();
@@ -259,6 +260,25 @@ class GameRoom {
         this.watchClock();
       } catch (err) {
         console.error(`[room ${this.id}] vanguard timeout failed`, err);
+      }
+    }, pending.ms + VANGUARD_GRACE_MS);
+  }
+
+  // Same backstop for a Patchy Lines arrangement: if the owner's client never
+  // sends one, the random gaps stand. A Vanguard deployment may open next.
+  watchPatchy() {
+    const pending = this.state.patchy;
+    if (!pending) { clearTimeout(this.patchyTimer); this.patchyTimer = null; return; }
+    if (this.patchyTimer) return;
+    this.patchyTimer = setTimeout(() => {
+      this.patchyTimer = null;
+      if (this.state.patchy !== pending) return;
+      try {
+        if (!engine.applyAction(this.state, pending.color, { type: 'patchyArrange', moves: [] })) this.broadcast();
+        this.watchVanguard();
+        this.watchClock();
+      } catch (err) {
+        console.error(`[room ${this.id}] patchy lines timeout failed`, err);
       }
     }, pending.ms + VANGUARD_GRACE_MS);
   }

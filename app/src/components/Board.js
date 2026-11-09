@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { Pressable, Text, View, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import { G, E, tapSquare, targetingOverlay, isChoosingShield, vanguardPending, vanguardMine, vanguardZone, useGame } from '../lib/game.js';
+import { G, E, tapSquare, targetingOverlay, isChoosingShield, vanguardPending, vanguardMine, vanguardZone, patchyPending, patchyMine, patchyZone, patchyOccupant, patchyCanGo, useGame } from '../lib/game.js';
 import { usePrefs, BOARD_THEMES } from '../lib/prefs.js';
 import { augmentIcons, figureImages } from '../generated/assets.js';
 
@@ -31,6 +31,8 @@ const TINT = {
   firePriming: 'rgba(200, 40, 10, 0.4)',
   shieldChoice: 'rgba(150, 158, 170, 0.6)',
   vanguardTarget: 'rgba(255, 210, 80, 0.55)',
+  patchyGap: 'rgba(255, 123, 114, 0.18)',
+  patchyTarget: 'rgba(255, 123, 114, 0.45)',
   shootPreview: 'rgba(120, 120, 120, 0.25)',
 };
 const TARGET_TINT = {
@@ -156,6 +158,12 @@ function Board({ size }) {
   const vgMine = vanguardMine();
   const vgZone = new Set(vanguardZone());
   const vgPlan = vgMine ? G.vanguardPlan : [];
+  const pzPending = patchyPending();
+  const pzMine = patchyMine();
+  const pzZone = new Set(patchyZone());
+  const pzPos = pzMine ? G.patchyPos : {};
+  const pzLanding = {}; // planned square → origin
+  for (const from in pzPos) pzLanding[pzPos[from]] = from;
 
   const squares = [];
   ranks.forEach((rank, r) => files.forEach((file, f) => {
@@ -179,6 +187,7 @@ function Board({ size }) {
     if (s.fireAura[sq] && s.fireAura[sq].turns >= 1) add(TINT.firePriming);
     if (range && range.includes(sq) && !legal.has(sq)) add(TINT.shootPreview);
     if (sel === sq || (vgMine && G.vanguardSelected === sq)) add(TINT.selected);
+    if (pzMine && G.patchySelected && (pzPos[G.patchySelected] || G.patchySelected) === sq) add(TINT.selected);
     if (kingCheck && sq === toMoveKingSq) add(TINT[kingCheck]);
     if (queenCheck && sq === belovedSq) add(TINT[queenCheck]);
     if (target && target.targetable.has(sq)) add(TARGET_TINT[target.id][target.preview.has(sq) ? 1 : 0]);
@@ -187,6 +196,11 @@ function Board({ size }) {
     if (vgPending && vgZone.has(sq)) {
       layers.push({ borderWidth: 3, borderColor: 'rgba(255, 200, 70, 0.95)' });
       if (vgMine && G.vanguardSelected && E.isEmpty(s, sq) && !vgPlan.some(p => p.to === sq)) add(TINT.vanguardTarget);
+    }
+    if (pzPending && pzZone.has(sq)) {
+      layers.push({ borderWidth: 2, borderStyle: 'dashed', borderColor: 'rgba(255, 123, 114, 0.85)' });
+      if (pzMine && !patchyOccupant(sq)) add(TINT.patchyGap);
+      if (pzMine && patchyCanGo(sq)) add(TINT.patchyTarget);
     }
 
     // Move markers: a dot for a move, a ring for a capture, a crosshair
@@ -232,7 +246,7 @@ function Board({ size }) {
         </View>
       );
     } else if (p) {
-      const plannedAway = vgPlan.some(v => v.from === sq);
+      const plannedAway = vgPlan.some(v => v.from === sq) || sq in pzPos;
       const ready = E.readyAbilityMarkers(s, sq);
       const shieldDir = E.shieldDirAt(s, sq);
       piece = (
@@ -256,7 +270,8 @@ function Board({ size }) {
       );
     }
     // Vanguard: where each planned unit will land.
-    const planned = vgPlan.find(v => v.to === sq);
+    // (Patchy Lines likewise: where each slid unit will stand.)
+    const planned = vgPlan.find(v => v.to === sq) || (pzLanding[sq] && { from: pzLanding[sq] });
     if (planned) {
       const u = E.pieceAt(s, planned.from);
       if (u) piece = <View style={{ opacity: 0.7 }}><Unit s={s} type={u.type} color={u.color} sq={planned.from} size={pieceSize} /></View>;

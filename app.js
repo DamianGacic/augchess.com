@@ -102,6 +102,8 @@ function currentActor() {
   // A Vanguard deployment happens before White's first turn, so it belongs
   // to its owner even when that's Black and White is "to move".
   if (state.phase === 'playing' && state.vanguard) return state.vanguard.color;
+  // Same for arranging Patchy Lines, which comes before even that.
+  if (state.phase === 'playing' && state.patchy) return state.patchy.color;
   if (state.phase === 'draft' && state.draftState) return state.draftState.current;
   if (state.phase === 'playing' && state.game) return state.game.turn();
   return 'w';
@@ -554,6 +556,7 @@ function renderAll() {
   if (state.pendingShield) { selectedSquare = null; legalMoves = []; }
   if (selectedSquare) legalMoves = computeLegalMovesFor(selectedSquare);
   Vanguard.sync();
+  Patchy.sync();
   syncShieldPanel();
 
   renderBoard();
@@ -1018,6 +1021,7 @@ function renderBoard() {
   }
 
   Vanguard.decorate();
+  Patchy.decorate();
   BoardAnim.afterRender();
   if (window.Board3D) Board3D.sync(); // board3d.js, a module: absent until it loads
   renderAbilityBar();
@@ -1071,7 +1075,7 @@ function attachBadgeHandlers(badge, sq, color) {
 //  DOUBLE-CLICK (tower leave / dismount activation)
 // ═══════════════════════════════════════════════════════════════════════════════
 function onPieceDblClick(e) {
-  if (Vanguard.active()) return;
+  if (Vanguard.active() || Patchy.active()) return;
   if (state.gameOver || !isMyTurn() || state.pendingShield) return;
   const sq = e.currentTarget.dataset.square;
   const turn = state.game.turn();
@@ -1097,6 +1101,7 @@ function onPieceDblClick(e) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function onSquareClick(e) {
   if (Vanguard.onSquareClick(e.currentTarget.dataset.square)) return;
+  if (Patchy.onSquareClick(e.currentTarget.dataset.square)) return;
   if (state.gameOver) return;
   // A real drag always ends (mouseup/touchend) before its click arrives, so
   // one still open here never got its release — don't let it eat the click.
@@ -1302,6 +1307,7 @@ function onPieceMouseDown(e) {
   // release, which would leave a drag hanging (see cancelStaleDrag).
   if (e.button !== 0) return;
   if (Vanguard.onPiecePress(e.currentTarget.dataset.square)) { e.preventDefault(); return; }
+  if (Patchy.onPiecePress(e.currentTarget.dataset.square)) { e.preventDefault(); return; }
   if (state.gameOver) return;
   if (state.pendingStunlock || state.pendingShield) return;
   if (!isMyTurn()) return;
@@ -1320,6 +1326,7 @@ function onPieceMouseDown(e) {
 
 function onPieceTouchStart(e) {
   if (Vanguard.onPiecePress(e.currentTarget.dataset.square)) return; // the tap's click places it
+  if (Patchy.onPiecePress(e.currentTarget.dataset.square)) return;
   if (state.gameOver) return;
   if (state.pendingStunlock || state.pendingShield) return;
   if (!isMyTurn()) return;
@@ -1473,6 +1480,10 @@ function updateStatus() {
   }
   lastRating = null;
 
+  if (state.patchy) {
+    statusText.textContent = `${state.patchy.color === 'w' ? 'White' : 'Black'} is arranging their Patchy Lines`;
+    return;
+  }
   if (state.vanguard) {
     statusText.textContent = `${state.vanguard.color === 'w' ? 'White' : 'Black'} is deploying their Vanguard`;
     return;

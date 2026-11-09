@@ -55,6 +55,7 @@ const GLYPHS = {
   relentlessAdvance: 'rally-the-troops',
   coronation: 'crown',
   beloved: 'crowned-heart',
+  patchyLines: 'broken-wall',
   inferno: 'wildfires',
   unstableFireball: 'fireball',
   unstableTeleport: 'teleport',

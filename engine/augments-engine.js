@@ -714,6 +714,50 @@
     return null;
   }
 
+  // ── Patchy Lines ───────────────────────────────────────────────────────
+  // Before anything else, the Patchy Lines owner slides the pawn-type units
+  // left in their starting row(s) side to side, choosing where the gaps go —
+  // all at once, in one action (planned client-side, hidden until sent).
+  // Each move keeps its unit on its own row; moves are simultaneous, so a
+  // target may be a square another moving unit is leaving. `moves` may be
+  // empty (time ran out, or the random gaps were fine as they were).
+  function arrangePatchyLines(state, color, moves) {
+    if (!state.patchy) return 'No Patchy Lines arrangement is pending';
+    if (state.patchy.color !== color) return 'Not your Patchy Lines';
+    if (!Array.isArray(moves)) return 'Moves must be a list';
+    const ranks = chessEngine.startingPawnRanks(state, color);
+    const isSq = sq => typeof sq === 'string' && /^[a-h][1-8]$/.test(sq);
+    const froms = new Set(), tos = new Set();
+    for (const m of moves) {
+      if (!m || !isSq(m.from) || !isSq(m.to)) return 'Malformed move';
+      const piece = pieceAt(state, m.from);
+      if (!piece || piece.color !== color || piece.type !== 'p' || !ranks.includes(m.from[1])) return `No unit of yours in the line on ${m.from}`;
+      if (m.to[1] !== m.from[1]) return `${m.to} is not on the same row as ${m.from}`;
+      if (froms.has(m.from) || tos.has(m.to)) return 'Each unit and each square can only be used once';
+      froms.add(m.from); tos.add(m.to);
+    }
+    for (const m of moves) if (!froms.has(m.to) && !isEmpty(state, m.to)) return `${m.to} is not free`;
+
+    const moving = moves.filter(m => m.from !== m.to);
+    const skins = state.ghoulSkin && state.ghoulSkin[color];
+    const carried = moving.map(m => skins ? skins[m.from] : undefined);
+    moving.forEach(m => { state.game.remove(m.from); if (skins) delete skins[m.from]; });
+    moving.forEach((m, i) => {
+      state.game.put({ type: 'p', color }, m.to);
+      if (carried[i] !== undefined) skins[m.to] = carried[i];
+    });
+    state.game.load(state.game.fen());
+
+    const gaps = ranks.flatMap(rank => 'abcdefgh'.split('').map(file => file + rank)).filter(sq => !pieceAt(state, sq));
+    const units = pluralUnit(unitName(state, color, 'p'));
+    logEntry(state, color, '⇄' + moving.map(m => m.from + m.to).join(','), moving.length
+      ? `Patchy Lines: ${units} shuffled along the line — the gaps are on ${gaps.join(', ')}.`
+      : `Patchy Lines: the line holds — the gaps are on ${gaps.join(', ')}.`, 'event');
+    state.patchy = null;
+    chessEngine.startVanguard(state);
+    return null;
+  }
+
   // ── Bishops' Shields ───────────────────────────────────────────────────
   // The last step of a turn in which a shielded bishop moved (see
   // executeMove's pendingShield): its owner turns the shield to face one of
@@ -934,7 +978,7 @@
     getClubbingQuadrants, castClubbing,
     getFireballTargets, castUnstableFireball,
     getTeleportTargets, castUnstableTeleport,
-    getRaiseTheDeadTargets, castRaiseTheDead, endRaiseTheDead, deployVanguard, orientShield,
+    getRaiseTheDeadTargets, castRaiseTheDead, endRaiseTheDead, deployVanguard, arrangePatchyLines, orientShield,
     TURN_CONSUMING_ABILITIES, turnEndingAbilityActions, abilityKingSafetyError,
     unitAbilitiesFor, readyAbilityMarkers, globalAbilitiesFor, armAbility, castAbility, cancelAbility,
   };

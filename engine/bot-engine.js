@@ -41,6 +41,7 @@
   function botActor(state) {
     if (state.phase === 'draft' && state.draftState) return state.draftState.current;
     if (state.phase !== 'playing' || !state.game || state.gameOver) return null;
+    if (state.patchy) return state.patchy.color;
     if (state.vanguard) return state.vanguard.color;
     if (state.pendingStunlock) return state.pendingStunlock.color;
     if (state.pendingShield) return state.pendingShield.color;
@@ -418,6 +419,8 @@
   }
 
   function decide(state, color, opts) {
+    // Patchy Lines is a handicap the bot never drafts; keep the random gaps.
+    if (state.patchy) return [{ type: 'patchyArrange', moves: [] }];
     if (state.vanguard) return [chooseVanguard(state, color, opts)];
 
     if (state.pendingStunlock) {

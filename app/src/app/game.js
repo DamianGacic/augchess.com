@@ -6,7 +6,7 @@ import { Stack, router } from 'expo-router';
 import * as Game from '../lib/game.js';
 import { G, useGame } from '../lib/game.js';
 import Board from '../components/Board.js';
-import { PlayerBar, StatusLine, AbilityBar, VanguardPanel, ShieldPanel, Controls, GameTabs } from '../components/GamePanels.js';
+import { PlayerBar, StatusLine, AbilityBar, VanguardPanel, PatchyPanel, ShieldPanel, Controls, GameTabs } from '../components/GamePanels.js';
 import { SettingsSheet, DraftSheet, PromotionSheet, LobbySheet } from '../components/GameSheets.js';
 import { S } from '../theme.js';
 
@@ -39,6 +39,7 @@ export default function GameScreen() {
         <PlayerBar color={bottom} />
         <StatusLine />
         <VanguardPanel />
+        <PatchyPanel />
         <ShieldPanel />
         <AbilityBar />
         <Controls />

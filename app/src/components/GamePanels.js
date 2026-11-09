@@ -109,6 +109,30 @@ export function VanguardPanel() {
   );
 }
 
+export function PatchyPanel() {
+  useGame();
+  if (!Game.patchyPending()) return null;
+  const mine = Game.patchyMine();
+  const secs = Math.ceil(Game.patchyRemainingMs() / 1000);
+  const color = G.state.patchy.color;
+  const units = E.pluralUnit(E.unitName(G.state, color, 'p'));
+  const gaps = Game.patchyZone().filter(sq => !Game.patchyOccupant(sq)).length;
+  return (
+    <View style={styles.panel}>
+      <Image source={augmentIcons.patchyLines} style={styles.panelIcon} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.panelTitle}>Patchy Lines · {secs}s</Text>
+        <Text style={styles.panelSub}>
+          {mine ? `${G.patchySelected ? 'Now tap a free square on its row' : `Slide your ${units} to choose where the gaps go`} · ${gaps} gaps`
+            : `${name(color)} is arranging their Patchy Lines…`}
+        </Text>
+      </View>
+      {mine && <Button small title="Reset" onPress={Game.resetPatchy} />}
+      {mine && <Button small title="Ready" variant="primary" onPress={Game.sendPatchy} />}
+    </View>
+  );
+}
+
 export function ShieldPanel() {
   useGame();
   const s = G.state;
