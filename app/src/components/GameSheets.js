@@ -136,7 +136,7 @@ function DraftCard({ aug }) {
           <Text style={styles.cardName}>{aug.name}</Text>
           {ds.owned.w.includes(aug.id) && <Text style={styles.owner}>W</Text>}
           {ds.owned.b.includes(aug.id) && <Text style={styles.owner}>B</Text>}
-          <Text style={styles.cost}>{aug.cost}</Text>
+          <Text style={[styles.cost, E.isPointGain(aug.cost) && styles.costGain]}>{E.formatCost(aug.cost)}</Text>
         </View>
         <Text style={styles.cardDesc} numberOfLines={3}>{aug.desc}</Text>
       </View>
@@ -265,6 +265,8 @@ const styles = StyleSheet.create({
   cardName: { color: C.textBright, fontWeight: '800', fontSize: 15, flexShrink: 1 },
   owner: { color: C.bg0, backgroundColor: C.textSecondary, fontSize: 10, fontWeight: '900', paddingHorizontal: 4, borderRadius: 4, overflow: 'hidden' },
   cost: { marginLeft: 'auto', color: '#1b1405', backgroundColor: C.gold, fontWeight: '900', paddingHorizontal: 8, borderRadius: 999, overflow: 'hidden' },
+  // A handicap's cost is points gained: "+2" in green.
+  costGain: { backgroundColor: C.success },
   cardDesc: { color: C.textSecondary, fontSize: 13, lineHeight: 18 },
   info: { color: C.textSecondary, fontSize: 20, paddingHorizontal: 4 },
   promos: { flexDirection: 'row', justifyContent: 'space-around' },

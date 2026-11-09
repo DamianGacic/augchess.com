@@ -54,6 +54,7 @@ const GLYPHS = {
   ringOfFire: 'fire-ring',
   relentlessAdvance: 'rally-the-troops',
   coronation: 'crown',
+  beloved: 'crowned-heart',
   inferno: 'wildfires',
   unstableFireball: 'fireball',
   unstableTeleport: 'teleport',

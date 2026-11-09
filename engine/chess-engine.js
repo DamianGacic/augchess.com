@@ -172,6 +172,10 @@
     // augments-engine.js).
     state.bishopShields = { w: {}, b: {} };
     state.pendingShield = null;
+
+    // Beloved: the square of each side's Beloved Queen, carried along as she
+    // moves (applyMoveToState, deployVanguard in augments-engine.js).
+    seedBelovedQueens(state);
   }
 
   // Ranks a side's pawn-type units start on: the normal pawn row, plus the
@@ -184,6 +188,86 @@
 
   function has(state, color, augId) {
     return state.augments[color] && state.augments[color].includes(augId);
+  }
+
+  // ── Beloved ─────────────────────────────────────────────────────────────
+  // A Beloved Queen is royal, like a second King: she may never be left
+  // under attack, losing her loses the game, and when no move gets both her
+  // and the King out of danger it's checkmate. Only the Queen a side starts
+  // with is Beloved — a promoted Queen is an ordinary piece. Abilities can
+  // still kill her outright, exactly as they can a King.
+  //
+  // state.belovedQueen[color] is the square she was last seen on (null for a
+  // side without Beloved). It follows her moves; once anything else stands
+  // there, she has fallen.
+  function seedBelovedQueens(state) {
+    state.belovedQueen = { w: null, b: null };
+    for (const color of ['w', 'b']) {
+      if (!has(state, color, 'beloved')) continue;
+      const own = sq => { const p = pieceAt(state, sq); return !!p && p.color === color && p.type === 'q'; };
+      const home = color === 'w' ? 'd1' : 'd8';
+      state.belovedQueen[color] = own(home) ? home : (state.game.SQUARES.find(own) || null);
+    }
+  }
+
+  function anyBelovedInPlay(state) {
+    return !!(state.belovedQueen && (state.belovedQueen.w || state.belovedQueen.b));
+  }
+
+  // Her square while she still stands on it, else null.
+  function belovedQueenSquare(state, color) {
+    const sq = state.belovedQueen && state.belovedQueen[color];
+    if (!sq) return null;
+    const p = pieceAt(state, sq);
+    return p && p.color === color && p.type === 'q' ? sq : null;
+  }
+
+  // She was on the board and isn't any more: captured, shot, burned, …
+  function belovedQueenFallen(state, color) {
+    return !!(state.belovedQueen && state.belovedQueen[color]) && !belovedQueenSquare(state, color);
+  }
+
+  function isBelovedQueenAttacked(state, color) {
+    const sq = belovedQueenSquare(state, color);
+    return !!sq && squareAttackedBy(state, sq, color === 'w' ? 'b' : 'w');
+  }
+
+  // Inside the enemy King's Ring of Fire, she burns at a turn end before her
+  // owner gets to move her again (see checkRingOfFire), so it's check.
+  function inEnemyRingOfFire(state, color, sq) {
+    const enemy = color === 'w' ? 'b' : 'w';
+    if (!state.fireActive || !state.fireActive[enemy]) return false;
+    const enemyKing = findKingSquare(state, enemy);
+    return !!enemyKing && kingAuraSquares(enemyKing, ringOfFireRadius(state, enemy)).includes(sq);
+  }
+
+  // Whether `color`'s Beloved Queen is in check as `color` is about to move:
+  // attacked once this ply's Solar Strike has gone off (or burned by it), or
+  // standing in the enemy's Ring of Fire. Same role as kingThreatenedAfterPly.
+  function belovedQueenThreatenedAfterPly(state, color) {
+    if (!state.belovedQueen || !state.belovedQueen[color]) return false;
+    const board = boardAfterSolarBurns(state);
+    const sq = belovedQueenSquare(board, color);
+    if (!sq) return true;
+    return squareAttackedBy(board, sq, color === 'w' ? 'b' : 'w') || inEnemyRingOfFire(board, color, sq);
+  }
+
+  // After `color` has played a move out on `sim`: the Beloved Queen still
+  // stands, isn't attacked, and isn't sure to burn before `color` moves
+  // again (the enemy's Ring of Fire, or a Solar Strike going off on the
+  // opponent's coming turn, which they can't stop).
+  function belovedQueenSafeOn(sim, color) {
+    if (!sim.belovedQueen || !sim.belovedQueen[color]) return true;
+    const sq = belovedQueenSquare(sim, color);
+    if (!sq) return false;
+    if (squareAttackedBy(sim, sq, color === 'w' ? 'b' : 'w')) return false;
+    if (inEnemyRingOfFire(sim, color, sq)) return false;
+    return !solarBurnsThisPly(sim).includes(sq);
+  }
+
+  // Check for game-over and status purposes: either royal piece in danger.
+  function royalThreatenedAfterPly(state, color) {
+    return kingThreatenedAfterPly(state, color) || belovedQueenThreatenedAfterPly(state, color);
   }
 
   // ── Move history ────────────────────────────────────────────────────────
@@ -1303,8 +1387,10 @@
   // Warlord (chess.js never lets a King be captured, nor stand in check), a
   // check that's about to burn away, or an effect that lands inside the
   // move itself (see hasDelayedEffects).
+  // A Beloved Queen anywhere counts too: chess.js knows neither that she's
+  // royal nor that killing her wins on the spot.
   function needsManualCheck(state, color) {
-    return !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) ||
+    return anyBelovedInPlay(state) || !!(state.mounted.w || state.mounted.b) || anyFigurePawnsInPlay(state) || anyFigureRooksInPlay(state) ||
       anyFigureBishopsInPlay(state) || anyShieldsInPlay(state) || anyWarlordInPlay(state) ||
       isCheckDoomedByFire(state, color) || hasDelayedEffects(state, color);
   }
@@ -1345,6 +1431,11 @@
 
   function kingSafeOn(sim, color) {
     if (!(sim.mounted[color] || findKingSquare(sim, color))) return false;
+    if (belovedQueenFallen(sim, color)) return false;
+    // Killing the enemy's Beloved Queen ends the game there and then, before
+    // anything still attacking this side's King or Queen gets to strike.
+    if (belovedQueenFallen(sim, color === 'w' ? 'b' : 'w')) return true;
+    if (!belovedQueenSafeOn(sim, color)) return false;
     return !isKingAttacked(sim, color) || isCheckDoomedByFire(sim, color);
   }
 
@@ -1365,16 +1456,24 @@
   // and not by an attacker that's about to burn in a Ring of Fire. This,
   // not the bare board, is what "in check" means for status and game-over.
   function kingThreatenedAfterPly(state, color) {
+    if (!solarBurnsThisPly(state).length) return isKingAttacked(state, color) && !isCheckDoomedByFire(state, color);
+    const sim = boardAfterSolarBurns(state);
+    if (!(sim.mounted[color] || findKingSquare(sim, color))) return true;
+    return isKingAttacked(sim, color) && !isCheckDoomedByFire(sim, color);
+  }
+
+  // The board once this ply's Solar Strike has gone off — `state` itself
+  // when nothing burns this ply, else a copy.
+  function boardAfterSolarBurns(state) {
     const burns = solarBurnsThisPly(state);
-    if (!burns.length) return isKingAttacked(state, color) && !isCheckDoomedByFire(state, color);
+    if (!burns.length) return state;
     const sim = cloneForSimulation(state);
     burns.forEach(sq => {
       if (warlordSurvives(sim, sq)) return; // the strike only wounds him
       delete sim.mannedTowers[sq];
       if (pieceAt(sim, sq)) sim.game.remove(sq);
     });
-    if (!(sim.mounted[color] || findKingSquare(sim, color))) return true;
-    return isKingAttacked(sim, color) && !isCheckDoomedByFire(sim, color);
+    return sim;
   }
 
   // A Warlord who hasn't been wounded yet is never in check: the blow would
@@ -1542,6 +1641,7 @@
       bishopShields: state.bishopShields
         ? { w: { ...state.bishopShields.w }, b: { ...state.bishopShields.b } }
         : undefined,
+      belovedQueen: state.belovedQueen ? { ...state.belovedQueen } : undefined,
     };
   }
 
@@ -1556,6 +1656,7 @@
     state.gameOverText = snap.gameOverText;
     if (snap.apprenticeTeleportUsed) state.apprenticeTeleportUsed = snap.apprenticeTeleportUsed;
     if (snap.bishopShields) state.bishopShields = snap.bishopShields;
+    if (snap.belovedQueen) state.belovedQueen = snap.belovedQueen;
   }
 
   function flipTurnFen(state, stripCastleColor, epTargetSquare) {
@@ -1589,6 +1690,13 @@
         state.game.load(flipTurnFen(state, lostCastling ? color : null));
       }
       return;
+    }
+
+    // A Beloved Queen's square follows her (see seedBelovedQueens). A capture
+    // aimed at a fresh Warlord returned above: she never left m.from, or
+    // died there.
+    if (state.belovedQueen && state.belovedQueen[color] === m.from && !SHOT_SPECIALS.includes(m.special)) {
+      state.belovedQueen[color] = m.to;
     }
 
     // A shot into a shield's face is fired but bounces off (see SHIELD_DIRS).
@@ -2236,7 +2344,9 @@
     archerStepOffsets, isArcherOnCooldown, archerThreatSquares,
     generateLeapingMoves, generateKingsPawnMoves, generateTowerEntryMoves,
     generateMountMoves, generateMountedKingMoves,
-    filterIntoCheck, needsManualCheck, solarBurnsThisPly, kingThreatenedAfterPly,
+    filterIntoCheck, needsManualCheck, solarBurnsThisPly, kingThreatenedAfterPly, boardAfterSolarBurns,
+    seedBelovedQueens, anyBelovedInPlay, belovedQueenSquare, belovedQueenFallen, isBelovedQueenAttacked,
+    belovedQueenThreatenedAfterPly, belovedQueenSafeOn, royalThreatenedAfterPly,
     cloneForSimulation, kingSafeOn, tickTurnWithoutMove,
     isKingAttacked, kingCheckers, isCheckDoomedByFire, squareAttackedBy, attacksSquare, clearPath,
     applyMoveToState, executeMove, describeMove, findRequestedMove, flipTurnFen,

@@ -113,6 +113,9 @@ function Board({ size }) {
   const toMove = s.game.turn();
   const toMoveKingSq = s.mounted[toMove] || E.findKingSquare(s, toMove);
   const kingCheck = toMoveKingSq && E.kingThreatenedAfterPly(s, toMove) ? (E.isKingAttacked(s, toMove) ? 'inCheck' : 'checkIncoming') : null;
+  // A Beloved Queen in check is tinted like a King in check.
+  const belovedSq = E.belovedQueenSquare(s, toMove);
+  const queenCheck = belovedSq && E.belovedQueenThreatenedAfterPly(s, toMove) ? (E.isBelovedQueenAttacked(s, toMove) ? 'inCheck' : 'checkIncoming') : null;
   const solarBurns = E.solarBurnsThisPly(s);
   const sel = G.selectedSquare;
   const legal = new Map(G.legalMoves.map(m => [m.to, m]));
@@ -177,6 +180,7 @@ function Board({ size }) {
     if (range && range.includes(sq) && !legal.has(sq)) add(TINT.shootPreview);
     if (sel === sq || (vgMine && G.vanguardSelected === sq)) add(TINT.selected);
     if (kingCheck && sq === toMoveKingSq) add(TINT[kingCheck]);
+    if (queenCheck && sq === belovedSq) add(TINT[queenCheck]);
     if (target && target.targetable.has(sq)) add(TARGET_TINT[target.id][target.preview.has(sq) ? 1 : 0]);
     if (shieldChoices && shieldChoices.some(c => c.sq === sq)) add(TINT.shieldChoice);
     if (s.pendingShield && sq === s.pendingShield.sq) layers.push({ borderWidth: 3, borderColor: 'rgba(225, 230, 238, 0.95)' });
@@ -240,6 +244,9 @@ function Board({ size }) {
             </View>
           )}
           {p.type === 'k' && E.hasWarlord(s, p.color) && s.warlordWounded && s.warlordWounded[p.color] && <View style={styles.health} />}
+          {p.type === 'q' && E.belovedQueenSquare(s, p.color) === sq && (
+            <Image source={augmentIcons.beloved} style={[styles.beloved, { width: sqSize * 0.3, height: sqSize * 0.3 }]} />
+          )}
           {shieldDir && (
             <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${SHIELD_ANGLES[shieldDir] + (G.flipped ? 180 : 0)}deg` }] }]}>
               <View style={[styles.shieldBar, s.pendingShield && s.pendingShield.sq === sq && styles.shieldPending]} />
@@ -285,6 +292,7 @@ const styles = StyleSheet.create({
   badgeWhite: { backgroundColor: '#5a5f6b', borderColor: '#e6e6e6' },
   badgeBlack: { backgroundColor: '#d8d8d8', borderColor: '#262626' },
   ready: { position: 'absolute', top: -2, right: -4, gap: 1 },
+  beloved: { position: 'absolute', top: -2, left: -4 },
   health: { position: 'absolute', bottom: 0, left: '15%', width: '35%', height: 3, backgroundColor: '#e53935', borderRadius: 2 },
   shieldBar: { position: 'absolute', top: '4%', left: '15%', width: '70%', height: '9%', backgroundColor: '#8d939c', borderRadius: 3, borderWidth: 1, borderColor: '#3e434b' },
   shieldPending: { backgroundColor: '#e1e6ee' },

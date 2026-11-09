@@ -11,7 +11,8 @@
   const { pieceAt, frToSq, sqToFR, findKingSquare, isKingAttacked, isCheckDoomedByFire, has,
     figurePawnType, anyFigurePawnsInPlay, figureRookType, anyFigureRooksInPlay,
     figureBishopType, anyFigureBishopsInPlay, squareAttackedBy, longbowShootRangeSquares,
-    generateMoves, generateExitMoves, needsManualCheck, kingThreatenedAfterPly } = chessEngine;
+    generateMoves, generateExitMoves, needsManualCheck, kingThreatenedAfterPly,
+    belovedQueenFallen, belovedQueenThreatenedAfterPly } = chessEngine;
 
   function evaluateGameOver(state) {
     // A game lost on time (clock-engine.js) is over for good — every branch
@@ -23,6 +24,10 @@
     const fallen = color => has(state, color, 'warlord') ? 'Warlord slain' : 'King captured';
     if (!wK) { state.gameOver = true; state.gameOverText = `♛ Black wins — ${fallen('w')}!`; return; }
     if (!bK) { state.gameOver = true; state.gameOverText = `♛ White wins — ${fallen('b')}!`; return; }
+
+    // Beloved: losing the Beloved Queen ends the game just like losing the King.
+    if (belovedQueenFallen(state, 'w')) { state.gameOver = true; state.gameOverText = '💔 Black wins — the Beloved Queen has fallen!'; return; }
+    if (belovedQueenFallen(state, 'b')) { state.gameOver = true; state.gameOverText = '💔 White wins — the Beloved Queen has fallen!'; return; }
 
     // Coronation: an instant win the moment that color's King is sitting on
     // the opponent's back rank, however it got there (a plain King step, or
@@ -60,22 +65,25 @@
       state.gameOver = false; state.gameOverText = ''; return;
     }
 
-    let sideToMove, inCheck, exposedByStrike, canMove;
+    let sideToMove, kingInCheck, queenInCheck, exposedByStrike, canMove;
     try {
       sideToMove = state.game.turn();
-      inCheck = kingThreatenedAfterPly(state, sideToMove);
-      exposedByStrike = inCheck && !isKingAttacked(state, sideToMove);
+      kingInCheck = kingThreatenedAfterPly(state, sideToMove);
+      queenInCheck = belovedQueenThreatenedAfterPly(state, sideToMove);
+      exposedByStrike = kingInCheck && !isKingAttacked(state, sideToMove);
       canMove = sideToMoveHasSafeMove(state, sideToMove);
     } catch (err) {
       console.error('evaluateGameOver (manual path) failed:', err);
       state.gameOver = false; state.gameOverText = ''; return;
     }
     if (!canMove) {
-      if (inCheck) {
+      if (kingInCheck || queenInCheck) {
         const winner = sideToMove === 'w' ? 'Black' : 'White';
         const loser = sideToMove === 'w' ? 'White' : 'Black';
         state.gameOver = true;
-        state.gameOverText = exposedByStrike
+        state.gameOverText = !kingInCheck
+          ? `♛ ${winner} wins by checkmate — ${loser}'s Beloved Queen can't be saved!`
+          : exposedByStrike
           ? `♛ ${winner} wins by checkmate — the Solar Strike leaves ${loser}'s King defenceless!`
           : `♛ ${winner} wins by checkmate!`;
       } else {

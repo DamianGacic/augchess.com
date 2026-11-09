@@ -40,7 +40,7 @@ function updateSolarStrikePreview(x, y) {
   const el = document.elementFromPoint(x, y);
   const sqEl = el ? el.closest('.square') : null;
   const hoveredSq = sqEl ? sqEl.dataset.square : null;
-  const validCenters = getSolarStrikeCenters(pendingSolarStrike.queenSq);
+  const validCenters = getSolarStrikeCenters(pendingSolarStrike.queenSq, state);
   let best = null;
   if (hoveredSq) {
     const { f: hf, r: hr } = sqToFR(hoveredSq);

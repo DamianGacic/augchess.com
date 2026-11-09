@@ -30,7 +30,8 @@ export function KindTag({ aug }) {
 }
 
 export function CostTag({ cost }) {
-  return <Text style={[styles.tag, { color: C.gold, borderColor: C.goldDeep }]}>{cost} {cost === 1 ? 'point' : 'points'}</Text>;
+  const gain = E.isPointGain(cost);
+  return <Text style={[styles.tag, gain ? { color: C.success, borderColor: C.success } : { color: C.gold, borderColor: C.goldDeep }]}>{E.formatCost(cost)} {Math.abs(cost) === 1 ? 'point' : 'points'}</Text>;
 }
 
 export function RequiresTag({ aug }) {

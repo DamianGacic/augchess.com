@@ -75,6 +75,7 @@ function buildDemoPiece(p, { isFlipped = false } = {}) {
   if (p.fig === 'ghoul') el.style.backgroundImage = `url("figures/images/ghoul${p.skin || 0}.png")`;
   if (p.ready && p.ready.length) el.appendChild(abilityReadyBadges(p.ready));
   if (p.badges.includes('cooldown')) el.classList.add('reloading');
+  if (p.badges.includes('beloved')) el.classList.add('beloved');
   if (p.badges.includes('wounded')) el.appendChild(warlordHealthBar());
   if (p.shield) el.appendChild(bishopShieldEl(p.shield, { pending: !!p.shieldPending, isFlipped }));
   return el;
@@ -429,7 +430,7 @@ const AugmentDemoPopover = (() => {
       node.dataset.augId = c.id;
       node.style.setProperty('--i', i);
       node.appendChild(emblemImg(augmentIconUrl(c.id), c.name));
-      node.insertAdjacentHTML('beforeend', `<span class="abn-name"></span><span class="abn-cost">${c.cost}</span>`);
+      node.insertAdjacentHTML('beforeend', `<span class="abn-name"></span><span class="abn-cost${isPointGain(c.cost) ? ' gain' : ''}">${formatCost(c.cost)}</span>`);
       node.querySelector('.abn-name').textContent = c.name;
       node.addEventListener('click', () => { hideAll(); showAugmentDetail(c); });
       row.appendChild(node);

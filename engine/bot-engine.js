@@ -67,6 +67,7 @@
     let best = null, bestScore = -Infinity;
     for (const aug of data.AUGMENTS) {
       if (!draftEngine.canAfford(state, color, aug)) continue;
+      if (aug.cost <= 0) continue; // a handicap (Beloved): the bot doesn't play around it
       const worth = AUGMENT_WORTH[aug.id] !== undefined ? AUGMENT_WORTH[aug.id] : aug.cost * 0.7;
       const score = worth / aug.cost + rand() * 0.35;
       if (score > bestScore) { bestScore = score; best = aug; }
@@ -307,7 +308,7 @@
     if (has(state, color, 'solarStrike') && !state.solarStrikeCastThisTurn) {
       for (const qSq of ownSquares(state, color)) {
         if (!augmentsEngine.unitAbilitiesFor(state, qSq).some(a => a && a.id === 'solarStrike')) continue;
-        const centres = augmentsEngine.getSolarStrikeCenters(qSq).map(c => {
+        const centres = augmentsEngine.getSolarStrikeCenters(qSq, state).map(c => {
           let v = 0;
           for (const sq of augmentsEngine.solarStrikeSquares(c.f, c.r)) {
             const p = pieceAt(state, sq);

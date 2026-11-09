@@ -40,8 +40,8 @@ function kindTag(aug) {
 
 function costBadge(cost) {
   const el = document.createElement('span');
-  el.className = 'cost-badge';
-  el.innerHTML = `<span class="cost-num">${cost}</span>${cost === 1 ? 'point' : 'points'}`;
+  el.className = 'cost-badge' + (isPointGain(cost) ? ' gain' : '');
+  el.innerHTML = `<span class="cost-num">${formatCost(cost)}</span>${Math.abs(cost) === 1 ? 'point' : 'points'}`;
   return el;
 }
 
@@ -57,7 +57,7 @@ function requiresTag(aug) {
 function showAugmentDetail(augment) {
   document.getElementById('detail-icon').src = augmentIconUrl(augment.id);
   detailTitle.textContent = augment.name;
-  detailCost.textContent = `Cost: ${augment.cost}`;
+  detailCost.textContent = isPointGain(augment.cost) ? `Gives: ${formatCost(augment.cost)} points` : `Cost: ${augment.cost}`;
   const meta = document.getElementById('detail-meta');
   meta.innerHTML = '';
   meta.appendChild(kindTag(augment));

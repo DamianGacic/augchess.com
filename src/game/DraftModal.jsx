@@ -40,7 +40,7 @@ function SlotCard({ aug, className, onClick, disabled, short, title }) {
       <AugmentEmblem aug={aug} />
       <span className="as-text">
         <span className="as-name">{aug.name}</span>
-        <span className="as-cost">{aug.cost} pt{aug.cost === 1 ? '' : 's'}{short > 0 && ` · ${short} short`}</span>
+        <span className={'as-cost' + (isPointGain(aug.cost) ? ' gain' : '')}>{formatCost(aug.cost)} pt{Math.abs(aug.cost) === 1 ? '' : 's'}{short > 0 && ` · ${short} short`}</span>
       </span>
     </button>
   );
@@ -98,7 +98,7 @@ function DraftCard({ aug }) {
       onClick={disabled ? undefined : () => dispatch({ type: 'draftPick', augId: aug.id })}
     >
       <img className="emblem" src={augmentIconUrl(aug.id)} alt="" draggable={false} />
-      <div className="ac-cost">{aug.cost}</div>
+      <div className={'ac-cost' + (isPointGain(aug.cost) ? ' gain' : '')}>{formatCost(aug.cost)}</div>
       <div className="ac-body">
         <div className="ac-name">
           {aug.name}{' '}

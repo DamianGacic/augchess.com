@@ -20,6 +20,7 @@ const ABILITY_META = {
   solarStrike: { label: 'Solar Strike' },
   breakingRank: { label: 'Breaking Rank (passive)' },
   coronation: { label: 'Coronation (passive)' },
+  beloved: { label: 'Beloved (passive)' },
   advance: { label: 'Advance' },
   kingsLightning: { label: 'Lightning Aura', passiveLabel: 'Lightning Aura (active)' },
   ringOfFire: { label: 'Ring of Fire', passiveLabel: 'Ring of Fire (active)' },

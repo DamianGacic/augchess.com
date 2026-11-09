@@ -23,12 +23,12 @@ export const GLOBAL_KEYS = ['A', 'S', 'D', 'F'];
 const TARGETED = {
   solarStrike: {
     status: '☀ Tap where to strike, then tap again to cast',
-    areas: t => E.getSolarStrikeCenters(t.unitSq),
+    areas: t => E.getSolarStrikeCenters(t.unitSq, G.state),
     squares: a => E.solarStrikeSquares(a.f, a.r),
     // Nearest valid center to the tap, like solarstrike.js.
     resolve: (t, sq) => {
       const { f: hf, r: hr } = E.sqToFR(sq);
-      return E.getSolarStrikeCenters(t.unitSq).reduce((a, b) =>
+      return E.getSolarStrikeCenters(t.unitSq, G.state).reduce((a, b) =>
         (Math.abs(a.f - hf) + Math.abs(a.r - hr) <= Math.abs(b.f - hf) + Math.abs(b.r - hr) ? a : b), null);
     },
     action: (t, a) => ({ type: 'castAbility', id: 'solarStrike', unitSq: t.unitSq, center: E.frToSq(a.f, a.r) }),
@@ -955,6 +955,9 @@ export function statusLine() {
   const side = s.game.turn();
   const name = side === 'w' ? 'White' : 'Black';
   const attacked = E.isKingAttacked(s, side);
+  if (!E.kingThreatenedAfterPly(s, side) && E.belovedQueenThreatenedAfterPly(s, side)) {
+    return { text: `⚠ ${name}'s Beloved Queen is in check!`, tone: 'check' };
+  }
   if (E.kingThreatenedAfterPly(s, side)) {
     return { text: attacked ? `⚠ ${name} is in check!` : `⚠ The Solar Strike will expose ${name}'s King!`, tone: 'check' };
   }

@@ -14,7 +14,7 @@ export function KindTag({ aug }) {
 }
 
 export function CostBadge({ cost }) {
-  return <span className="cost-badge"><span className="cost-num">{cost}</span>{cost === 1 ? 'point' : 'points'}</span>;
+  return <span className={'cost-badge' + (isPointGain(cost) ? ' gain' : '')}><span className="cost-num">{formatCost(cost)}</span>{Math.abs(cost) === 1 ? 'point' : 'points'}</span>;
 }
 
 export function RequiresTag({ aug }) {

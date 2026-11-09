@@ -702,6 +702,12 @@ function renderBoard() {
   const kingCheckClass = toMoveKingSq && kingThreatenedAfterPly(state, toMove)
     ? (isKingAttacked(state, toMove) ? 'in-check' : 'check-incoming')
     : null;
+  // A Beloved Queen in check: red when attacked, else 'check-incoming' (a
+  // Solar Strike over her, or standing in the enemy's Ring of Fire).
+  const belovedSq = belovedQueenSquare(state, toMove);
+  const queenCheckClass = belovedSq && belovedQueenThreatenedAfterPly(state, toMove)
+    ? (isBelovedQueenAttacked(state, toMove) ? 'in-check' : 'check-incoming')
+    : null;
   const solarBurns = solarBurnsThisPly(state);
 
   let archerShootRange = null;
@@ -815,6 +821,7 @@ function renderBoard() {
       }
 
       if (kingCheckClass && sq === toMoveKingSq) sqEl.classList.add(kingCheckClass);
+      if (queenCheckClass && sq === belovedSq) sqEl.classList.add(queenCheckClass);
 
       if (state.stunnedSquares[sq] > 0) sqEl.classList.add('stunned');
 
@@ -831,7 +838,7 @@ function renderBoard() {
       }
 
       if (solarStrikeTargeting && pendingSolarStrike) {
-        const validCenters = getSolarStrikeCenters(pendingSolarStrike.queenSq);
+        const validCenters = getSolarStrikeCenters(pendingSolarStrike.queenSq, state);
         const isTargetable = validCenters.some(({ f: cf, r: cr }) => solarStrikeSquares(cf, cr).includes(sq));
         if (isTargetable) sqEl.classList.add('solarstrike-target');
         if (solarStrikeHoverCenter && solarStrikeSquares(solarStrikeHoverCenter.f, solarStrikeHoverCenter.r).includes(sq)) {
@@ -984,6 +991,11 @@ function renderBoard() {
           pieceEl.title = pending ? 'Turn this bishop\'s shield' : shieldTitle(piece.color, shieldDir);
         }
 
+        if (piece.type === 'q' && belovedQueenSquare(state, piece.color) === sq) {
+          pieceEl.classList.add('beloved');
+          pieceEl.title = 'Beloved Queen: she can never be left under attack, and losing her loses the game';
+        }
+
         // White's freshly deployed Vanguard units sit out White's first turn.
         if (state.vanguardLocked && state.vanguardLocked.includes(sq)) {
           pieceEl.classList.add('vanguard-locked');
@@ -1122,7 +1134,7 @@ function onSquareClick(e) {
     if (solarStrikeHoverCenter) {
       applySolarStrikeToCenter(solarStrikeHoverCenter.f, solarStrikeHoverCenter.r);
     } else {
-      const validCenters = getSolarStrikeCenters(pendingSolarStrike.queenSq);
+      const validCenters = getSolarStrikeCenters(pendingSolarStrike.queenSq, state);
       const { f: hf, r: hr } = sqToFR(sq);
       const best = validCenters.reduce((a, b) => {
         const da = Math.abs(a.f - hf) + Math.abs(a.r - hr);
@@ -1515,6 +1527,11 @@ function updateStatus() {
   const sideName = sideToMove === 'w' ? 'White' : 'Black';
   const attacked = isKingAttacked(state, sideToMove);
   const threatened = kingThreatenedAfterPly(state, sideToMove);
+  if (!threatened && belovedQueenThreatenedAfterPly(state, sideToMove)) {
+    statusText.textContent = `⚠ ${sideName}'s Beloved Queen is in check!`;
+    statusBox.classList.add('check');
+    return;
+  }
   if (threatened) {
     statusText.textContent = attacked
       ? `⚠ ${sideName} is in check!`

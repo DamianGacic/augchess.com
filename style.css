@@ -3518,6 +3518,34 @@ main {
 }
 @keyframes vg-flow { to { stroke-dashoffset: -11; } }
 
+/* The Beloved Queen: a heart in her corner (Vanguard's mark uses the other). */
+.piece.beloved::before {
+  content: '';
+  position: absolute;
+  top: -4%;
+  left: -4%;
+  width: 30%;
+  height: 30%;
+  background: url("augments/icons/beloved.svg") center / contain no-repeat;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* A handicap's cost is points gained: "+2", in green instead of gold. */
+.augment-card .ac-cost.gain {
+  color: var(--success);
+  background: rgba(79, 219, 164, 0.12);
+  border-color: rgba(79, 219, 164, 0.5);
+}
+.augment-slot-card .as-cost.gain,
+.abn-cost.gain,
+.cost-badge.gain .cost-num,
+.augment-card-upright .cost-badge.gain .cost-num { color: var(--success); }
+.cost-badge.gain .cost-num {
+  background: rgba(79, 219, 164, 0.14);
+  border-color: rgba(79, 219, 164, 0.5);
+}
+
 /* White's deployed units, sitting out White's first turn. */
 .piece.vanguard-locked { filter: saturate(0.6) brightness(0.92); }
 .piece.vanguard-locked::after {

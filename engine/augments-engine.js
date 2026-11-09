@@ -82,8 +82,10 @@
 
   // ── Solar Strike ──────────────────────────────────────────────────────
   // Valid 3×3 centers: within 2 squares (Chebyshev) of the queen, and far
-  // enough from the edge that the full 3×3 stays on the board.
-  function getSolarStrikeCenters(queenSq) {
+  // enough from the edge that the full 3×3 stays on the board. Given the
+  // state, also never over the caster's own Beloved Queen: no Queen may move
+  // the turn the strike is cast, so she'd be trapped in it and burn.
+  function getSolarStrikeCenters(queenSq, state) {
     const { f: qf, r: qr } = sqToFR(queenSq);
     const centers = [];
     for (let f = 1; f <= 6; f++) {
@@ -91,7 +93,9 @@
         if (Math.max(Math.abs(f - qf), Math.abs(r - qr)) <= 2) centers.push({ f, r });
       }
     }
-    return centers;
+    const caster = state && pieceAt(state, queenSq);
+    const beloved = caster && chessEngine.belovedQueenSquare(state, caster.color);
+    return beloved ? centers.filter(c => !solarStrikeSquares(c.f, c.r).includes(beloved)) : centers;
   }
 
   function solarStrikeSquares(f, r) {
@@ -117,8 +121,12 @@
     const piece = pieceAt(state, queenSq);
     if (!piece || piece.color !== color || piece.type !== 'q') return 'That is not your Queen';
     const { f, r } = sqToFR(centerSq);
-    const valid = getSolarStrikeCenters(queenSq).some(c => c.f === f && c.r === r);
-    if (!valid) return 'That center is out of range';
+    const valid = getSolarStrikeCenters(queenSq, state).some(c => c.f === f && c.r === r);
+    if (!valid) {
+      const beloved = chessEngine.belovedQueenSquare(state, color);
+      if (beloved && solarStrikeSquares(f, r).includes(beloved)) return 'Your Beloved Queen would burn in that Solar Strike';
+      return 'That center is out of range';
+    }
     if (chessEngine.isVanguardFresh(state, color, queenSq)) return 'A Queen deployed by Vanguard has to move before she can cast Solar Strike';
 
     state.solarMarkedBy = state.solarMarkedBy || {};
@@ -684,6 +692,7 @@
       for (const map of [state.stunlockCharges, state.ghoulSkin, state.apprenticeTeleportUsed, state.bishopShields]) {
         if (map && map[color] && p.from in map[color]) { map[color][p.to] = map[color][p.from]; delete map[color][p.from]; }
       }
+      if (state.belovedQueen && state.belovedQueen[color] === p.from) state.belovedQueen[color] = p.to;
     });
 
     // A King or Rook that left its home square can no longer castle.
@@ -790,6 +799,7 @@
     const list = [];
     if (has(state, color, 'breakingRank')) list.push({ id: 'breakingRank', passive: true });
     if (has(state, color, 'coronation')) list.push({ id: 'coronation', passive: true });
+    if (has(state, color, 'beloved')) list.push({ id: 'beloved', passive: true });
     if (has(state, color, 'advance') && !state.advanceUsed[color]) list.push({ id: 'advance' });
     if (has(state, color, 'relentlessAdvance')) {
       list.push(state.relentlessAdvanceActive[color] ? { id: 'relentlessAdvance', passive: true } : { id: 'relentlessAdvance' });
@@ -888,7 +898,8 @@
       if (sim.pendingRaiseTheDead) finishRaiseTheDeadTurn(sim, color);
       chessEngine.tickTurnWithoutMove(sim);
       chessEngine.checkKingsLightning(sim);
-      return chessEngine.kingSafeOn(sim, color) ? null : 'That would leave your King open to capture';
+      if (chessEngine.kingSafeOn(sim, color)) return null;
+      return has(state, color, 'beloved') ? 'That would leave your King or Beloved Queen open to capture' : 'That would leave your King open to capture';
     } finally {
       Math.random = random;
     }

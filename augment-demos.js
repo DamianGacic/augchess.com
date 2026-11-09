@@ -375,6 +375,20 @@
       ],
     },
 
+    beloved: {
+      augments: { w: ['beloved'] },
+      position: 'wKf2 wQd2 wPa2 wPh2 bKg8 bRe7 bPe4',
+      steps: [
+        { select: 'd2', caption: 'Beloved gives you 2 extra points to draft with, but your Queen (♥) becomes a second King: she may never stand where she could be taken. The pawn covers d3, so she can\'t go there.' },
+        { move: 'a2-a3', quick: true },
+        {
+          move: 'e4-e3', caption: 'Now a pawn attacks King and Queen at once, and the rook guards it…',
+          after: '…the King can\'t take it, the Queen can\'t either (she would be taken back), and no move saves both: checkmate. Losing her outright, to a capture or a spell, loses the game too.',
+          expect: s => s.gameOver && /Black wins by checkmate/.test(s.gameOverText),
+        },
+      ],
+    },
+
     coronation: {
       augments: { w: ['coronation'] },
       position: 'wKe6 wPa2 bKa5 bRb1 bPh7',
@@ -578,6 +592,7 @@
       // opening squares — redo both for this custom position.
       state.stunlockCharges = { w: {}, b: {} };
       state.ghoulSkin = { w: {}, b: {} };
+      E.seedBelovedQueens(state);
       forEachPiece(state, (sq, p) => {
         if (p.type === 'b' && E.has(state, p.color, 'stunlock')) state.stunlockCharges[p.color][sq] = true;
         if (p.type === 'p' && E.figurePawnType(state, p.color) === 'ghoul') {
@@ -625,6 +640,7 @@
       if (!mounted) p.ready = E.readyAbilityMarkers(state, sq);
       if (type === 'p' && E.figurePawnType(state, color) === 'archer' && E.isArcherOnCooldown(state, color, sq)) p.badges.push('cooldown');
       if (state.vanguardLocked && state.vanguardLocked.includes(sq)) p.badges.push('vanguard');
+      if (type === 'q' && E.belovedQueenSquare(state, color) === sq) p.badges.push('beloved');
       if (type === 'k' && E.hasWarlord(state, color) && state.warlordWounded && state.warlordWounded[color]) p.badges.push('wounded');
       const shield = E.shieldDirAt(state, sq);
       if (shield) {
@@ -650,7 +666,7 @@
         choices = E.getClubbingQuadrants(target.unit).map(q => ({ key: E.frToSq(q.f, q.r), squares: E.quadrantSquares(q.f, q.r) }));
         break;
       case 'solarStrike':
-        choices = E.getSolarStrikeCenters(target.unit).map(c => ({ key: E.frToSq(c.f, c.r), squares: E.solarStrikeSquares(c.f, c.r) }));
+        choices = E.getSolarStrikeCenters(target.unit, state).map(c => ({ key: E.frToSq(c.f, c.r), squares: E.solarStrikeSquares(c.f, c.r) }));
         break;
       case 'silverBullet': choices = E.getSilverBulletTargets(state, target.unit, color).map(sq => ({ key: sq, squares: [sq] })); break;
       case 'fireball': choices = E.getFireballTargets(state, target.unit, color).map(sq => ({ key: sq, squares: [sq] })); break;
@@ -727,6 +743,8 @@
       const k = E.findKingSquare(state, turn);
       if (k) add(k, 'in-check');
     }
+    const belovedSq = E.belovedQueenSquare(state, turn);
+    if (belovedSq && E.belovedQueenThreatenedAfterPly(state, turn)) add(belovedSq, 'in-check');
 
     for (const sq of Object.keys(state.stunnedSquares)) if (state.stunnedSquares[sq] > 0) add(sq, 'stunned');
     state.ghoulBrokeRank[turn].forEach(sq => add(sq, 'broke-rank'));
