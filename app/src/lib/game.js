@@ -28,8 +28,10 @@ const TARGETED = {
     // Nearest valid center to the tap, like solarstrike.js.
     resolve: (t, sq) => {
       const { f: hf, r: hr } = E.sqToFR(sq);
-      return E.getSolarStrikeCenters(t.unitSq, G.state).reduce((a, b) =>
-        (Math.abs(a.f - hf) + Math.abs(a.r - hr) <= Math.abs(b.f - hf) + Math.abs(b.r - hr) ? a : b), null);
+      const centers = E.getSolarStrikeCenters(t.unitSq, G.state);
+      if (!centers.length) return null;
+      return centers.reduce((a, b) =>
+        (Math.abs(a.f - hf) + Math.abs(a.r - hr) <= Math.abs(b.f - hf) + Math.abs(b.r - hr) ? a : b));
     },
     action: (t, a) => ({ type: 'castAbility', id: 'solarStrike', unitSq: t.unitSq, center: E.frToSq(a.f, a.r) }),
   },
