@@ -2,6 +2,21 @@
 Chess with augmented rules.
 Augments are selected auction style before game start
 
+## Game modes
+Local (hotseat), vs AI, Play Online (casual queue), Play Ranked, game links, and
+**Correspondence**: slow games between two signed-in players. Each side has a
+time bank of 1–3 days that only runs on their turn (draft picks, setup, moves);
+the game is saved after every action (`correspondence_games` /
+`correspondence_moves`, `supabase/migrations/0011_correspondence.sql`) and can be
+picked up any time from the Correspondence page.
+
+## To do
+- Correspondence: notifications when it's your turn (email, push, in-app badge)
+- Correspondence: the mobile app (`app/`)
+- Correspondence: expire invitations nobody accepts
+- Correspondence: resigning during the draft (only possible once play starts)
+- Correspondence: chat is kept in memory only, so it's lost when the game is unloaded
+
 
 
 

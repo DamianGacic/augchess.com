@@ -27,6 +27,10 @@ export default function HomePage() {
     findMatch(true);
   };
   const gameLink = () => { AiPlayer.end(); createGameLink(); };
+  const correspondence = () => {
+    if (!session) { setState({ authOpen: true }); return; } // signed-in players only
+    showView('correspondence');
+  };
 
   return (
     <main className="home-main">
@@ -41,6 +45,7 @@ export default function HomePage() {
             <button className="btn btn-multiplayer btn-lg" onClick={playOnline}>Play Online</button>
             <button className="btn btn-multiplayer btn-lg" onClick={playRanked}>Play Ranked</button>
             <button className="btn btn-secondary btn-lg" onClick={gameLink}>Create Game Link</button>
+            <button className="btn btn-multiplayer btn-lg" onClick={correspondence}>Correspondence</button>
           </div>
         </div>
         <div className="hero-art" aria-hidden="true">

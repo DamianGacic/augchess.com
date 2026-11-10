@@ -8,6 +8,7 @@ import HistoryPage from './pages/HistoryPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import AugmentsPage from './pages/AugmentsPage.jsx';
 import FiguresPage from './pages/FiguresPage.jsx';
+import CorrespondencePage from './pages/CorrespondencePage.jsx';
 import GameSettingsModal from './game/GameSettingsModal.jsx';
 import PromotionModal from './game/PromotionModal.jsx';
 import DraftModal from './game/DraftModal.jsx';
@@ -19,6 +20,7 @@ const PAGES = {
   account: SettingsPage,
   augments: AugmentsPage,
   figures: FiguresPage,
+  correspondence: CorrespondencePage,
 };
 
 export default function App() {

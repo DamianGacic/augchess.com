@@ -20,6 +20,9 @@ class GameRoom {
   constructor(id, { ranked = false } = {}) {
     this.id = id;
     this.ranked = ranked;
+    // Seats go only to signed-in accounts (authenticate), never to whoever
+    // connects first: ranked rooms, and correspondence games (subclass).
+    this.accountSeats = ranked;
     this.recorded = false; // the current game has been saved to the history
     this.frames = []; // serialized state after every change of the current game, for its replay
     this.startedAt = null;
@@ -127,7 +130,7 @@ class GameRoom {
   // after that is a read-only spectator. Returns the assignment.
   // In a ranked room everyone starts out spectating; authenticate() seats them.
   join(ws) {
-    for (const color of this.ranked ? [] : ['w', 'b']) {
+    for (const color of this.accountSeats ? [] : ['w', 'b']) {
       if (!this.seats[color]) {
         const token = crypto.randomBytes(16).toString('hex');
         this.seats[color] = { socket: ws, token };
@@ -159,14 +162,14 @@ class GameRoom {
   // In a casual room it only notes which account is in the sender's seat,
   // so the game history can name them.
   async authenticate(ws, accessToken) {
-    if (!this.ranked) {
+    if (!this.accountSeats) {
       const seat = ws.augchess && this.seats[ws.augchess.color];
       if (seat && seat.socket === ws) seat.userId = await ratings.verifyUser(accessToken);
       return null;
     }
     if (ws.augchess && ws.augchess.color) return null;
     const userId = await ratings.verifyUser(accessToken);
-    if (!userId) { this.sendRejection(ws, 'Sign in to play ranked games'); return null; }
+    if (!userId) { this.sendRejection(ws, this.signInReason || 'Sign in to play ranked games'); return null; }
     if (ws.readyState !== ws.OPEN) return null;
     let color = ['w', 'b'].find(c => this.seats[c] && this.seats[c].userId === userId);
     if (color) {

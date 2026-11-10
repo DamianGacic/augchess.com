@@ -12,21 +12,31 @@ const PROVIDERS = [
 
 // Optional sign-in: Google / X, or email + password. A display name typed
 // when creating an account is applied on first login (see track_login()).
+// Also the password reset: 'forgot' emails a reset link, and 'reset' (opened
+// by main.jsx when the page comes back from that link) sets the new password.
+const TITLES = { signin: 'Sign in', signup: 'Create account', forgot: 'Reset your password', reset: 'Choose a new password' };
+
 export default function AuthModal() {
-  const { authOpen } = useStore();
-  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+  const { authOpen, authMode } = useStore();
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'forgot' | 'reset'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (authOpen) { setEmail(''); setPassword(''); setDisplayName(''); setStatus(''); }
-  }, [authOpen]);
+    if (authOpen) {
+      setMode(authMode || 'signin');
+      setEmail(''); setPassword(''); setConfirm(''); setDisplayName(''); setStatus(''); setDone(false);
+    }
+  }, [authOpen, authMode]);
 
   if (!authOpen) return null;
-  const close = () => setState({ authOpen: false });
+  const close = () => setState({ authOpen: false, authMode: 'signin' });
+  const switchTo = (next) => { setMode(next); setPassword(''); setConfirm(''); setStatus(''); setDone(false); };
   const signingUp = mode === 'signup';
 
   async function oauth(provider) {
@@ -57,38 +67,90 @@ export default function AuthModal() {
     // Supabase answers a sign-up for an already-registered email with a
     // user that has no identities, and sends nothing.
     else if (data.user && data.user.identities && !data.user.identities.length) {
-      setStatus('That email already has an account. Sign in instead, or use Google / X if that is how you signed up.');
+      setStatus('That email already has an account. Sign in instead, or reset your password if you never set one.');
     }
     else setStatus('Check your email to confirm your account, then sign in.');
+  }
+
+  async function sendReset(e) {
+    e.preventDefault();
+    const addr = email.trim();
+    if (!addr) return;
+    setBusy(true);
+    setStatus('Sending…');
+    const { error } = await Auth.requestPasswordReset(addr);
+    setBusy(false);
+    if (error) { setStatus(error.message || 'Could not send the reset email — try again.'); return; }
+    setDone(true);
+    setStatus(`If ${addr} has an account, a reset link is on its way. Open it on this device to choose a new password.`);
+  }
+
+  async function savePassword(e) {
+    e.preventDefault();
+    if (password.length < 6) { setStatus('Use at least 6 characters.'); return; }
+    if (password !== confirm) { setStatus('The passwords don\'t match.'); return; }
+    setBusy(true);
+    setStatus('Saving…');
+    const { error } = await Auth.updatePassword(password);
+    setBusy(false);
+    if (error) { setStatus(error.message || 'Could not save the password — the reset link may have expired. Request a new one.'); return; }
+    setDone(true);
+    setStatus('Password updated. You\'re signed in.');
+  }
+
+  let body;
+  if (mode === 'forgot') {
+    body = (<>
+      <p className="augment-subtitle">Enter your email and we'll send you a link to choose a new password. This also works if you signed up with Google or X and never set one.</p>
+      <form className="auth-form" onSubmit={sendReset}>
+        <input type="email" className="auth-email-input" placeholder="you@example.com" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} />
+        <button type="submit" className="btn btn-primary" disabled={busy || done}>Send reset link</button>
+      </form>
+      <button type="button" className="link-btn" onClick={() => switchTo('signin')}>Back to sign in</button>
+    </>);
+  } else if (mode === 'reset') {
+    body = done ? null : (<>
+      <p className="augment-subtitle">You opened a password reset link. Pick a new password for your account.</p>
+      <form className="auth-form" onSubmit={savePassword}>
+        <input type="password" className="auth-email-input" placeholder="New password" autoComplete="new-password" minLength={6} required value={password} onChange={e => setPassword(e.target.value)} />
+        <input type="password" className="auth-email-input" placeholder="Repeat new password" autoComplete="new-password" minLength={6} required value={confirm} onChange={e => setConfirm(e.target.value)} />
+        <button type="submit" className="btn btn-primary" disabled={busy}>Save password</button>
+      </form>
+    </>);
+  } else {
+    body = (<>
+      <p className="augment-subtitle">Optional — sync your profile across devices. Playing and sharing game links never requires an account.</p>
+      <div className="auth-oauth">
+        {PROVIDERS.map(([id, label, icon]) => (
+          <button key={id} className="btn btn-secondary auth-oauth-btn" onClick={() => oauth(id)}>{icon}{label}</button>
+        ))}
+      </div>
+      <div className="auth-divider"><span>or use email</span></div>
+      <form className="auth-form" onSubmit={submit}>
+        <input type="email" className="auth-email-input" placeholder="you@example.com" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} />
+        <input type="password" className="auth-email-input" placeholder="Password" autoComplete={signingUp ? 'new-password' : 'current-password'} minLength={6} required value={password} onChange={e => setPassword(e.target.value)} />
+        {signingUp && (
+          <>
+            <input type="text" className="auth-email-input" placeholder="Display name (optional)" maxLength={20} autoComplete="off" value={displayName} onChange={e => setDisplayName(e.target.value)} />
+            <p className="auth-hint">You can leave this blank and choose or change it anytime in Settings.</p>
+          </>
+        )}
+        <button type="submit" className="btn btn-primary" disabled={busy}>{signingUp ? 'Create account' : 'Sign in'}</button>
+      </form>
+      {!signingUp && <button type="button" className="link-btn" onClick={() => switchTo('forgot')}>Forgot password?</button>}
+      <button type="button" className="link-btn" onClick={() => switchTo(signingUp ? 'signin' : 'signup')}>
+        {signingUp ? 'Already have an account? Sign in' : 'New here? Create an account'}
+      </button>
+    </>);
   }
 
   return (
     <div className="modal" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="modal-content auth-modal-content">
-        <h3>{signingUp ? 'Create account' : 'Sign in'}</h3>
-        <p className="augment-subtitle">Optional — sync your profile across devices. Playing and sharing game links never requires an account.</p>
-        <div className="auth-oauth">
-          {PROVIDERS.map(([id, label, icon]) => (
-            <button key={id} className="btn btn-secondary auth-oauth-btn" onClick={() => oauth(id)}>{icon}{label}</button>
-          ))}
-        </div>
-        <div className="auth-divider"><span>or use email</span></div>
-        <form className="auth-form" onSubmit={submit}>
-          <input type="email" className="auth-email-input" placeholder="you@example.com" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} />
-          <input type="password" className="auth-email-input" placeholder="Password" autoComplete={signingUp ? 'new-password' : 'current-password'} minLength={6} required value={password} onChange={e => setPassword(e.target.value)} />
-          {signingUp && (
-            <>
-              <input type="text" className="auth-email-input" placeholder="Display name (optional)" maxLength={20} autoComplete="off" value={displayName} onChange={e => setDisplayName(e.target.value)} />
-              <p className="auth-hint">You can leave this blank and choose or change it anytime in Settings.</p>
-            </>
-          )}
-          <button type="submit" className="btn btn-primary" disabled={busy}>{signingUp ? 'Create account' : 'Sign in'}</button>
-        </form>
-        <button type="button" className="link-btn" onClick={() => { setMode(signingUp ? 'signin' : 'signup'); setStatus(''); }}>
-          {signingUp ? 'Already have an account? Sign in' : 'New here? Create an account'}
-        </button>
+        <h3>{TITLES[mode]}</h3>
+        {body}
         <p className="auth-status-msg">{status}</p>
-        <button className="btn btn-secondary" onClick={close}>Close</button>
+        <button className="btn btn-secondary" onClick={close}>{mode === 'reset' && done ? 'Done' : 'Close'}</button>
       </div>
     </div>
   );

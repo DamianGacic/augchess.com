@@ -188,7 +188,7 @@
   // once a Patchy Lines arrangement before it has resolved).
   function startVanguard(state) {
     state.vanguard = null;
-    ['w', 'b'].forEach(c => { if (has(state, c, 'vanguard')) state.vanguard = { color: c, ms: VANGUARD_MS }; });
+    ['w', 'b'].forEach(c => { if (has(state, c, 'vanguard')) state.vanguard = { color: c, ms: pregameMs(state, VANGUARD_MS) }; });
   }
 
   // Patchy Lines: knock PATCHY_GAPS random pawn-type units out of the
@@ -205,9 +205,16 @@
         state.game.remove(sq);
         if (state.ghoulSkin && state.ghoulSkin[color]) delete state.ghoulSkin[color][sq];
       }
-      state.patchy = { color, ms: PATCHY_MS };
+      state.patchy = { color, ms: pregameMs(state, PATCHY_MS) };
     });
     state.game.load(state.game.fen());
+  }
+
+  // A correspondence game (settings.days) has no seconds-long windows: the
+  // owner takes as long as they like, paid for out of their time bank like
+  // any other turn. null = untimed (vanguard.js / patchy.js hide the timer).
+  function pregameMs(state, ms) {
+    return state.settings && state.settings.days ? null : ms;
   }
 
   // Ranks a side's pawn-type units start on: the normal pawn row, plus the

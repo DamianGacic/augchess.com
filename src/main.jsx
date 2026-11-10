@@ -11,7 +11,14 @@ import './gameBridge.js';
 window.showView = showView;
 
 Auth.onChange((session, profile) => setState({ session, profile }));
+// Opened from a password reset email: ask for the new password.
+Auth.onPasswordRecovery(() => setState({ authOpen: true, authMode: 'reset' }));
 Auth.init();
+
+// A correspondence invite link (?corr=<id>): the Correspondence page shows
+// the invitation, or opens the game if it's already yours.
+const corrId = getCorrespondenceIdFromUrl();
+if (corrId) setState({ view: 'correspondence', corrInvite: corrId });
 
 // Synchronous first render: the header's #mp-badge has to exist before
 // app.js's DOMContentLoaded handler can update it.

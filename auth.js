@@ -27,6 +27,11 @@ const Auth = (function () {
   let profile = null;
   let heartbeatTimer = null;
   let onChangeCb = () => {};
+  // Password reset: the emailed link brings the user back here signed in
+  // with a recovery session (#...type=recovery in the URL, then a
+  // PASSWORD_RECOVERY event); the page then asks for a new password.
+  let onRecoveryCb = null;
+  let recoveryPending = false;
   let markReady;
   const ready = new Promise(resolve => { markReady = resolve; });
 
@@ -40,8 +45,16 @@ const Auth = (function () {
     return initClient().finally(markReady);
   }
 
+  function noteRecovery() {
+    recoveryPending = true;
+    if (onRecoveryCb) { recoveryPending = false; onRecoveryCb(); }
+  }
+
   async function initClient() {
     if (!configured() || typeof window.supabase === 'undefined') return;
+    // Read before createClient, which consumes the link's #fragment (and may
+    // fire PASSWORD_RECOVERY before onAuthStateChange below is listening).
+    if (/[#&]type=recovery\b/.test(window.location.hash)) noteRecovery();
     try {
       client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     } catch (e) {
@@ -52,6 +65,7 @@ const Auth = (function () {
     await handleSession(data.session);
     client.auth.onAuthStateChange(async (event, newSession) => {
       if (event === 'SIGNED_IN') await trackLogin();
+      if (event === 'PASSWORD_RECOVERY' && !recoveryPending) noteRecovery();
       await handleSession(newSession);
     });
   }
@@ -128,6 +142,21 @@ const Auth = (function () {
     return client.auth.signInWithOAuth({ provider, options: { redirectTo: window.location.origin } });
   }
 
+  // Emails a password reset link that comes back to this page. Supabase
+  // answers the same whether or not the email has an account. Works for
+  // accounts made with Google / X too: they get a password added.
+  async function requestPasswordReset(email) {
+    if (!client) return { error: new Error('Supabase is not configured') };
+    return client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+  }
+
+  // Sets a new password for the signed-in user (here: the recovery session
+  // from a reset link).
+  async function updatePassword(password) {
+    if (!client) return { error: new Error('Supabase is not configured') };
+    return client.auth.updateUser({ password });
+  }
+
   // Set/change/clear (empty string) the signed-in user's display name.
   // Rejected server-side (error.message) if already taken by someone else.
   async function setDisplayName(name) {
@@ -164,6 +193,14 @@ const Auth = (function () {
   const gameReplay = (id) => rpc('game_replay', { game_id: id });
   // Local games (vs AI / hotseat) — the browser posts these itself.
   const recordLocalGame = (game) => rpc('record_local_game', { g: game });
+  // Correspondence games — see supabase/migrations/0011_correspondence.sql.
+  // opponent: a friend's user id, or null for an invite link.
+  const createCorrespondenceGame = (opponent, days, points, playAs) =>
+    rpc('create_correspondence_game', { opponent, days, points, play_as: playAs });
+  const acceptCorrespondenceGame = (id) => rpc('accept_correspondence_game', { game_id: id });
+  const cancelCorrespondenceGame = (id) => rpc('cancel_correspondence_game', { game_id: id });
+  const listCorrespondenceGames = () => rpc('list_correspondence_games');
+  const correspondenceGameInfo = (id) => rpc('correspondence_game_info', { game_id: id });
 
   async function signOut() {
     if (client) await client.auth.signOut();
@@ -174,6 +211,8 @@ const Auth = (function () {
     signUp,
     signIn,
     signInWithProvider,
+    requestPasswordReset,
+    updatePassword,
     signOut,
     setDisplayName,
     checkDisplayNameAvailable,
@@ -185,6 +224,11 @@ const Auth = (function () {
     listGames,
     gameReplay,
     recordLocalGame,
+    createCorrespondenceGame,
+    acceptCorrespondenceGame,
+    cancelCorrespondenceGame,
+    listCorrespondenceGames,
+    correspondenceGameInfo,
     // Resolves once init() has restored the session (or found none).
     ready,
     get session() { return session; },
@@ -192,5 +236,10 @@ const Auth = (function () {
     // Fires immediately on init (with the restored session/profile, or
     // null/null) and again on every sign-in/sign-out/display-name change.
     onChange(cb) { onChangeCb = cb; },
+    // Fires once the page was opened from a password reset link.
+    onPasswordRecovery(cb) {
+      onRecoveryCb = cb;
+      if (recoveryPending) { recoveryPending = false; cb(); }
+    },
   };
 })();

@@ -23,6 +23,7 @@
 
 // ─── Play mode ────────────────────────────────────────────────────────────────
 let netMode = false;   // true once connected to a server room
+let correspondenceGame = false; // a slow, saved game (?corr=<id>), see openCorrespondenceGame
 let myColor = null;    // 'w' | 'b' | null (spectator, or hotseat = unrestricted)
 let aiColor = null;    // the AI's color when playing it (ai-player.js), else null
 let replay = null;     // { frames, index } while stepping through a logged game (REPLAY below)
@@ -58,6 +59,7 @@ document.getElementById('btn-new-game').addEventListener('click', () => {
   dispatch({ type: 'newGame' }); // harmless no-op if already mid-settings/draft
   showGameSettings();
 });
+document.getElementById('btn-my-games').addEventListener('click', () => showView('correspondence'));
 document.getElementById('btn-flip').addEventListener('click', () => { flipped = !flipped; renderBoard(); });
 document.getElementById('btn-undo').addEventListener('click', undoMove);
 document.getElementById('btn-undo').classList.toggle('hidden', netMode);
@@ -85,6 +87,9 @@ function syncGameEndButtons() {
   drawBtn.textContent = offered ? 'Accept Draw' : state.drawOffer ? 'Draw Offered' : 'Offer Draw';
   drawBtn.disabled = !!state.drawOffer && !offered;
   document.getElementById('btn-decline-draw').classList.toggle('hidden', !(drawable && offered));
+  // A correspondence game is never restarted (the server refuses it too).
+  if (!replay) document.getElementById('btn-new-game').classList.toggle('hidden', correspondenceGame);
+  document.getElementById('btn-my-games').classList.toggle('hidden', !correspondenceGame);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -176,13 +181,17 @@ let lastRating = null; // { rating, delta } for this player after a ranked game
 // fires on the raw WebSocket handshake, strictly before that reply can have
 // arrived. Anything that needs myColor immediately (board flip) belongs
 // here, not in an onOpen handler.
-NetClient.onJoined((joinedColor, token, ranked) => {
+NetClient.onJoined((joinedColor, token, ranked, correspondence) => {
   myColor = joinedColor;
   rankedGame = ranked;
+  correspondenceGame = correspondence;
   if (joinedColor === 'b') flipped = true;
   updateMpBadge();
-  if (ranked && !joinedColor) Auth.ready.then(() => {
-    if (!Auth.session) showMpModal('Ranked game', 'Sign in to play ranked games. You are watching as a spectator.', false, false);
+  syncGameEndButtons();
+  if ((ranked || correspondence) && !joinedColor) Auth.ready.then(() => {
+    if (Auth.session) return;
+    if (correspondence) showMpModal('Correspondence game', 'Sign in to play your correspondence games. You are watching as a spectator.', false, false);
+    else showMpModal('Ranked game', 'Sign in to play ranked games. You are watching as a spectator.', false, false);
   });
 });
 
@@ -223,7 +232,7 @@ function updateMpBadge() {
   } else if (netMode && NetClient.active) {
     reconnecting = false;
     const colorLabel = myColor === 'w' ? 'White' : myColor === 'b' ? 'Black' : 'Spectator';
-    badge.textContent = `🟢 ${rankedGame ? 'Ranked' : 'Online'} · You are ${colorLabel}`;
+    badge.textContent = `🟢 ${rankedGame ? 'Ranked' : correspondenceGame ? 'Correspondence' : 'Online'} · You are ${colorLabel}`;
     badge.classList.remove('hidden');
   } else if (netMode && reconnecting) {
     badge.textContent = '🟡 Reconnecting…';
@@ -246,6 +255,7 @@ function leaveOnlineGame() {
   netMode = false;
   myColor = null;
   rankedGame = false;
+  correspondenceGame = false;
   lastRating = null;
   flipped = false;
   netStateUpdateCount = 0;
@@ -423,6 +433,18 @@ function cancelSearch() {
   const ws = queueSocket;
   queueSocket = null;
   if (ws) ws.close();
+}
+
+// Opens one of your correspondence games (src/pages/CorrespondencePage.jsx):
+// the server loads it from the database and seats you once signed in.
+function openCorrespondenceGame(id) {
+  AiPlayer.end();
+  cancelSearch();
+  leaveOnlineGame();
+  if (replay) endReplay();
+  history.replaceState(null, '', buildCorrespondenceUrl(id));
+  correspondenceGame = true;
+  joinGameFromUrl('corr/' + id);
 }
 
 // Called on page load when the URL has ?game=<id> — auto-join as guest/spectator.
@@ -1556,6 +1578,9 @@ function updateStatus() {
   }
 
   statusText.textContent = (state.game.turn() === 'w' ? 'White' : 'Black') + ' to move';
+  if (correspondenceGame && myColor) {
+    statusText.textContent += state.game.turn() === myColor ? ' · Your move' : ' · Waiting for your opponent. You can close this page.';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

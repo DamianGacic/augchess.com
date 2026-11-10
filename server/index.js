@@ -14,6 +14,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const { RoomStore } = require('./rooms.js');
 const { Matchmaker } = require('./matchmaking.js');
+const { CorrespondenceStore } = require('./correspondence.js');
 
 const ROOT = path.join(__dirname, '..', 'dist');
 if (!fs.existsSync(ROOT)) console.warn('No dist/ build — run `npm run build` at the repo root, or use `npm run dev` there (Vite) for development.');
@@ -21,6 +22,8 @@ const PORT = process.env.PORT || 8000;
 
 const store = new RoomStore();
 const matchmaker = new Matchmaker(store);
+const correspondence = new CorrespondenceStore();
+correspondence.start();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -99,6 +102,20 @@ server.on('upgrade', (req, socket, head) => {
     });
     return;
   }
+  // A correspondence game is loaded from the database on demand.
+  const corr = url.pathname.match(/^\/ws\/corr\/([0-9a-f-]{36})$/);
+  if (corr) {
+    correspondence.load(corr[1]).then((room) => {
+      if (!room) { socket.destroy(); return; }
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit('connection', ws, req, room, url);
+      });
+    }).catch((err) => {
+      console.error(`[corr ${corr[1]}] load failed`, err);
+      socket.destroy();
+    });
+    return;
+  }
   const match = url.pathname.match(/^\/ws\/([a-f0-9]+)$/);
   if (!match) { socket.destroy(); return; }
   const room = store.get(match[1]);
@@ -120,7 +137,7 @@ wss.on('connection', (ws, req, room, url) => {
     assignment = room.join(ws);
   }
 
-  ws.send(JSON.stringify({ type: 'joined', color: assignment.color, token: assignment.token, ranked: room.ranked }));
+  ws.send(JSON.stringify({ type: 'joined', color: assignment.color, token: assignment.token, ranked: room.ranked, correspondence: !!room.correspondence }));
   room.sendChatHistory(ws);
   // Broadcast (not just sendState to the new socket) so everyone already in
   // the room — the host waiting on "Share this link", other spectators —
@@ -134,7 +151,7 @@ wss.on('connection', (ws, req, room, url) => {
     else if (action && action.type === 'auth') {
       room.authenticate(ws, action.accessToken).then((seat) => {
         if (!seat) return;
-        ws.send(JSON.stringify({ type: 'joined', color: seat.color, token: seat.token, ranked: true }));
+        ws.send(JSON.stringify({ type: 'joined', color: seat.color, token: seat.token, ranked: room.ranked, correspondence: !!room.correspondence }));
         room.broadcast();
       }).catch(err => console.error(`[room ${room.id}] auth failed`, err));
     }

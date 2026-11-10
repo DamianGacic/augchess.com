@@ -3918,3 +3918,16 @@ label.settings-row { cursor: pointer; }
 /* React mounts into #root (src/main.jsx); it adds no box of its own so the
    header and pages lay out exactly as when they were static markup. */
 #root { display: contents; }
+
+/* ─── Correspondence (src/pages/CorrespondencePage.jsx) ─────────────────── */
+.vg-timer.hidden { display: none; }
+.corr-select { width: 100%; max-width: 320px; }
+.corr-link { margin-top: 12px; }
+.corr-link .auth-email-input { flex: 1; min-width: 0; }
+.corr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.corr-row { gap: 8px; }
+.corr-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; border: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.corr-open:disabled { cursor: default; }
+.corr-open:not(:disabled):hover .lb-name { color: var(--gold); }
+.corr-draft-banks { margin-top: 8px; }
+.nav-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--gold); color: #1a1408; font-size: 11px; font-weight: 700; line-height: 1; vertical-align: middle; }

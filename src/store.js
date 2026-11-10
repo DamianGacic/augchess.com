@@ -3,7 +3,8 @@
 // sign-in modal is open. A plain store read through useSyncExternalStore.
 import { useSyncExternalStore } from 'react';
 
-let state = { view: 'home', session: null, profile: null, authOpen: false, descsLoaded: false };
+// corrInvite: the correspondence game id from a ?corr=<id> link, until handled.
+let state = { view: 'home', session: null, profile: null, authOpen: false, authMode: 'signin', descsLoaded: false, corrInvite: null };
 const listeners = new Set();
 
 export function setState(patch) {

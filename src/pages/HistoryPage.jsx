@@ -5,7 +5,7 @@ import { useStore } from '../store.js';
 // Clicking one loads its frames and steps through them on the game screen
 // (startReplay in app.js).
 const name = (n) => n || 'Guest';
-const MODE = { online: 'Casual', ranked: 'Ranked', ai: 'vs AI', local: 'Local' };
+const MODE = { online: 'Casual', ranked: 'Ranked', ai: 'vs AI', local: 'Local', correspondence: 'Correspondence' };
 const delta = (d) => (d == null ? '' : ` (${d >= 0 ? '+' : ''}${d})`);
 
 export default function HistoryPage() {

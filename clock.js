@@ -28,8 +28,22 @@ function formatTime(ms) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+// A correspondence time bank (days): "2d 5h", "7h 12m", then m:ss for the
+// last hour.
+function formatBank(ms) {
+  const minutes = Math.floor(ms / 60000);
+  if (minutes >= 24 * 60) return `${Math.floor(minutes / 1440)}d ${Math.floor(minutes / 60) % 24}h`;
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return formatTime(ms);
+}
+
+// Correspondence banks already run during the draft.
+function shownClock() {
+  return state.phase === 'playing' || (state.settings && state.settings.days) ? state.clock : null;
+}
+
 function renderClocks() {
-  const clock = state.phase === 'playing' ? state.clock : null;
+  const clock = shownClock();
   const now = Date.now() + (netMode ? clockOffset : 0);
 
   // Hotseat: this browser is the authority, so it calls the flag itself.
@@ -42,8 +56,8 @@ function renderClocks() {
 
   ['w', 'b'].forEach(color => {
     const el = color === 'w' ? clockWhiteEl : clockBlackEl;
-    const ms = clock ? clockRemaining(state, color, now) : state.settings.minutes * 60 * 1000;
-    el.textContent = formatTime(ms);
+    const ms = clock ? clockRemaining(state, color, now) : startingMs(state);
+    el.textContent = state.settings.days ? formatBank(ms) : formatTime(ms);
     el.classList.toggle('active', !!clock && clock.running === color && !state.gameOver);
     el.classList.toggle('low-time', !!clock && ms <= LOW_TIME_MS && ms > 0);
   });
@@ -53,7 +67,7 @@ function renderClocks() {
 // side's time is actually running.
 function syncClock() {
   renderClocks();
-  const clock = state.phase === 'playing' ? state.clock : null;
+  const clock = shownClock();
   const running = !!(clock && clock.running && !state.gameOver);
   if (running && !clockDisplayTimer) clockDisplayTimer = setInterval(renderClocks, 200);
   if (!running && clockDisplayTimer) { clearInterval(clockDisplayTimer); clockDisplayTimer = null; }

@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useStore, showView } from '../store.js';
 
 const NAV = [
   ['home', 'Home'],
+  ['correspondence', 'My Games'],
   ['leaderboard', 'Leaderboards'],
   ['history', 'History'],
   ['game', 'Game'],
@@ -9,8 +11,28 @@ const NAV = [
   ['figures', 'Figures'],
 ];
 
+// Correspondence games waiting on you (your move, or an invitation to
+// answer), polled while signed in, for the count on the My Games tab.
+const POLL_MS = 20 * 1000;
+function useWaitingOnMe(session, view) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!session) { setCount(0); return undefined; }
+    let live = true;
+    const check = () => Auth.listCorrespondenceGames().then(({ data }) => {
+      if (!live || !data) return;
+      setCount(data.filter(g => (g.status === 'active' && g.turn === g.my_color) || (g.status === 'invited' && !g.created_by_me)).length);
+    });
+    check();
+    const timer = setInterval(check, POLL_MS);
+    return () => { live = false; clearInterval(timer); };
+  }, [session, view]);
+  return count;
+}
+
 export default function Header() {
   const { view, session } = useStore();
+  const waiting = useWaitingOnMe(session, view);
   return (
     <header>
       <div className="logo" title="Home" onClick={() => showView('home')}>
@@ -19,7 +41,10 @@ export default function Header() {
       </div>
       <nav className="main-nav">
         {NAV.map(([id, label]) => (
-          <button key={id} className={'nav-btn' + (view === id ? ' active' : '')} onClick={() => showView(id)}>{label}</button>
+          <button key={id} className={'nav-btn' + (view === id ? ' active' : '')} onClick={() => showView(id)}>
+            {label}
+            {id === 'correspondence' && waiting > 0 && <span className="nav-count" title={`${waiting} waiting on you`}>{waiting}</span>}
+          </button>
         ))}
       </nav>
       <div className="profile-wrap">

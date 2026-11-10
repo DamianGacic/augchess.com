@@ -38,8 +38,15 @@ const Vanguard = (() => {
     return pending() ? VANGUARD_ZONES[state.vanguard.color] : [];
   }
 
+  // Correspondence games leave this untimed (ms null): no countdown, no
+  // automatic submit — the owner's time bank is what runs.
+  function untimed() {
+    return pending() && state.vanguard.ms == null;
+  }
+
   function remainingMs() {
     if (!pending() || seenAt === null) return 0;
+    if (untimed()) return Infinity;
     return Math.max(0, state.vanguard.ms - (Date.now() - seenAt));
   }
 
@@ -225,8 +232,11 @@ const Vanguard = (() => {
       : `${who} is deploying their Vanguard…`;
     panel.querySelector('.vg-count').textContent = `${plan.length}/${zone().length} placed`;
     const ms = remainingMs();
-    panel.querySelector('.vg-secs').textContent = Math.ceil(ms / 1000);
-    panel.querySelector('.vg-ring').style.strokeDashoffset = String(100 - (ms / state.vanguard.ms) * 100);
+    panel.querySelector('.vg-timer').classList.toggle('hidden', untimed());
+    if (!untimed()) {
+      panel.querySelector('.vg-secs').textContent = Math.ceil(ms / 1000);
+      panel.querySelector('.vg-ring').style.strokeDashoffset = String(100 - (ms / state.vanguard.ms) * 100);
+    }
     panel.classList.toggle('urgent', ms <= 5000);
   }
 

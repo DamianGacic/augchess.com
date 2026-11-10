@@ -1,4 +1,4 @@
-import { useStore } from '../store.js';
+import { useStore, showView } from '../store.js';
 import { useGame } from '../gameBridge.js';
 import { AugmentEmblem } from '../components/augmentBits.jsx';
 
@@ -126,7 +126,11 @@ export default function DraftModal() {
     <div className="modal">
       <div className="modal-content augment-content">
         <h3>Augment Draft</h3>
-        <p className="augment-subtitle">{ds.current === 'w' ? 'White' : 'Black'}, choose an augment (or pass)</p>
+        <p className="augment-subtitle">
+          {state.settings.days && netMode && myColor && !canActFor(ds.current)
+            ? `Waiting for ${ds.current === 'w' ? 'White' : 'Black'} to pick. The game is saved, so you can leave and come back from My Games.`
+            : `${ds.current === 'w' ? 'White' : 'Black'}, choose an augment (or pass)`}
+        </p>
         <div className="augment-points-row">
           {[['w', 'White'], ['b', 'Black']].map(([c, label]) => (
             <div key={c} className={'augment-points' + (ds.current === c ? ' active' : '')}>
@@ -150,7 +154,15 @@ export default function DraftModal() {
           </div>
           <SidePanel color="b" label="Black's Picks" />
         </div>
+        {/* Correspondence: the draft can sit for days, so show the time
+            banks and a way out to the game list. */}
+        {state.settings.days && state.clock && (
+          <p className="augment-subtitle corr-draft-banks">
+            Time bank: White {formatBank(clockRemaining(state, 'w', Date.now() + clockOffset))} · Black {formatBank(clockRemaining(state, 'b', Date.now() + clockOffset))}
+          </p>
+        )}
         <div className="augment-actions">
+          {state.settings.days && <button className="btn btn-secondary" onClick={() => showView('correspondence')}>My Games</button>}
           <button className="btn btn-secondary" disabled={!canActFor(ds.current)} onClick={() => dispatch({ type: 'draftPass' })}>Pass / Done</button>
         </div>
       </div>

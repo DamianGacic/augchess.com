@@ -23,6 +23,8 @@
  *   (in casual rooms too, which only records who is playing)
  *   and gets a second 'joined' with its seat (server/rooms.js authenticate).
  *   Chat goes client -> server as {type:'chat', text}, outside the engine.
+ *   Correspondence games connect as room id 'corr/<uuid>' (/ws/corr/<uuid>)
+ *   and seat accounts like ranked rooms; their 'joined' says correspondence:true.
  */
 const NetClient = (function () {
   let ws = null;
@@ -106,7 +108,7 @@ const NetClient = (function () {
         token = msg.token;
         if (color && token) sessionStorage.setItem(storageKey(id), JSON.stringify({ color, token }));
         if (!msg.ranked || !color) sendAuth(sock); // casual: names you in the game history
-        onJoinedCb(color, token, !!msg.ranked);
+        onJoinedCb(color, token, !!msg.ranked, !!msg.correspondence);
       } else if (msg.type === 'state') {
         onStateCb(msg.state, msg.now);
       } else if (msg.type === 'actionRejected') {
@@ -177,6 +179,16 @@ const NetClient = (function () {
 // ─── URL helpers (mirrors old multiplayer.js) ─────────────────────────────────
 function getGameIdFromUrl() {
   return new URLSearchParams(window.location.search).get('game');
+}
+function getCorrespondenceIdFromUrl() {
+  return new URLSearchParams(window.location.search).get('corr');
+}
+function buildCorrespondenceUrl(id) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set('corr', id);
+  url.hash = '';
+  return url.toString();
 }
 function buildGameUrl(gameId) {
   const url = new URL(window.location.href);

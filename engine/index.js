@@ -13,6 +13,7 @@
   const gameOverEngine = isNode ? require('./gameover-engine.js') : root;
   const augmentsEngine = isNode ? require('./augments-engine.js') : root;
   const clockEngine = isNode ? require('./clock-engine.js') : root;
+  const Chess = isNode ? require('../chess.js').Chess : root.Chess;
 
   function createRoomState() {
     return draftEngine.createRoomState();
@@ -31,7 +32,8 @@
   // acting player's flag has fallen finds the game already over (and gets
   // refused) instead of being played.
   function applyAction(state, color, action, now = Date.now()) {
-    if (state.phase === 'playing' && state.game) clockEngine.tickClock(state, now);
+    // (A correspondence game's bank runs during the draft too — see clock-engine.)
+    if (state.clock) clockEngine.tickClock(state, now);
     const beforeW = state.game ? chessEngine.ghoulCount(state, 'w') : 0;
     const beforeB = state.game ? chessEngine.ghoulCount(state, 'b') : 0;
     const err = dispatchAction(state, color, action, now);
@@ -86,6 +88,7 @@
         // The deployment happens before White's first turn — that turn's
         // start-of-turn check (Breaking Rank) runs now, against the new board.
         if (!err) chessEngine.checkBreakingRank(state, state.game.turn());
+        if (!err) clockEngine.syncCorrespondenceClock(state, now);
         return err;
       }
 
@@ -95,6 +98,7 @@
         // Like a Vanguard deployment: White's first turn starts now — unless
         // a Vanguard deployment (opened just now) still comes first.
         if (!err && !state.vanguard) chessEngine.checkBreakingRank(state, state.game.turn());
+        if (!err) clockEngine.syncCorrespondenceClock(state, now);
         return err;
       }
 
@@ -103,19 +107,19 @@
 
       case 'settingsStart': {
         const err = draftEngine.startSettings(state);
-        if (!err) afterDraftPhaseChange(state);
+        if (!err) afterDraftPhaseChange(state, now);
         return err;
       }
 
       case 'draftPick': {
         const err = draftEngine.draftPick(state, color, action.augId);
-        if (!err) afterDraftPhaseChange(state);
+        if (!err) afterDraftPhaseChange(state, now);
         return err;
       }
 
       case 'draftPass': {
         const err = draftEngine.draftPass(state, color);
-        if (!err) afterDraftPhaseChange(state);
+        if (!err) afterDraftPhaseChange(state, now);
         return err;
       }
 
@@ -240,6 +244,7 @@
       }
 
       case 'newGame': {
+        if (clockEngine.isCorrespondence(state)) return 'A correspondence game can\'t be restarted';
         if (state.phase === 'settings' || state.phase === 'draft') return 'A game is already being set up';
         resetToSettings(state);
         return null;
@@ -270,7 +275,10 @@
   }
 
   // Called after any draft-phase action that might have flipped state.phase.
-  function afterDraftPhaseChange(state) {
+  function afterDraftPhaseChange(state, now) {
+    // A correspondence game's banks start with the draft (initClock keeps
+    // them once the board is set up below).
+    if (state.phase === 'draft' && clockEngine.isCorrespondence(state) && !state.clock) clockEngine.initClock(state);
     if (state.phase === 'playing' && !state.game) {
       chessEngine.newGame(state);
       clockEngine.initClock(state);
@@ -281,6 +289,7 @@
       // check itself once it resolves.
       if (!state.vanguard && !state.patchy) chessEngine.checkBreakingRank(state, state.game.turn());
     }
+    clockEngine.syncCorrespondenceClock(state, now);
   }
 
   // A bishop that moved still has its shield to turn (Bishops' Shields) —
@@ -378,8 +387,21 @@
     return chessEngine.serializeState(state);
   }
 
+  // The other way: a serializeState() snapshot (as saved for a correspondence
+  // game) back into live room state, the chess.js board rebuilt from its FEN.
+  // Same as a client does with every state message, and as
+  // cloneForSimulation does. chess.js's move history doesn't survive, so a
+  // repetition draw only counts positions since the last reload — the engine
+  // already reloads the board after most augment effects for the same reason.
+  function restoreState(saved) {
+    const state = JSON.parse(JSON.stringify(saved));
+    if (state.game) state.game = new Chess(saved.game.fen);
+    return state;
+  }
+
   const exportsObj = {
-    createRoomState, applyAction, serializeState,
+    createRoomState, applyAction, serializeState, restoreState,
+    isCorrespondence: clockEngine.isCorrespondence, correspondenceActor: clockEngine.correspondenceActor,
     tickClock: clockEngine.tickClock, clockRemaining: clockEngine.clockRemaining,
   };
 
