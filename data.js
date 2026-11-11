@@ -74,7 +74,7 @@ const AUGMENTS = [
   // A handicap: a negative cost gives its owner points to spend instead.
   { id: 'beloved', name: 'Beloved', cost: -2, desc: 'Loading description...', category: 'wincondition' },
   { id: 'patchyLines', name: 'Patchy Lines', cost: -1, desc: 'Loading description...', category: 'pregame' },
-  { id: 'charming', name: 'Charming', cost: 5, desc: 'Loading description...', category: 'unitability' },
+  { id: 'charming', name: 'Charming', cost: 5, desc: 'Loading description...' },
   // Charming follow-up — only offered to a player once they own Charming.
   { id: 'mothsToAFlame', name: 'Moths to a Flame', cost: 6, desc: 'Loading description...', requires: 'charming' },
   // Ring of Fire follow-up — only offered to a player once they own Ring of Fire.
