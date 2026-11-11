@@ -693,6 +693,7 @@
         if (map && map[color] && p.from in map[color]) { map[color][p.to] = map[color][p.from]; delete map[color][p.from]; }
       }
       if (state.belovedQueen && state.belovedQueen[color] === p.from) state.belovedQueen[color] = p.to;
+      if (state.charmingQueen && state.charmingQueen[color] === p.from) state.charmingQueen[color] = p.to;
     });
 
     // A King or Rook that left its home square can no longer castle.
@@ -844,6 +845,7 @@
     if (has(state, color, 'breakingRank')) list.push({ id: 'breakingRank', passive: true });
     if (has(state, color, 'coronation')) list.push({ id: 'coronation', passive: true });
     if (has(state, color, 'beloved')) list.push({ id: 'beloved', passive: true });
+    if (has(state, color, 'charming')) list.push({ id: 'charming', passive: true });
     if (has(state, color, 'advance') && !state.advanceUsed[color]) list.push({ id: 'advance' });
     if (has(state, color, 'relentlessAdvance')) {
       list.push(state.relentlessAdvanceActive[color] ? { id: 'relentlessAdvance', passive: true } : { id: 'relentlessAdvance' });

@@ -61,7 +61,7 @@
     silverBullet: 3.5, kingsLightning: 4.5, ringOfFire: 3, relentlessAdvance: 2.5,
     coronation: 1.5, inferno: 4, unstableFireball: 3.5, unstableTeleport: 1.2,
     kingsguard: 2.5, quickdraw: 2.2, swift: 2, nimble: 2, warmWelcome: 2,
-    accuracy: 2.5, longshot: 2.5,
+    accuracy: 2.5, longshot: 2.5, charming: 3, mothsToAFlame: 3.5,
   };
 
   function chooseDraftAction(state, color, rand = Math.random) {

@@ -920,6 +920,7 @@ function renderBoard() {
           : `Solar Strike: burns at the end of ${other}'s next turn`;
       }
       if (state.teleportMarked[sq] > 0) sqEl.classList.add('teleport-marked');
+      if (state.charmMarked && state.charmMarked[sq] > 0) sqEl.classList.add('charm-marked');
       if (state.fireDeathMarked[sq] > 0) sqEl.classList.add('fire-death-marked');
       if (state.warmWelcomeMarked[sq] > 0) sqEl.classList.add('warm-welcome-marked');
 

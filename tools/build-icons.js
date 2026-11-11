@@ -56,6 +56,8 @@ const GLYPHS = {
   coronation: 'crown',
   beloved: 'crowned-heart',
   patchyLines: 'broken-wall',
+  charming: 'smitten',
+  mothsToAFlame: 'candle-light',
   inferno: 'wildfires',
   unstableFireball: 'fireball',
   unstableTeleport: 'teleport',

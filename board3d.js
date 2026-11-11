@@ -37,7 +37,7 @@ const TINTS = [
   ['solar-imminent', 0xff6f00], ['solar-marked', 0xffca28],
   ['fire-priming', 0xff5722], ['fire-zone', 0xffab91], ['fire-king', 0xff8a65],
   ['lightning-zone', 0x80d8ff], ['lightning-king', 0x40c4ff],
-  ['stunned', 0x9575cd], ['teleport-marked', 0x4dd0e1],
+  ['stunned', 0x9575cd], ['teleport-marked', 0x4dd0e1], ['charm-marked', 0xffe3ee],
   ['fire-death-marked', 0xd84315], ['warm-welcome-marked', 0xffcc80],
   ['shoot-range-preview', 0xffccbc], ['claw-range-preview', 0xe1bee7],
   ['broke-rank', 0xce93d8], ['tower', 0x8d8d8d], ['last-move', 0xd4c86a],

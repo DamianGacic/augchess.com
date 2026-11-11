@@ -34,7 +34,7 @@ function demoReadingTime(caption) {
 // still owed (`shownMs` = how long the caption has already been up).
 const DEMO_CYCLE_STEP = 480;
 const DEMO_EFFECT_CLASSES = ['fire-zone', 'fire-king', 'lightning-zone', 'lightning-king', 'solar-marked', 'stunned',
-  'broke-rank', 'teleport-marked'];
+  'broke-rank', 'teleport-marked', 'charm-marked'];
 
 function demoFrameDuration(frame, next, shownMs) {
   if (frame.kind === 'quick') return 1100;

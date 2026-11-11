@@ -100,6 +100,44 @@
       ],
     },
 
+    charming: {
+      augments: { w: ['charming'] },
+      position: 'wKg1 wQc2 wPf2 wPg2 wPh2 bKg8 bRe8 bBb7 bNc6 bPa6 bPf7 bPg7 bPh7',
+      steps: [
+        {
+          move: 'c2-e4',
+          caption: 'At the end of your turn, your Queen draws in the closest enemy that can see her along a straight or diagonal line…',
+          after: '…so the knight on c6 takes a step towards her, to d5, even though a knight could never move that way.',
+          expect: { e4: 'wQ', d5: 'bN', c6: null },
+        },
+        { move: 'a6-a5', quick: true },
+        {
+          move: 'g2-g3',
+          caption: 'A unit already next to her stays where it is. The knight on d5 also blocks the bishop behind it, so this time the h7 pawn is drawn in, to g6.',
+          expect: { d5: 'bN', g6: 'bP', h7: null, e8: 'bR' },
+        },
+      ],
+    },
+
+    mothsToAFlame: {
+      augments: { w: ['charming', 'mothsToAFlame'] },
+      position: 'wKg1 wQd1 wPg2 wPh2 bKf8 bPd5 bPa6 bPh7',
+      steps: [
+        {
+          move: 'd1-d4',
+          caption: 'With Moths to a Flame, a unit already next to your charming Queen doesn\'t stop there: it steps onto her square…',
+          after: '…and dies to her.',
+          expect: { d4: 'wQ', d5: null },
+        },
+        { move: 'f8-e8', quick: true },
+        {
+          move: 'd4-d7',
+          caption: 'That goes for a King too: end your turn with her next to the enemy King and he walks into her, which wins the game.',
+          expect: state => state.gameOver && state.gameOverText.includes('White wins'),
+        },
+      ],
+    },
+
     // The position stands in for the random draw: newGame has already opened
     // the arrangement, and here the dice took the c2, d2 and f2 pawns.
     patchyLines: {
@@ -613,6 +651,7 @@
       state.stunlockCharges = { w: {}, b: {} };
       state.ghoulSkin = { w: {}, b: {} };
       E.seedBelovedQueens(state);
+      E.seedCharmingQueens(state);
       forEachPiece(state, (sq, p) => {
         if (p.type === 'b' && E.has(state, p.color, 'stunlock')) state.stunlockCharges[p.color][sq] = true;
         if (p.type === 'p' && E.figurePawnType(state, p.color) === 'ghoul') {
@@ -774,6 +813,7 @@
     state.ghoulBrokeRank[turn].forEach(sq => add(sq, 'broke-rank'));
     for (const sq of Object.keys(state.solarMarked)) if (state.solarMarked[sq] > 0) add(sq, 'solar-marked');
     for (const sq of Object.keys(state.teleportMarked)) if (state.teleportMarked[sq] > 0) add(sq, 'teleport-marked');
+    for (const sq of Object.keys(state.charmMarked || {})) if (state.charmMarked[sq] > 0) add(sq, 'charm-marked');
     for (const sq of Object.keys(state.fireDeathMarked)) if (state.fireDeathMarked[sq] > 0) add(sq, 'fire-death-marked');
     for (const sq of Object.keys(state.warmWelcomeMarked)) if (state.warmWelcomeMarked[sq] > 0) add(sq, 'warm-welcome-marked');
 
@@ -877,6 +917,11 @@
         const landed = next.find(n => n.sq === hint.to && n.color === o.color);
         r.style = landed ? 'merge' : 'die';
       } else if (hint.blink) r.style = 'blink';
+      else if (state.charmMarked && state.charmMarked[o.sq] > 0) {
+        // Moths to a Flame: it stepped into the charming Queen next to it.
+        r.style = 'charm';
+        r.into = E.charmingQueenSquare(state, o.color === 'w' ? 'b' : 'w') || undefined;
+      }
       else if (state.fireDeathMarked[o.sq] > 0) r.style = 'burn';
       else if (state.warmWelcomeMarked[o.sq] > 0) r.style = 'shot';
       else if (lightning.has(o.sq)) r.style = 'zap';
@@ -995,8 +1040,15 @@
         throw new Error(`${label}: step has nothing to do`);
       }
 
+      const logBefore = state.moveLog.length;
       const err = withRandom(step.rng, rand, () => E.applyAction(state, actor, action));
       if (err) throw new Error(`${label}: engine rejected the step: ${err}`);
+      // Charming at the turn's end: a soft beam from the Queen to whoever she drew in.
+      for (const e of state.moveLog.slice(logBefore)) {
+        const m = /^(💗|🕯)([a-h][1-8])[-x]([a-h][1-8])/u.exec(e.san);
+        const queen = m && E.charmingQueenSquare(state, e.color);
+        if (queen) fx.push({ kind: 'charm', from: queen, to: m[1] === '💗' ? m[3] : m[2] });
+      }
       checkExpect(state, step.expect, label);
       if (state.gameOver && i < demo.steps.length - 1) throw new Error(`${label}: game ended early (${state.gameOverText})`);
 

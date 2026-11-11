@@ -24,6 +24,7 @@ const TINT = {
   solarMarked: 'rgba(235, 170, 50, 0.5)',
   solarImminent: 'rgba(240, 120, 40, 0.65)',
   teleportMarked: 'rgba(103, 58, 183, 0.3)',
+  charmMarked: 'rgba(255, 220, 235, 0.55)', // Charming: very light pink-white
   fireDeathMarked: 'rgba(230, 74, 25, 0.35)',
   warmWelcomeMarked: 'rgba(255, 152, 0, 0.3)',
   lightningZone: 'rgba(255, 220, 40, 0.4)',
@@ -178,6 +179,7 @@ function Board({ size }) {
     if (s.ghoulBrokeRank[toMove].includes(sq)) add(TINT.brokeRank);
     if (s.solarMarked[sq] > 0) add(solarBurns.includes(sq) ? TINT.solarImminent : TINT.solarMarked);
     if (s.teleportMarked[sq] > 0) add(TINT.teleportMarked);
+    if (s.charmMarked && s.charmMarked[sq] > 0) add(TINT.charmMarked);
     if (s.fireDeathMarked[sq] > 0) add(TINT.fireDeathMarked);
     if (s.warmWelcomeMarked[sq] > 0) add(TINT.warmWelcomeMarked);
     for (const a of auras) {

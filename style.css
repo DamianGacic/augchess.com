@@ -2501,6 +2501,18 @@ main {
    "a teleport happened at this square" specifically (last-move alone
    doesn't distinguish a teleport from a normal step). Still shows as a bare
    ring on an empty square (the vanish outcome's origin square). */
+/* Charming: a very light pink-white ring, for one turn, where the Queen
+   drew a unit to (or, with Moths to a Flame, where one stepped into her). */
+.square.charm-marked::after {
+  content: '';
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 3px solid #ffe3ee;
+  background: radial-gradient(circle, rgba(255, 240, 246, 0.35), rgba(255, 214, 231, 0.12) 70%);
+  box-shadow: 0 0 10px rgba(255, 214, 231, 0.9);
+  pointer-events: none;
+}
 .square.teleport-marked::after {
   content: '';
   position: absolute;
@@ -2958,8 +2970,16 @@ main {
 .demo-board .piece.demo-ghost.demo-out-shot  { --flash: #ff5252; }
 .demo-board .piece.demo-ghost.demo-out-blink { animation-name: demo-blink-out; }
 .demo-board .piece.demo-ghost.demo-out-merge { animation-name: demo-merge; }
+.demo-board .piece.demo-ghost.demo-out-charm { --flash: #ffe3ee; }
 .demo-board .piece.demo-ghost.demo-into { animation-duration: 0.9s; }
 .demo-board .piece.demo-ghost.demo-into.demo-out-die { animation-name: demo-into-die; }
+.demo-board .piece.demo-ghost.demo-into.demo-out-charm { animation-name: demo-into-charm; }
+@keyframes demo-into-charm {
+  0%   { opacity: 1; transform: none; filter: none; }
+  55%  { opacity: 1; transform: translate(var(--dx), var(--dy)); filter: drop-shadow(0 0 6px #ffe3ee); }
+  75%  { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1.1); filter: drop-shadow(0 0 9px #fff) brightness(1.7); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.5); }
+}
 
 @keyframes demo-die {
   0%   { opacity: 1; transform: none; filter: none; }
@@ -3013,6 +3033,7 @@ main {
 .demo-fx-shot     { stroke: #fff6d8; }
 .demo-fx-bullet   { stroke: #e0e6f0; }
 .demo-fx-fireball { stroke: #ff7043; stroke-width: 0.2; }
+.demo-fx-charm    { stroke: #ffe3ee; stroke-width: 0.16; }
 .demo-fx-burst {
   fill: none;
   stroke-width: 0.08;
@@ -3023,6 +3044,7 @@ main {
 }
 .demo-fx-burst.demo-fx-shot, .demo-fx-burst.demo-fx-bullet { stroke: #ff5252; }
 .demo-fx-burst.demo-fx-fireball { stroke: #ff9800; }
+.demo-fx-burst.demo-fx-charm { stroke: #ffd6e7; }
 @keyframes demo-fly {
   0%   { stroke-dashoffset: 1.35; opacity: 1; }
   85%  { stroke-dashoffset: 0; opacity: 1; }
@@ -3341,6 +3363,14 @@ main {
 .ba-ghost.ba-out-zap   { --ba-flash: #ffeb3b; }
 .ba-ghost.ba-out-blink { animation-name: ba-blink-out; }
 .ba-ghost.ba-out-merge { animation-name: ba-merge; }
+.ba-ghost.ba-out-charm { animation-name: ba-charm-out; animation-duration: 0.55s !important; }
+@keyframes ba-charm-out {
+  0%   { opacity: 1; transform: none; filter: none; }
+  50%  { opacity: 1; filter: drop-shadow(0 0 8px #ffe3ee) brightness(1.6); }
+  100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.5); filter: drop-shadow(0 0 12px #fff) brightness(2); }
+}
+/* Charming: the unit just drawn in glows a very light pink-white. */
+.piece.ba-charmed { filter: drop-shadow(0 0 9px rgba(255, 220, 235, 0.95)) brightness(1.25); transition: filter 0.4s ease-out; }
 @keyframes ba-die {
   0%   { opacity: 1; transform: none; filter: none; }
   40%  { opacity: 1; transform: scale(1.08); filter: drop-shadow(0 0 6px var(--ba-flash, #ff5252)) brightness(1.5); }
@@ -3386,6 +3416,7 @@ main {
   animation: ba-streak 0.24s ease-out both;
 }
 .ba-streak-bullet   { background: linear-gradient(90deg, transparent, #cfd8e6 60%, #fff); }
+.ba-streak-charm    { height: 5px; margin-top: -2.5px; background: linear-gradient(90deg, rgba(255, 240, 246, 0.2), #ffe3ee 55%, #fff); box-shadow: 0 0 12px rgba(255, 214, 231, 0.95); animation-duration: 0.5s; }
 .ba-streak-fireball { height: 6px; margin-top: -3px; background: linear-gradient(90deg, transparent, #ff7043 50%, #ffd54f); box-shadow: 0 0 10px #ff7043; animation-duration: 0.32s; }
 @keyframes ba-streak {
   0%   { clip-path: inset(0 100% 0 0); opacity: 1; }

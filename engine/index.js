@@ -315,6 +315,8 @@
     // Moving instead of answering a draw offer turns it down.
     if (state.drawOffer && state.drawOffer !== justMoved) state.drawOffer = null;
     const fenBefore = state.game.fen();
+    // Charming: the turn's last act — the mover's Queen draws an enemy in.
+    chessEngine.checkCharming(state, justMoved);
     chessEngine.checkBreakingRank(state, state.game.turn());
     chessEngine.checkKingsLightning(state);
     chessEngine.checkRingOfFire(state);
@@ -328,6 +330,7 @@
     if (state.game.fen() !== fenBefore) state.game.load(state.game.fen());
     chessEngine.pruneBishopShields(state);
     chessEngine.tickTeleportMarks(state);
+    chessEngine.tickCharmMarks(state);
     chessEngine.tickFireDeathMarks(state);
     chessEngine.tickWarmWelcomeMarks(state);
     const wasOver = state.gameOver;

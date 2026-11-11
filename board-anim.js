@@ -145,6 +145,9 @@ const BoardAnim = (() => {
       else if (san.startsWith('⚔')) {
         const pairs = san.slice(1).split(',').filter(Boolean).map(s => ({ from: s.slice(0, 2), to: s.slice(2, 4) }));
         events.push({ kind: 'vanguard', color, pairs });
+      } else if (san.startsWith('💗') || san.startsWith('🕯')) {
+        // Charming (from-to) / Moths to a Flame (fromxQueen).
+        events.push({ kind: 'charm', color, from: sqs[0], to: sqs[1], moth: san.startsWith('🕯') });
       } else if (san.startsWith('⇄')) {
         const pairs = san.slice(1).split(',').filter(Boolean).map(s => ({ from: s.slice(0, 2), to: s.slice(2, 4) }));
         events.push({ kind: 'patchy', color, pairs });
@@ -248,6 +251,14 @@ const BoardAnim = (() => {
         banner.className = 'ba-banner';
         banner.textContent = e.pairs.length ? 'Vanguard' : 'Vanguard holds';
         addFx(banner, 1500);
+      } else if (e.kind === 'charm') {
+        // A soft pink-white beam from the Queen, and a glow on whoever she drew in.
+        const queen = e.moth ? e.to : charmingQueenSquare(state, e.color);
+        const drawn = e.moth ? e.from : e.to;
+        if (queen) streak(queen, drawn, 'charm');
+        ripple([drawn], null, 'rgba(255, 226, 238, 0.85)', { dur: 650 });
+        const el = !e.moth && squareEl(drawn) && squareEl(drawn).querySelector('.piece');
+        if (el) { el.classList.add('ba-charmed'); setTimeout(() => el.classList.remove('ba-charmed'), 900); }
       } else if (e.kind === 'patchy') {
         const rows = startingPawnRanks(state, e.color);
         ripple(rows.flatMap(rank => 'abcdefgh'.split('').map(file => file + rank)), null, 'rgba(255, 123, 114, 0.6)', { dur: 650 });

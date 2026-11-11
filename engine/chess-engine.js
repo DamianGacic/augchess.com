@@ -182,6 +182,10 @@
     // Beloved: the square of each side's Beloved Queen, carried along as she
     // moves (applyMoveToState, deployVanguard in augments-engine.js).
     seedBelovedQueens(state);
+    // Charming: the same tracking for the charming Queen, plus the one-turn
+    // pink marker left where a charmed unit was drawn to (see checkCharming).
+    seedCharmingQueens(state);
+    state.charmMarked = {};
   }
 
   // Opens the Vanguard deployment if either side has it (from newGame, or
@@ -269,6 +273,140 @@
   function isBelovedQueenAttacked(state, color) {
     const sq = belovedQueenSquare(state, color);
     return !!sq && squareAttackedBy(state, sq, color === 'w' ? 'b' : 'w');
+  }
+
+  // ── Charming ────────────────────────────────────────────────────────────
+  // At the end of her owner's turn, the starting Queen draws in the closest
+  // enemy unit that can see her along a straight or diagonal line: it takes
+  // one step towards her, whether it could normally move that way or not
+  // (ties are broken at random). A unit already next to her stays put —
+  // unless her owner has Moths to a Flame, in which case it steps onto her
+  // square and dies (a fresh Warlord survives that once, wounded). Manned
+  // towers block her line of sight and can't be charmed. Like Beloved, only
+  // the Queen a side starts with charms; state.charmingQueen[color] follows
+  // her, and is dropped for good once she's gone.
+  function seedCharmingQueens(state) {
+    state.charmingQueen = { w: null, b: null };
+    for (const color of ['w', 'b']) {
+      if (!has(state, color, 'charming')) continue;
+      const own = sq => { const p = pieceAt(state, sq); return !!p && p.color === color && p.type === 'q'; };
+      const home = color === 'w' ? 'd1' : 'd8';
+      state.charmingQueen[color] = own(home) ? home : (state.game.SQUARES.find(own) || null);
+    }
+  }
+
+  function charmingQueenSquare(state, color) {
+    const sq = state.charmingQueen && state.charmingQueen[color];
+    if (!sq) return null;
+    const p = pieceAt(state, sq);
+    return p && p.color === color && p.type === 'q' ? sq : null;
+  }
+
+  const CHARM_DIRS = [[0, 1], [1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1]];
+
+  // Everything a charmed unit takes along from square to square.
+  function relocateUnit(state, from, to) {
+    const p = pieceAt(state, from);
+    const c = p.color;
+    state.game.remove(from);
+    state.game.put({ type: p.type === 'p' && isPromoRank(c, sqToFR(to).r) ? 'q' : p.type, color: c }, to);
+    for (const map of [state.stunlockCharges, state.ghoulSkin, state.apprenticeTeleportUsed, state.bishopShields, state.archerCooldown]) {
+      if (map && map[c] && from in map[c]) { map[c][to] = map[c][from]; delete map[c][from]; }
+    }
+    if (state.stunnedSquares[from] !== undefined) { state.stunnedSquares[to] = state.stunnedSquares[from]; delete state.stunnedSquares[from]; }
+    for (const list of [state.ghoulJustMoved, state.ghoulBrokeRank]) {
+      if (list && list[c]) list[c] = list[c].map(sq => sq === from ? to : sq);
+    }
+    if (state.mounted[c] === from) state.mounted[c] = to;
+    if (state.belovedQueen && state.belovedQueen[c] === from) state.belovedQueen[c] = to;
+    if (state.vanguardFresh && state.vanguardFresh[c]) state.vanguardFresh[c] = state.vanguardFresh[c].filter(u => u.sq !== from);
+    if (state.vanguardLocked) state.vanguardLocked = state.vanguardLocked.filter(sq => sq !== from);
+  }
+
+  // A unit gone without a capture move: drop what was tracked on its square.
+  function removeUnit(state, sq) {
+    const p = pieceAt(state, sq);
+    clearMountedIfCaptured(state, sq);
+    state.game.remove(sq);
+    for (const map of [state.stunlockCharges, state.ghoulSkin, state.apprenticeTeleportUsed, state.bishopShields, state.archerCooldown]) {
+      if (map && map[p.color]) delete map[p.color][sq];
+    }
+    delete state.stunnedSquares[sq];
+    if (state.vanguardFresh && state.vanguardFresh[p.color]) state.vanguardFresh[p.color] = state.vanguardFresh[p.color].filter(u => u.sq !== sq);
+  }
+
+  // After units moved behind chess.js's back: a King or Rook off its home
+  // square can't castle, and an en-passant square someone now stands on is void.
+  function repairFen(state) {
+    const parts = state.game.fen().split(' ');
+    const at = (sq, type, color) => { const q = pieceAt(state, sq); return q && q.type === type && q.color === color; };
+    const keep = {
+      K: at('e1', 'k', 'w') && at('h1', 'r', 'w'), Q: at('e1', 'k', 'w') && at('a1', 'r', 'w'),
+      k: at('e8', 'k', 'b') && at('h8', 'r', 'b'), q: at('e8', 'k', 'b') && at('a8', 'r', 'b'),
+    };
+    parts[2] = parts[2].split('').filter(ch => keep[ch]).join('') || '-';
+    if (parts[3] !== '-' && pieceAt(state, parts[3])) parts[3] = '-';
+    state.game.load(parts.join(' '));
+  }
+
+  // The enemy units the charming Queen on `qSq` could draw in right now:
+  // the first unit along each of her 8 lines, if it's an enemy. Without
+  // Moths to a Flame, one already next to her doesn't count.
+  function charmCandidates(state, color, qSq) {
+    const moths = has(state, color, 'mothsToAFlame');
+    const { f, r } = sqToFR(qSq);
+    const found = [];
+    for (const [df, dr] of CHARM_DIRS) {
+      for (let d = 1; ; d++) {
+        const sq = frToSq(f + df * d, r + dr * d);
+        if (!sq) break;
+        if (state.mannedTowers[sq]) break; // a manned tower blocks her gaze and is immune
+        const p = pieceAt(state, sq);
+        if (!p) continue;
+        if (p.color !== color && (d > 1 || moths)) found.push({ sq, d, to: frToSq(f + df * (d - 1), r + dr * (d - 1)) });
+        break;
+      }
+    }
+    const nearest = Math.min(...found.map(c => c.d));
+    return found.filter(c => c.d === nearest);
+  }
+
+  // Runs at the end of `color`'s turn (afterTurnSettles in engine/index.js).
+  function checkCharming(state, color) {
+    if (state.gameOver || !state.charmingQueen || !state.charmingQueen[color]) return;
+    const qSq = charmingQueenSquare(state, color);
+    if (!qSq) { state.charmingQueen[color] = null; return; } // she's gone, for good
+    const closest = charmCandidates(state, color, qSq);
+    if (!closest.length) return;
+    const pick = closest[Math.floor(Math.random() * closest.length)];
+    const victim = unitAt(state, pick.sq, color);
+
+    if (pick.to === qSq) {
+      // Moths to a Flame: a unit next to her steps into her and dies.
+      if (isFreshWarlordAt(state, pick.sq)) {
+        const survival = warlordSurvivalText(state, pick.sq);
+        warlordSurvives(state, pick.sq);
+        logEntry(state, color, '🕯' + pick.sq + 'x' + qSq, `Moths to a Flame: ${victim} was drawn into the Queen on ${qSq}, ${survival}.`, 'event');
+      } else {
+        removeUnit(state, pick.sq);
+        repairFen(state);
+        logEntry(state, color, '🕯' + pick.sq + 'x' + qSq, `Moths to a Flame: ${victim} was drawn into the Queen on ${qSq} and died.`, 'event');
+      }
+      state.charmMarked[pick.sq] = 2;
+      return;
+    }
+    relocateUnit(state, pick.sq, pick.to);
+    repairFen(state);
+    state.charmMarked[pick.to] = 2;
+    logEntry(state, color, '💗' + pick.sq + '-' + pick.to, `Charming: the Queen on ${qSq} drew ${victim} to ${pick.to}.`, 'event');
+  }
+
+  function tickCharmMarks(state) {
+    if (!state.charmMarked) return;
+    for (const sq of Object.keys(state.charmMarked)) {
+      state.charmMarked[sq]--;
+      if (state.charmMarked[sq] <= 0) delete state.charmMarked[sq];
+    }
   }
 
   // Inside the enemy King's Ring of Fire, she burns at a turn end before her
@@ -1685,6 +1823,7 @@
         ? { w: { ...state.bishopShields.w }, b: { ...state.bishopShields.b } }
         : undefined,
       belovedQueen: state.belovedQueen ? { ...state.belovedQueen } : undefined,
+      charmingQueen: state.charmingQueen ? { ...state.charmingQueen } : undefined,
     };
   }
 
@@ -1700,6 +1839,7 @@
     if (snap.apprenticeTeleportUsed) state.apprenticeTeleportUsed = snap.apprenticeTeleportUsed;
     if (snap.bishopShields) state.bishopShields = snap.bishopShields;
     if (snap.belovedQueen) state.belovedQueen = snap.belovedQueen;
+    if (snap.charmingQueen) state.charmingQueen = snap.charmingQueen;
   }
 
   function flipTurnFen(state, stripCastleColor, epTargetSquare) {
@@ -1740,6 +1880,9 @@
     // died there.
     if (state.belovedQueen && state.belovedQueen[color] === m.from && !SHOT_SPECIALS.includes(m.special)) {
       state.belovedQueen[color] = m.to;
+    }
+    if (state.charmingQueen && state.charmingQueen[color] === m.from && !SHOT_SPECIALS.includes(m.special)) {
+      state.charmingQueen[color] = m.to;
     }
 
     // A shot into a shield's face is fired but bounces off (see SHIELD_DIRS).
@@ -2391,6 +2534,7 @@
     filterIntoCheck, needsManualCheck, solarBurnsThisPly, kingThreatenedAfterPly, boardAfterSolarBurns,
     seedBelovedQueens, anyBelovedInPlay, belovedQueenSquare, belovedQueenFallen, isBelovedQueenAttacked,
     belovedQueenThreatenedAfterPly, belovedQueenSafeOn, royalThreatenedAfterPly,
+    seedCharmingQueens, charmingQueenSquare, charmCandidates, checkCharming, tickCharmMarks,
     cloneForSimulation, kingSafeOn, tickTurnWithoutMove,
     isKingAttacked, kingCheckers, isCheckDoomedByFire, squareAttackedBy, attacksSquare, clearPath,
     applyMoveToState, executeMove, describeMove, findRequestedMove, flipTurnFen,
